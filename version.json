@@ -1,7 +1,7 @@
 {
-  "version": "2.0.2",
-  "download_url": "https://github.com/beardrubyblue/VroxVPN/releases/download/v2.0.2/vroxory-vpn_2.0.2_amd64.deb",
-  "changelog": "Убрано дублирование скорости трафика в блоке \"Трафик\" (показывалось дважды). Подтверждено polkit-правило без запроса пароля при подключении/отключении из 2.0.1.",
+  "version": "2.0.3",
+  "download_url": "https://github.com/beardrubyblue/VroxVPN/releases/download/v2.0.3/vroxory-vpn_2.0.3_amd64.deb",
+  "changelog": "Уведомления о статусе (загрузка подписки, проверка обновлений и т.п.) теперь скрываются автоматически через 5 секунд. Баннер \"доступно обновление\" остаётся видимым, пока не нажмёшь \"Обновить\".",
   "min_version": "1.0.0",
-  "released_at": "2026-06-16T14:51:16Z"
+  "released_at": "2026-06-16T15:12:39Z"
 }

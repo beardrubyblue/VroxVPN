@@ -21,7 +21,7 @@ from ui.server_row import ServerRow
 from ui.stats_bar import StatsBar
 from ui.log_panel import LogPanel
 
-APP_VERSION = "2.0.2"
+APP_VERSION = "2.0.3"
 
 
 class MainWindow(Adw.ApplicationWindow):
@@ -114,6 +114,7 @@ class MainWindow(Adw.ApplicationWindow):
         self.banner.set_revealed(False)
         self.banner.connect("button-clicked", self._on_banner_button_clicked)
         self._banner_click_handler = None
+        self._banner_timeout_id = None
         root.append(self.banner)
 
         # отдельный баннер для обновлений самого приложения (не hysteria2)
@@ -121,6 +122,7 @@ class MainWindow(Adw.ApplicationWindow):
         self.app_update_banner.set_revealed(False)
         self.app_update_banner.connect("button-clicked", self._on_app_banner_button_clicked)
         self._app_banner_click_handler = None
+        self._app_banner_timeout_id = None
         root.append(self.app_update_banner)
 
         self.stack = Adw.ViewStack()
@@ -327,7 +329,14 @@ class MainWindow(Adw.ApplicationWindow):
 
         btn.set_child(content_box)
 
-    def _show_banner(self, text: str, button_label: str = "", on_click=None, warning: bool = False):
+    def _show_banner(
+        self,
+        text: str,
+        button_label: str = "",
+        on_click=None,
+        warning: bool = False,
+        persistent: bool = False,
+    ):
         self.banner.set_title(text)
         self.banner.set_button_label(button_label)
         self._banner_click_handler = on_click
@@ -337,15 +346,40 @@ class MainWindow(Adw.ApplicationWindow):
         else:
             self.banner.remove_css_class("error")
 
+        if self._banner_timeout_id:
+            GLib.source_remove(self._banner_timeout_id)
+            self._banner_timeout_id = None
+
+        if not persistent:
+            self._banner_timeout_id = GLib.timeout_add_seconds(5, self._auto_hide_banner)
+        return False
+
+    def _auto_hide_banner(self):
+        self.banner.set_revealed(False)
+        self._banner_timeout_id = None
+        return False
+
     def _on_banner_button_clicked(self, _banner):
         if self._banner_click_handler:
             self._banner_click_handler()
 
-    def _show_app_banner(self, text: str, button_label: str = "", on_click=None):
+    def _show_app_banner(self, text: str, button_label: str = "", on_click=None, persistent: bool = False):
         self.app_update_banner.set_title(text)
         self.app_update_banner.set_button_label(button_label)
         self._app_banner_click_handler = on_click
         self.app_update_banner.set_revealed(True)
+
+        if self._app_banner_timeout_id:
+            GLib.source_remove(self._app_banner_timeout_id)
+            self._app_banner_timeout_id = None
+
+        if not persistent:
+            self._app_banner_timeout_id = GLib.timeout_add_seconds(5, self._auto_hide_app_banner)
+        return False
+
+    def _auto_hide_app_banner(self):
+        self.app_update_banner.set_revealed(False)
+        self._app_banner_timeout_id = None
         return False
 
     def _on_app_banner_button_clicked(self, _banner):
@@ -405,6 +439,7 @@ class MainWindow(Adw.ApplicationWindow):
             f"Доступно обновление hysteria2: {latest_version}",
             button_label="Обновить",
             on_click=self._start_update,
+            persistent=True,
         )
         return False
 
@@ -460,6 +495,7 @@ class MainWindow(Adw.ApplicationWindow):
             f"Доступно обновление Vroxory VPN {result['latest']}",
             button_label="Обновить",
             on_click=lambda: self._prompt_app_update(result),
+            persistent=True,
         )
         return False
 
