@@ -1,0 +1,24 @@
+#!/bin/bash
+set -e
+
+# Python зависимости
+pip3 install --break-system-packages requests PyYAML pystray pillow 2>/dev/null || true
+
+# polkit правило
+cat > /etc/polkit-1/rules.d/49-vroxory-vpn.rules << 'POLKIT'
+polkit.addRule(function(action, subject) {
+    if ((action.id == "org.freedesktop.policykit.exec") &&
+        (action.lookup("program").indexOf("hysteria2") !== -1 ||
+         action.lookup("program").indexOf("nft") !== -1 ||
+         action.lookup("program") === "/bin/sh") &&
+        subject.isInGroup("sudo")) {
+        return polkit.Result.YES;
+    }
+});
+POLKIT
+
+# Права
+chmod +x /opt/vroxory-vpn/main.py
+chmod 644 /usr/share/applications/vroxory-vpn.desktop
+
+echo "Vroxory VPN установлен. Запуск: vroxory-vpn"

@@ -1,0 +1,125 @@
+# Vroxory VPN
+
+VPN-клиент для Linux Ubuntu на базе hysteria2, работающий строго в TUN-режиме
+(без SOCKS5/HTTP-прокси). UI написан на Python + GTK4 (libadwaita).
+
+## Возможности (Фаза 1 / MVP)
+
+- Загрузка подписки (raw или base64) со списком `hysteria2://` ссылок
+- Парсинг параметров сервера (host, port, password, sni, insecure, obfs, pinSHA256)
+- Генерация YAML-конфига hysteria2 с включённым TUN-интерфейсом
+- Автоматическая загрузка и установка бинарника hysteria2 с GitHub Releases
+- Подключение/отключение через `pkexec` (приложению не нужен root целиком)
+- Сохранение URL подписки и последнего выбранного сервера
+
+## Возможности (Фаза 2)
+
+- TCP-пинг серверов из подписки, обновляется при загрузке/refresh
+- Иконка в системном трее (показать окно / подключить-отключить / выход)
+- Kill Switch на nftables — блокирует трафик мимо TUN при разрыве соединения
+- Авто-переподключение с экспоненциальной задержкой (до 5 попыток)
+- Статистика скорости передачи (↑/↓) во время подключения
+
+## Возможности (Фаза 3)
+
+- DNS-защита: подмена `/etc/resolv.conf` на 1.1.1.1/1.0.0.1/8.8.8.8 на время подключения, бэкап восстанавливается при отключении
+- Проверка DNS-утечек через 2 секунды после подключения
+- Проверка обновлений hysteria2 при старте (баннер с кнопкой «Обновить»)
+- Вкладка «Логи» с цветовой подсветкой уровней (INFO/WARN/ERROR), копированием и очисткой
+
+## Возможности (Фаза 4)
+
+- Редизайн UI на нативных Adw/Gtk компонентах по GNOME HIG (PreferencesGroup, SwitchRow, ViewSwitcherBar)
+- Меню в заголовке (настройки подписки, проверка обновлений, «О программе»)
+- Упаковка в `.deb` (`packaging/deb/build.sh`) — установка в `/opt/vroxory-vpn`, запуск командой `vroxory-vpn`
+
+> Kill Switch и DNS защита временно скрыты в UI (работают нестабильно), но код сохранён.
+
+## Установка
+
+```bash
+./scripts/install.sh
+```
+
+Скрипт установит системные зависимости (GTK4, libadwaita, polkit, nftables,
+AppIndicator), Python-пакеты (`requests`, `PyYAML`, `pystray`, `pillow`),
+добавит правило polkit для `hysteria2`/`sysctl`/`kill`/`ip`/`nft` и создаст
+ярлык приложения.
+
+## Запуск
+
+```bash
+python3 main.py
+```
+
+При первом запуске откройте настройки (иконка шестерёнки) и укажите URL
+подписки. Список серверов загрузится автоматически.
+
+## Структура проекта
+
+```
+vroxory-vpn/
+├── main.py                # точка входа GTK-приложения, трей, lifecycle
+├── requirements.txt
+├── core/
+│   ├── subscription.py    # загрузка и парсинг подписки
+│   ├── config_gen.py      # генерация YAML-конфига hysteria2
+│   ├── tun_manager.py     # запуск/остановка hysteria2, авто-реконнект
+│   ├── installer.py       # установка бинарника hysteria2
+│   ├── settings.py        # настройки в ~/.config/vroxory-vpn/settings.json
+│   ├── ping.py            # TCP-пинг серверов подписки
+│   ├── tray.py            # иконка в системном трее (pystray)
+│   ├── kill_switch.py     # kill switch на nftables
+│   ├── stats.py           # статистика трафика из /proc/net/dev
+│   ├── dns_manager.py     # DNS-защита и проверка утечек
+│   └── updater.py         # обновления hysteria2 (Updater) и приложения (AppUpdater)
+├── ui/
+│   ├── main_window.py     # главное окно, вкладки Серверы/Логи
+│   ├── server_row.py      # строка списка серверов с пингом
+│   ├── stats_bar.py       # индикатор скорости ↑/↓
+│   └── log_panel.py       # вкладка логов с цветовой подсветкой
+├── scripts/
+│   └── install.sh         # установка зависимостей и polkit-правила
+└── packaging/deb/
+    ├── build.sh            # сборка .deb пакета
+    └── DEBIAN/             # control, postinst, prerm
+```
+
+## Сборка .deb пакета
+
+```bash
+cd packaging/deb && bash build.sh
+sudo dpkg -i ../../vroxory-vpn_2.0.0_amd64.deb
+sudo apt-get install -f  # если нужны зависимости
+```
+
+Пакет устанавливает приложение в `/opt/vroxory-vpn/`, добавляет команду
+`vroxory-vpn` в `/usr/local/bin` и ярлык в меню приложений.
+
+## Обновления
+
+Приложение автоматически проверяет обновления при запуске.
+Если доступна новая версия — появится баннер с кнопкой "Обновить".
+
+### Для разработчика — выпуск новой версии
+
+1. Измени `CURRENT_VERSION` в `core/updater.py`
+2. Измени `Version` в `packaging/deb/DEBIAN/control`
+3. Собери и опубликуй:
+   ```bash
+   cd packaging/deb
+   bash build.sh --publish
+   ```
+4. Загрузи `version.json` на сервер:
+   ```bash
+   scp version.json user@net.vroxory.com:/var/www/vpn/version.json
+   ```
+
+Пользователи увидят обновление при следующем запуске приложения.
+
+## Безопасность TUN-режима
+
+В генерируемом конфиге секции `socks5`/`http` намеренно не указываются —
+у hysteria2 нет флага `disable`, отсутствие секции отключает прокси-сервер.
+Трафик идёт исключительно через TUN-интерфейс `tun-vroxory`. Kill Switch
+дополнительно блокирует весь исходящий трафик мимо TUN на уровне nftables.

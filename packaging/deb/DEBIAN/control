@@ -1,0 +1,12 @@
+Package: vroxory-vpn
+Version: 2.0.0
+Section: net
+Priority: optional
+Architecture: amd64
+Depends: python3 (>= 3.11), python3-gi, gir1.2-gtk-4.0, gir1.2-adw-1, python3-pip, polkitd, pkexec, nftables
+Maintainer: Vroxory <admin@vroxory.com>
+Description: Hysteria2 VPN клиент для Linux
+ Графический VPN клиент с поддержкой hysteria2 протокола.
+ Работает в TUN режиме без прокси.
+ Функции: подписки 3x-ui, Kill Switch, DNS защита,
+ системный трей, авто-переподключение.

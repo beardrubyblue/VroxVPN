@@ -1,0 +1,4 @@
+#!/bin/bash
+set -e
+rm -f /etc/polkit-1/rules.d/49-vroxory-vpn.rules
+echo "Vroxory VPN удалён."

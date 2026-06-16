@@ -1,0 +1,6 @@
+__pycache__/
+*.pyc
+*.deb
+packaging/deb/build/
+.vscode/
+*.egg-info/

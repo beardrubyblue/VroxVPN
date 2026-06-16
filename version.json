@@ -1,0 +1,7 @@
+{
+  "version": "2.0.0",
+  "download_url": "https://github.com/beardrubyblue/VroxVPN/releases/download/v2.0.0/vroxory-vpn_2.0.0_amd64.deb",
+  "changelog": "Первый публичный релиз. TUN режим, Kill Switch, DNS защита, системный трей.",
+  "min_version": "1.0.0",
+  "released_at": "2026-06-16T00:00:00Z"
+}
