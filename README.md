@@ -1,4 +1,4 @@
-# Vroxory VPN
+# VroxVPN
 
 VPN-клиент для Linux Ubuntu на базе hysteria2, работающий строго в TUN-режиме
 (без SOCKS5/HTTP-прокси). UI написан на Python + GTK4 (libadwaita).

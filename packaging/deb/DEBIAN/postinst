@@ -32,6 +32,15 @@ POLKIT
 # Права
 chmod +x /opt/vroxory-vpn/main.py
 chmod +x /opt/vroxory-vpn/core/privileged_helper.sh
-chmod 644 /usr/share/applications/vroxory-vpn.desktop
+chmod 644 /usr/share/applications/com.vroxory.vpn.desktop
 
-echo "Vroxory VPN установлен. Запуск: vroxory-vpn"
+# старое имя .desktop-файла (до переименования под application_id) —
+# убираем, чтобы в меню не осталась дублирующая запись "Vroxory VPN"
+rm -f /usr/share/applications/vroxory-vpn.desktop
+
+# обновляем кэш иконок и базу .desktop-файлов, чтобы новая иконка и
+# имя "VroxVPN" подхватились сразу, без перезахода в сессию
+gtk-update-icon-cache -f /usr/share/icons/hicolor 2>/dev/null || true
+update-desktop-database /usr/share/applications 2>/dev/null || true
+
+echo "VroxVPN установлен. Запуск: vroxory-vpn"

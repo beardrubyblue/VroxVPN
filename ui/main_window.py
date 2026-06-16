@@ -1,4 +1,4 @@
-"""Главное окно Vroxory VPN."""
+"""Главное окно VroxVPN."""
 import os
 import sys
 import threading
@@ -21,13 +21,13 @@ from ui.server_row import ServerRow
 from ui.stats_bar import StatsBar
 from ui.log_panel import LogPanel
 
-APP_VERSION = "2.1.1"
+APP_VERSION = "2.2.0"
 
 
 class MainWindow(Adw.ApplicationWindow):
     def __init__(self, app):
         super().__init__(application=app)
-        self.set_title("Vroxory VPN")
+        self.set_title("VroxVPN")
         self.set_default_size(420, 680)
 
         self.tun_manager = TunManager()
@@ -93,7 +93,7 @@ class MainWindow(Adw.ApplicationWindow):
         refresh_btn.connect("clicked", self._on_refresh_clicked)
         header.pack_start(refresh_btn)
 
-        self.window_title = Adw.WindowTitle(title="Vroxory VPN", subtitle="Не подключено")
+        self.window_title = Adw.WindowTitle(title="VroxVPN", subtitle="Не подключено")
         header.set_title_widget(self.window_title)
 
         menu = Gio.Menu()
@@ -399,8 +399,8 @@ class MainWindow(Adw.ApplicationWindow):
 
     def _show_about_dialog(self):
         dialog = Adw.AboutDialog(
-            application_name="Vroxory VPN",
-            application_icon="network-vpn",
+            application_name="VroxVPN",
+            application_icon="com.vroxory.vpn",
             version=APP_VERSION,
             comments="Hysteria2 VPN клиент с TUN режимом для Linux",
             website="https://net.vroxory.com",
@@ -510,7 +510,7 @@ class MainWindow(Adw.ApplicationWindow):
 
     def _show_app_update_banner(self, result: dict):
         self._show_app_banner(
-            f"Доступно обновление Vroxory VPN {result['latest']}",
+            f"Доступно обновление VroxVPN {result['latest']}",
             button_label="Обновить",
             on_click=lambda: self._prompt_app_update(result),
             persistent=True,

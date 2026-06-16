@@ -4,12 +4,12 @@ set -e
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PROJECT_DIR="$(cd "$SCRIPT_DIR/../.." && pwd)"
 BUILD_DIR="$SCRIPT_DIR/build"
-VERSION="2.1.1"
+VERSION="2.2.0"
 ARCH="amd64"
 PKG_NAME="vroxory-vpn_${VERSION}_${ARCH}"
 
 echo "═══════════════════════════════════"
-echo "  Сборка Vroxory VPN .deb пакета"
+echo "  Сборка VroxVPN .deb пакета"
 echo "═══════════════════════════════════"
 
 # Чистим
@@ -20,6 +20,7 @@ mkdir -p "$BUILD_DIR/$PKG_NAME"
 cp -r "$SCRIPT_DIR/DEBIAN" "$BUILD_DIR/$PKG_NAME/"
 chmod 755 "$BUILD_DIR/$PKG_NAME/DEBIAN/postinst"
 chmod 755 "$BUILD_DIR/$PKG_NAME/DEBIAN/prerm"
+chmod 755 "$BUILD_DIR/$PKG_NAME/DEBIAN/postrm"
 
 # Копируем файлы приложения → /opt/vroxory-vpn/
 mkdir -p "$BUILD_DIR/$PKG_NAME/opt/vroxory-vpn"
@@ -37,19 +38,32 @@ EOF
 chmod +x "$BUILD_DIR/$PKG_NAME/usr/local/bin/vroxory-vpn"
 
 # .desktop файл → /usr/share/applications/
+# ИМЯ ФАЙЛА ДОЛЖНО СОВПАДАТЬ с application_id ("com.vroxory.vpn") —
+# иначе GNOME Shell не может сопоставить запущенное окно с записью
+# в .desktop и показывает в доке/Alt-Tab голый application_id вместо
+# человеческого имени и иконки.
 mkdir -p "$BUILD_DIR/$PKG_NAME/usr/share/applications"
-cat > "$BUILD_DIR/$PKG_NAME/usr/share/applications/vroxory-vpn.desktop" << EOF
+cat > "$BUILD_DIR/$PKG_NAME/usr/share/applications/com.vroxory.vpn.desktop" << EOF
 [Desktop Entry]
-Name=Vroxory VPN
+Name=VroxVPN
 Comment=Hysteria2 VPN клиент
 Exec=vroxory-vpn
-Icon=network-vpn
+Icon=com.vroxory.vpn
 Terminal=false
 Type=Application
 Categories=Network;Security;
 Keywords=vpn;hysteria;tun;
 StartupNotify=true
+StartupWMClass=com.vroxory.vpn
 EOF
+
+# Иконки → /usr/share/icons/hicolor/<size>/apps/
+for size in 16 32 48 64 128 256 512; do
+    icon_dir="$BUILD_DIR/$PKG_NAME/usr/share/icons/hicolor/${size}x${size}/apps"
+    mkdir -p "$icon_dir"
+    cp "$PROJECT_DIR/assets/icons/com.vroxory.vpn-${size}.png" \
+        "$icon_dir/com.vroxory.vpn.png"
+done
 
 # Собираем .deb
 cd "$BUILD_DIR"
@@ -76,7 +90,7 @@ if [[ "$1" == "--publish" ]]; then
     # 2. Создаём GitHub Release и загружаем .deb
     gh release create "v${VERSION}" \
         "$PROJECT_DIR/vroxory-vpn_${VERSION}_${ARCH}.deb" \
-        --title "Vroxory VPN v${VERSION}" \
+        --title "VroxVPN v${VERSION}" \
         --notes "Обновление версии ${VERSION}" \
         --repo "beardrubyblue/VroxVPN"
 

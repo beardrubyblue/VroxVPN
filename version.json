@@ -1,8 +1,8 @@
 {
-  "version": "2.1.1",
-  "download_url": "https://github.com/beardrubyblue/VroxVPN/releases/download/v2.1.1/vroxory-vpn_2.1.1_amd64.deb",
-  "sha256": "e204e75370df8b15a3d0ed473af1c8fcdd25cc064689ea6240f35fac186023ce",
-  "changelog": "Исправлен баг \"иконка трея не убирается при выходе\": pkexec для очистки TUN/DNS при выходе мог зависать без таймаута, блокируя закрытие приложения и трея навсегда. Теперь привилегированные вызовы ограничены таймаутом, плюс добавлен резервный таймер — приложение гарантированно закрывается не позже 8 секунд после клика \"Выход\".",
+  "version": "2.2.0",
+  "download_url": "https://github.com/beardrubyblue/VroxVPN/releases/download/v2.2.0/vroxory-vpn_2.2.0_amd64.deb",
+  "sha256": "b93cb15f45c36feda5f5f80df7ca66d1fb650baa4f02a32368ae22a517cf5194",
+  "changelog": "Исправлено отображение названия в доке/Alt-Tab: показывался голый com.vroxory.vpn вместо имени приложения — причина в том, что имя .desktop-файла не совпадало с application_id. Файл переименован в com.vroxory.vpn.desktop. Везде название унифицировано на VroxVPN. Добавлен собственный логотип (щит с галочкой) во всех стандартных размерах вместо системной иконки-заглушки.",
   "min_version": "1.0.0",
-  "released_at": "2026-06-16T16:29:38Z"
+  "released_at": "2026-06-16T17:09:49Z"
 }

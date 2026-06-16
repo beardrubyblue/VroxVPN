@@ -34,17 +34,33 @@ polkit.addRule(function(action, subject) {
 });
 POLKIT
 
-# .desktop файл
+# Иконки → ~/.local/share/icons/hicolor/<size>/apps/
+for size in 16 32 48 64 128 256 512; do
+    icon_dir="$HOME/.local/share/icons/hicolor/${size}x${size}/apps"
+    mkdir -p "$icon_dir"
+    cp "$APP_DIR/assets/icons/com.vroxory.vpn-${size}.png" "$icon_dir/com.vroxory.vpn.png"
+done
+
+# .desktop файл — имя файла совпадает с application_id ("com.vroxory.vpn"),
+# иначе GNOME Shell не сопоставит окно с записью и в доке/Alt-Tab будет
+# виден голый application_id вместо "VroxVPN"
 mkdir -p "$HOME/.local/share/applications"
-cat > "$HOME/.local/share/applications/vroxory-vpn.desktop" << EOF
+cat > "$HOME/.local/share/applications/com.vroxory.vpn.desktop" << EOF
 [Desktop Entry]
-Name=Vroxory VPN
+Name=VroxVPN
+Comment=Hysteria2 VPN клиент
 Exec=python3 $APP_DIR/main.py
-Icon=network-vpn
+Icon=com.vroxory.vpn
 Terminal=false
 Type=Application
-Categories=Network;
+Categories=Network;Security;
+Keywords=vpn;hysteria;tun;
+StartupWMClass=com.vroxory.vpn
 EOF
+rm -f "$HOME/.local/share/applications/vroxory-vpn.desktop"
+
+gtk-update-icon-cache -f "$HOME/.local/share/icons/hicolor" 2>/dev/null || true
+update-desktop-database "$HOME/.local/share/applications" 2>/dev/null || true
 
 chmod +x "$APP_DIR/main.py"
 echo "✓ Установка завершена. Запуск: python3 $APP_DIR/main.py"

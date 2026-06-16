@@ -57,12 +57,12 @@ class TrayProcess:
         self.servers = []
 
         self.indicator = AppIndicator3.Indicator.new(
-            "vroxory-vpn",
+            "com.vroxory.vpn",
             _make_icon_path(False),
             AppIndicator3.IndicatorCategory.APPLICATION_STATUS,
         )
         self.indicator.set_status(AppIndicator3.IndicatorStatus.ACTIVE)
-        self.indicator.set_title("Vroxory VPN")
+        self.indicator.set_title("VroxVPN")
         self._rebuild_menu()
 
         threading.Thread(target=self._read_stdin, daemon=True).start()
