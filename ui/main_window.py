@@ -21,7 +21,7 @@ from ui.server_row import ServerRow
 from ui.stats_bar import StatsBar
 from ui.log_panel import LogPanel
 
-APP_VERSION = "2.0.0"
+APP_VERSION = "2.0.1"
 
 
 class MainWindow(Adw.ApplicationWindow):
@@ -182,6 +182,14 @@ class MainWindow(Adw.ApplicationWindow):
         self.servers_group.set_title("Серверы")
         self.servers_group.set_description("Нет серверов")
         self.servers_group.set_vexpand(True)
+
+        self.ping_button = Gtk.Button()
+        self.ping_button.set_icon_name("network-wired-symbolic")
+        self.ping_button.set_tooltip_text("Проверить пинг всех серверов")
+        self.ping_button.add_css_class("flat")
+        self.ping_button.set_valign(Gtk.Align.CENTER)
+        self.ping_button.connect("clicked", self._on_ping_button_clicked)
+        self.servers_group.set_header_suffix(self.ping_button)
 
         scrolled = Gtk.ScrolledWindow()
         scrolled.set_vexpand(True)
@@ -565,16 +573,35 @@ class MainWindow(Adw.ApplicationWindow):
             self._show_banner("Подписка пуста или не распознана")
         return False
 
+    def _on_ping_button_clicked(self, _button):
+        if not self._servers:
+            self._show_banner("Нет серверов для проверки")
+            return
+        self._ping_servers()
+
     def _ping_servers(self):
         servers = list(self._servers)
+        self.ping_button.set_sensitive(False)
+
+        pending = len(servers)
+        lock = threading.Lock()
 
         def on_ping_result(name: str, latency_ms):
+            nonlocal pending
             GLib.idle_add(self._apply_ping_result, name, latency_ms)
+            with lock:
+                pending -= 1
+                if pending <= 0:
+                    GLib.idle_add(self._on_ping_finished)
 
         def worker():
             ping_all_servers(servers, on_ping_result)
 
         threading.Thread(target=worker, daemon=True).start()
+
+    def _on_ping_finished(self):
+        self.ping_button.set_sensitive(True)
+        return False
 
     def _apply_ping_result(self, name: str, latency_ms):
         for i in range(len(self._servers)):
