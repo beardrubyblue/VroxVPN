@@ -1,25 +1,17 @@
-"""Иконка в системном трее."""
+"""Иконка в системном трее.
+
+Запускается как отдельный GTK3-процесс (core/tray_process.py), поскольку
+PyGObject не позволяет смешивать GTK3 (нужен для AyatanaAppIndicator3,
+без которого GNOME Shell не показывает трей-иконки) и GTK4 (главное окно)
+в одном процессе. Общение — через простой построчный протокол по
+stdin/stdout дочернего процесса.
+"""
+import subprocess
+import sys
 import threading
+from pathlib import Path
 
-from PIL import Image, ImageDraw
-
-try:
-    import pystray
-    PYSTRAY_AVAILABLE = True
-except Exception:
-    pystray = None
-    PYSTRAY_AVAILABLE = False
-
-CONNECTED_COLOR = (76, 175, 80, 255)
-DISCONNECTED_COLOR = (136, 136, 136, 255)
-
-
-def _make_icon_image(connected: bool) -> Image.Image:
-    image = Image.new("RGBA", (64, 64), (0, 0, 0, 0))
-    draw = ImageDraw.Draw(image)
-    color = CONNECTED_COLOR if connected else DISCONNECTED_COLOR
-    draw.ellipse((4, 4, 60, 60), fill=color)
-    return image
+TRAY_SCRIPT = Path(__file__).resolve().parent / "tray_process.py"
 
 
 class TrayIcon:
@@ -29,104 +21,73 @@ class TrayIcon:
         self.on_quit = None
         self.on_select_server = None
 
-        self._connected = False
-        self._server_name = ""
-        self._selected_server_name = ""
-        self._servers = []
-        self._icon = None
-        self._thread = None
-
-        if PYSTRAY_AVAILABLE:
-            self._icon = pystray.Icon(
-                "vroxory-vpn",
-                icon=_make_icon_image(False),
-                title="Vroxory VPN",
-                menu=self._build_menu(),
-            )
-
-    def _build_servers_menu(self):
-        if not self._servers:
-            return pystray.Menu(pystray.MenuItem("Нет серверов", None, enabled=False))
-
-        items = []
-        for server in self._servers:
-            name = server["name"]
-            items.append(
-                pystray.MenuItem(
-                    name,
-                    self._make_select_handler(name),
-                    checked=self._make_checked_fn(name),
-                    radio=True,
-                )
-            )
-        return pystray.Menu(*items)
-
-    def _make_select_handler(self, name: str):
-        def handler(_icon, _item):
-            self._selected_server_name = name
-            if self._icon:
-                self._icon.menu = self._build_menu()
-            if self.on_select_server:
-                self.on_select_server(name)
-        return handler
-
-    def _make_checked_fn(self, name: str):
-        def fn(_item):
-            return self._selected_server_name == name
-        return fn
-
-    def _build_menu(self):
-        status_text = (
-            f"Подключено к: {self._server_name}" if self._connected else "Не подключено"
-        )
-        toggle_text = "Отключить" if self._connected else "Подключить"
-        return pystray.Menu(
-            pystray.MenuItem("Vroxory VPN", None, enabled=False),
-            pystray.Menu.SEPARATOR,
-            pystray.MenuItem(status_text, None, enabled=False),
-            pystray.MenuItem("Серверы", self._build_servers_menu()),
-            pystray.Menu.SEPARATOR,
-            pystray.MenuItem("Показать окно", self._handle_show),
-            pystray.MenuItem(toggle_text, self._handle_toggle),
-            pystray.Menu.SEPARATOR,
-            pystray.MenuItem("Выход", self._handle_quit),
-        )
-
-    def _handle_show(self, _icon, _item):
-        if self.on_show:
-            self.on_show()
-
-    def _handle_toggle(self, _icon, _item):
-        if self.on_toggle:
-            self.on_toggle()
-
-    def _handle_quit(self, _icon, _item):
-        if self.on_quit:
-            self.on_quit()
+        self._process = None
+        self._reader_thread = None
 
     def start(self) -> None:
-        if not self._icon:
+        try:
+            self._process = subprocess.Popen(
+                [sys.executable, str(TRAY_SCRIPT)],
+                stdin=subprocess.PIPE,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.DEVNULL,
+                text=True,
+                bufsize=1,
+            )
+        except OSError as exc:
+            print(f"[tray] не удалось запустить процесс трея: {exc}")
+            self._process = None
             return
-        self._thread = threading.Thread(target=self._icon.run, daemon=True)
-        self._thread.start()
+
+        self._reader_thread = threading.Thread(target=self._read_output, daemon=True)
+        self._reader_thread.start()
+
+    def _read_output(self) -> None:
+        if not self._process or not self._process.stdout:
+            return
+        for raw in self._process.stdout:
+            line = raw.strip()
+            if line:
+                self._handle_line(line)
+
+    def _handle_line(self, line: str) -> None:
+        if line == "SHOW":
+            if self.on_show:
+                self.on_show()
+        elif line == "TOGGLE":
+            if self.on_toggle:
+                self.on_toggle()
+        elif line == "QUIT":
+            if self.on_quit:
+                self.on_quit()
+        elif line.startswith("SELECT:"):
+            name = line[len("SELECT:"):]
+            if self.on_select_server:
+                self.on_select_server(name)
+
+    def _send(self, line: str) -> None:
+        if not self._process or not self._process.stdin:
+            return
+        try:
+            self._process.stdin.write(line + "\n")
+            self._process.stdin.flush()
+        except (BrokenPipeError, OSError):
+            pass
 
     def stop(self) -> None:
-        if self._icon:
-            self._icon.stop()
+        if not self._process:
+            return
+        self._send("QUIT_PROCESS")
+        try:
+            self._process.wait(timeout=3)
+        except subprocess.TimeoutExpired:
+            self._process.kill()
 
     def update_status(self, connected: bool, server_name: str = "") -> None:
-        self._connected = connected
-        self._server_name = server_name
-        if server_name:
-            self._selected_server_name = server_name
-        if not self._icon:
-            return
-        self._icon.icon = _make_icon_image(connected)
-        self._icon.menu = self._build_menu()
+        self._send(f"STATUS:{1 if connected else 0}:{server_name}")
 
     def update_servers(self, servers: list, selected_name: str = "") -> None:
-        self._servers = servers
+        names = "\x1f".join(server["name"] for server in servers)
+        self._send(f"SERVERS:{names}")
         if selected_name:
-            self._selected_server_name = selected_name
-        if self._icon:
-            self._icon.menu = self._build_menu()
+            self._send(f"SELECTED:{selected_name}")

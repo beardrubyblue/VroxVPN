@@ -21,7 +21,7 @@ from ui.server_row import ServerRow
 from ui.stats_bar import StatsBar
 from ui.log_panel import LogPanel
 
-APP_VERSION = "2.0.5"
+APP_VERSION = "2.0.6"
 
 
 class MainWindow(Adw.ApplicationWindow):

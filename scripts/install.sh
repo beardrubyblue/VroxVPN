@@ -2,8 +2,9 @@
 set -e
 sudo apt-get update -q
 sudo apt-get install -y python3-gi python3-gi-cairo gir1.2-gtk-4.0 gir1.2-adw-1 \
-    python3-pip polkitd pkexec nftables gir1.2-ayatanaappindicator3-0.1
-pip3 install --user --break-system-packages requests PyYAML pystray pillow
+    gir1.2-gtk-3.0 gir1.2-ayatanaappindicator3-0.1 \
+    python3-pip polkitd pkexec nftables
+pip3 install --user --break-system-packages requests PyYAML pillow
 
 # polkit правило чтобы pkexec не спрашивал пароль каждый раз:
 # - hysteria2 (запуск TUN-клиента)

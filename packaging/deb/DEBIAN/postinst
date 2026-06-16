@@ -2,7 +2,7 @@
 set -e
 
 # Python зависимости
-pip3 install --break-system-packages requests PyYAML pystray pillow 2>/dev/null || true
+pip3 install --break-system-packages requests PyYAML pillow 2>/dev/null || true
 
 # polkit правило
 cat > /etc/polkit-1/rules.d/49-vroxory-vpn.rules << 'POLKIT'
