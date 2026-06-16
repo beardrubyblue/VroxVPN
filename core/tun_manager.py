@@ -7,7 +7,7 @@ from core import config_gen
 from core.installer import get_binary_path
 from core.dns_manager import DNSManager
 
-CONNECTED_MARKERS = ("tun started", "client up and running", "connected")
+CONNECTED_MARKERS = ("tun started", "client up and running", "tun listening")
 TUN_IFACE = "tun-vroxory"
 
 
@@ -49,6 +49,10 @@ class TunManager:
         binary = get_binary_path()
 
         self._loosen_rp_filter()
+        # если предыдущий запуск завершился аварийно, интерфейс tun-vroxory
+        # может остаться висеть в ядре — тогда hysteria2 падает с
+        # "device or resource busy". Чистим заранее (без проверки ошибок).
+        self._cleanup_interface()
 
         if self._used_pkexec:
             cmd = ["pkexec", binary, "client", "--config", str(config_path)]
@@ -86,6 +90,9 @@ class TunManager:
         if not self.process or not self.process.stdout:
             return
 
+        had_fatal = False
+        last_fatal_message = ""
+
         for line in self.process.stdout:
             line = line.rstrip()
             if not line:
@@ -94,17 +101,32 @@ class TunManager:
                 self.on_log(line)
 
             lowered = line.lower()
+
+            if "fatal" in lowered:
+                # hysteria2 иногда логирует "TUN listening" ДО фактического
+                # открытия устройства и лишь потом падает с FATAL — поэтому
+                # success-маркер мог сработать чуть раньше ошибки. Раз FATAL
+                # пришёл, попытку считаем неудачной независимо от этого.
+                had_fatal = True
+                last_fatal_message = line
+
             if not self._connected and any(marker in lowered for marker in CONNECTED_MARKERS):
                 self._connected = True
-                self._reconnect_attempts = 0
                 if self.on_connected:
                     self.on_connected()
                 if self.dns_protection_enabled:
                     self.dns_manager.enable()
 
         exit_code = self.process.wait()
-        was_connected = self._connected
+        was_connected = self._connected and not had_fatal
         self._connected = False
+
+        if was_connected:
+            # сбрасываем счётчик попыток только когда уверены, что сессия
+            # была рабочей — иначе ложный success-маркер ("connected to
+            # server" / "TUN listening" перед крахом) держит счётчик на 0
+            # и реконнект повторяется бесконечно с одинаковой задержкой.
+            self._reconnect_attempts = 0
 
         if self._stop_requested:
             if self.on_disconnected:
@@ -126,8 +148,9 @@ class TunManager:
             return
 
         if exit_code != 0 or not was_connected:
+            message = last_fatal_message or f"hysteria2 завершился с кодом {exit_code}"
             if self.on_error:
-                self.on_error(f"hysteria2 завершился с кодом {exit_code}")
+                self.on_error(message)
         else:
             if self.on_disconnected:
                 self.on_disconnected()
