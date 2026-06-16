@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Точка входа Vroxory VPN."""
 import sys
+import threading
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
@@ -14,6 +15,12 @@ from gi.repository import Adw, GLib
 from ui.main_window import MainWindow
 from core.tray import TrayIcon
 
+# Сколько максимум ждём корректное отключение VPN перед выходом. pkexec
+# при очистке TUN/DNS иногда отвечает не мгновенно (несколько секунд) —
+# без жёсткого потолка зависший вызов держал бы открытыми и окно, и
+# иконку в трее бесконечно после клика "Выход".
+QUIT_TIMEOUT_SECONDS = 8
+
 
 class VroxoryVPN(Adw.Application):
     def __init__(self):
@@ -24,6 +31,8 @@ class VroxoryVPN(Adw.Application):
         self.tray.on_quit = self._on_tray_quit
         self.tray.on_select_server = self._on_tray_select_server
         self._window = None
+        self._quit_requested = False
+        self._quit_finished = False
 
     def do_activate(self):
         if self._window is None:
@@ -76,17 +85,34 @@ class VroxoryVPN(Adw.Application):
 
     def request_full_quit(self):
         """Полностью завершает приложение: отключает VPN (рвёт TUN-
-        интерфейс), останавливает трей и закрывает процесс."""
+        интерфейс), останавливает трей и закрывает процесс.
+
+        disconnect() сам по себе уже не блокируется бесконечно (см.
+        run_privileged), но на случай ЛЮБОЙ другой неожиданной задержки
+        ставим запасной таймер — приложение обязано закрыться не позже
+        QUIT_TIMEOUT_SECONDS после клика "Выход", даже если что-то
+        зависнет."""
+        if self._quit_requested:
+            return
+        self._quit_requested = True
+
         def worker():
-            self._window.tun_manager.disconnect()
+            try:
+                self._window.tun_manager.disconnect()
+            except Exception as exc:
+                print(f"[quit] ошибка при отключении: {exc}")
             GLib.idle_add(self._finish_quit)
 
-        import threading
         threading.Thread(target=worker, daemon=True).start()
+        GLib.timeout_add_seconds(QUIT_TIMEOUT_SECONDS, self._finish_quit)
 
     def _finish_quit(self):
+        if self._quit_finished:
+            return False
+        self._quit_finished = True
         self.tray.stop()
         self.quit()
+        return False
 
 
 def main():

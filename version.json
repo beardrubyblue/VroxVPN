@@ -1,8 +1,8 @@
 {
-  "version": "2.1.0",
-  "download_url": "https://github.com/beardrubyblue/VroxVPN/releases/download/v2.1.0/vroxory-vpn_2.1.0_amd64.deb",
-  "sha256": "e5f67336375d006dc2366c19ef951d04f04f03635df3abf8a2d92106b9e21a36",
-  "changelog": "Security release. Polkit-правило больше не разрешает passwordless pkexec по подстроке пути (раньше /bin/sh, kill, ip, nft, sysctl, apt-get были доступны ЛЮБОМУ процессу пользователя из группы sudo без пароля) — теперь только точный путь к hysteria2 и единому helper-скрипту с жёстко заданными подкомандами. Добавлена sha256-проверка .deb перед авто-обновлением приложения и hysteria2-бинарника перед установкой. IP сервера для kill switch валидируется перед вставкой в nftables. Подписка с insecure=true (отключённая проверка TLS) теперь явно помечается предупреждением в интерфейсе.",
+  "version": "2.1.1",
+  "download_url": "https://github.com/beardrubyblue/VroxVPN/releases/download/v2.1.1/vroxory-vpn_2.1.1_amd64.deb",
+  "sha256": "e204e75370df8b15a3d0ed473af1c8fcdd25cc064689ea6240f35fac186023ce",
+  "changelog": "Исправлен баг \"иконка трея не убирается при выходе\": pkexec для очистки TUN/DNS при выходе мог зависать без таймаута, блокируя закрытие приложения и трея навсегда. Теперь привилегированные вызовы ограничены таймаутом, плюс добавлен резервный таймер — приложение гарантированно закрывается не позже 8 секунд после клика \"Выход\".",
   "min_version": "1.0.0",
-  "released_at": "2026-06-16T16:18:09Z"
+  "released_at": "2026-06-16T16:29:38Z"
 }
