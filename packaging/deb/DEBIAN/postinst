@@ -7,12 +7,14 @@ pip3 install --break-system-packages requests PyYAML pystray pillow 2>/dev/null 
 # polkit правило
 cat > /etc/polkit-1/rules.d/49-vroxory-vpn.rules << 'POLKIT'
 polkit.addRule(function(action, subject) {
-    if ((action.id == "org.freedesktop.policykit.exec") &&
-        (action.lookup("program").indexOf("hysteria2") !== -1 ||
-         action.lookup("program").indexOf("nft") !== -1 ||
-         action.lookup("program") === "/bin/sh") &&
-        subject.isInGroup("sudo")) {
-        return polkit.Result.YES;
+    if (action.id == "org.freedesktop.policykit.exec" && subject.isInGroup("sudo")) {
+        var program = action.lookup("program");
+        var allowed = ["hysteria2", "/sysctl", "/kill", "/ip", "/nft", "/apt-get", "/bin/sh"];
+        for (var i = 0; i < allowed.length; i++) {
+            if (program.indexOf(allowed[i]) !== -1) {
+                return polkit.Result.YES;
+            }
+        }
     }
 });
 POLKIT

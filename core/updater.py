@@ -121,14 +121,17 @@ class AppUpdater:
                     progress_callback(downloaded, total_size)
 
             urllib.request.urlretrieve(download_url, tmp_path, reporthook=reporthook)
-            print("[app-updater] скачивание завершено, устанавливаю через dpkg")
+            print("[app-updater] скачивание завершено, устанавливаю через apt-get")
 
-            cmd = ["dpkg", "-i", tmp_path]
+            # apt-get install (а не dpkg -i) сам подтягивает недостающие
+            # зависимости — без этого пришлось бы вручную запускать
+            # apt-get install -f после dpkg
+            cmd = ["apt-get", "install", "-y", tmp_path]
             if os.geteuid() != 0:
                 cmd = ["pkexec"] + cmd
 
             result = subprocess.run(cmd, capture_output=True, text=True)
-            print(f"[app-updater] dpkg -i -> код {result.returncode}")
+            print(f"[app-updater] apt-get install -> код {result.returncode}")
             return result.returncode == 0
         except Exception as exc:
             print(f"[app-updater] ошибка установки обновления: {exc}")

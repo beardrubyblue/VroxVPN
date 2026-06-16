@@ -89,9 +89,12 @@ vroxory-vpn/
 
 ```bash
 cd packaging/deb && bash build.sh
-sudo dpkg -i ../../vroxory-vpn_2.0.0_amd64.deb
-sudo apt-get install -f  # если нужны зависимости
+sudo apt install ../../vroxory-vpn_2.0.0_amd64.deb
 ```
+
+`apt install ./file.deb` сам разрешает зависимости за один шаг —
+в отличие от `dpkg -i`, после него не нужно вручную запускать
+`apt-get install -f`.
 
 Пакет устанавливает приложение в `/opt/vroxory-vpn/`, добавляет команду
 `vroxory-vpn` в `/usr/local/bin` и ярлык в меню приложений.

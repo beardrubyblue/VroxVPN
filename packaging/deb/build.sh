@@ -59,8 +59,7 @@ echo ""
 echo "✓ Готово: $PROJECT_DIR/${PKG_NAME}.deb"
 echo ""
 echo "Установка:"
-echo "  sudo dpkg -i ${PKG_NAME}.deb"
-echo "  sudo apt-get install -f  # если нужны зависимости"
+echo "  sudo apt install ./${PKG_NAME}.deb"
 
 # ── Публикация (только если передан флаг --publish) ──
 if [[ "$1" == "--publish" ]]; then
