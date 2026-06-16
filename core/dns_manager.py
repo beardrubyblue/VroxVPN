@@ -1,8 +1,8 @@
 """Защита DNS — переключение системного резолвера на доверенные серверы."""
 import os
-import shlex
-import subprocess
 from pathlib import Path
+
+from core.privileged import run_privileged
 
 RESOLV_CONF = "/etc/resolv.conf"
 
@@ -25,13 +25,13 @@ class DNSManager:
         self.backup_path.parent.mkdir(parents=True, exist_ok=True)
         self._save_backup()
 
-        quoted_content = shlex.quote(PROTECTED_RESOLV_CONTENT)
         # /etc/resolv.conf обычно симлинк на /run/systemd/resolve/stub-resolv.conf,
         # который systemd-resolved постоянно перегенерирует — писать "через" симлинк
         # бессмысленно, изменения затираются почти сразу. Снимаем симлинк и кладём
-        # обычный файл, который резолвер не трогает.
-        script = f"rm -f {RESOLV_CONF} && printf '%s' {quoted_content} > {RESOLV_CONF}"
-        success = self._run_privileged(script)
+        # обычный файл, который резолвер не трогает. Содержимое идёт через stdin
+        # helper-скрипта — без shell-интерполяции, экранирование не требуется.
+        result = run_privileged(["write-resolv-conf"], input_data=PROTECTED_RESOLV_CONTENT)
+        success = result.returncode == 0
         print(f"[dns] enable() -> {success}")
         return success
 
@@ -44,12 +44,11 @@ class DNSManager:
         kind, _, payload = raw.partition(":")
 
         if kind == "SYMLINK":
-            script = f"rm -f {RESOLV_CONF} && ln -sf {shlex.quote(payload)} {RESOLV_CONF}"
+            result = run_privileged(["relink-resolv-conf", payload])
         else:
-            quoted_content = shlex.quote(payload)
-            script = f"rm -f {RESOLV_CONF} && printf '%s' {quoted_content} > {RESOLV_CONF}"
+            result = run_privileged(["write-resolv-conf"], input_data=payload)
 
-        success = self._run_privileged(script)
+        success = result.returncode == 0
         if success:
             self.backup_path.unlink(missing_ok=True)
         print(f"[dns] disable() -> {success}")
@@ -70,13 +69,6 @@ class DNSManager:
         except OSError:
             content = DEFAULT_RESOLV_CONTENT
         self.backup_path.write_text(f"FILE:{content}")
-
-    def _run_privileged(self, script: str) -> bool:
-        cmd = ["sh", "-c", script]
-        if os.geteuid() != 0:
-            cmd = ["pkexec"] + cmd
-        result = subprocess.run(cmd, capture_output=True, text=True)
-        return result.returncode == 0
 
     def check_leak(self) -> dict:
         try:

@@ -1,4 +1,5 @@
 """Проверка и установка обновлений бинарника hysteria2 и самого приложения."""
+import hashlib
 import os
 import re
 import subprocess
@@ -7,6 +8,7 @@ import urllib.request
 import requests
 
 from core.installer import download_hysteria2, get_binary_path, is_installed
+from core.privileged import run_privileged
 
 GITHUB_API = "https://api.github.com/repos/apernet/hysteria/releases/latest"
 
@@ -65,7 +67,7 @@ def _version_tuple(version: str) -> tuple:
 
 
 class AppUpdater:
-    CURRENT_VERSION = "2.0.6"
+    CURRENT_VERSION = "2.1.0"
     VERSION_URL = "https://net.vroxory.com/vpn/version.json"
     # Fallback если основной сервер недоступен
     VERSION_URL_FALLBACK = "https://raw.githubusercontent.com/beardrubyblue/VroxVPN/main/version.json"
@@ -105,12 +107,15 @@ class AppUpdater:
                 "update_available": update_available,
                 "download_url": data.get("download_url", ""),
                 "changelog": data.get("changelog", ""),
+                "sha256": data.get("sha256", ""),
             }
         except Exception as exc:
             print(f"[app-updater] непредвиденная ошибка check_update: {exc}")
             return None
 
-    def download_and_install(self, download_url: str, progress_callback=None) -> bool:
+    def download_and_install(
+        self, download_url: str, expected_sha256: str = "", progress_callback=None
+    ) -> bool:
         tmp_path = self.UPDATE_DEB_PATH
         try:
             print(f"[app-updater] скачивание {download_url} -> {tmp_path}")
@@ -121,16 +126,23 @@ class AppUpdater:
                     progress_callback(downloaded, total_size)
 
             urllib.request.urlretrieve(download_url, tmp_path, reporthook=reporthook)
-            print("[app-updater] скачивание завершено, устанавливаю через apt-get")
+            print("[app-updater] скачивание завершено")
 
+            if expected_sha256:
+                digest = hashlib.sha256()
+                with open(tmp_path, "rb") as f:
+                    for chunk in iter(lambda: f.read(8192), b""):
+                        digest.update(chunk)
+                if digest.hexdigest().lower() != expected_sha256.lower():
+                    print("[app-updater] проверка sha256 не пройдена, установка отменена")
+                    return False
+
+            print("[app-updater] устанавливаю через apt-get")
             # apt-get install (а не dpkg -i) сам подтягивает недостающие
             # зависимости — без этого пришлось бы вручную запускать
-            # apt-get install -f после dpkg
-            cmd = ["apt-get", "install", "-y", tmp_path]
-            if os.geteuid() != 0:
-                cmd = ["pkexec"] + cmd
-
-            result = subprocess.run(cmd, capture_output=True, text=True)
+            # apt-get install -f после dpkg. Идёт через privileged_helper.sh,
+            # который проверяет, что путь равен ровно UPDATE_DEB_PATH.
+            result = run_privileged(["apt-install", tmp_path])
             print(f"[app-updater] apt-get install -> код {result.returncode}")
             return result.returncode == 0
         except Exception as exc:

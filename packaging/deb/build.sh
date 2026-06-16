@@ -4,7 +4,7 @@ set -e
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PROJECT_DIR="$(cd "$SCRIPT_DIR/../.." && pwd)"
 BUILD_DIR="$SCRIPT_DIR/build"
-VERSION="2.0.6"
+VERSION="2.1.0"
 ARCH="amd64"
 PKG_NAME="vroxory-vpn_${VERSION}_${ARCH}"
 
@@ -26,6 +26,7 @@ mkdir -p "$BUILD_DIR/$PKG_NAME/opt/vroxory-vpn"
 cp -r "$PROJECT_DIR/"{main.py,core,ui,requirements.txt} \
     "$BUILD_DIR/$PKG_NAME/opt/vroxory-vpn/"
 find "$BUILD_DIR/$PKG_NAME/opt/vroxory-vpn" -name "__pycache__" -type d -exec rm -rf {} +
+chmod +x "$BUILD_DIR/$PKG_NAME/opt/vroxory-vpn/core/privileged_helper.sh"
 
 # Исполняемый wrapper → /usr/local/bin/vroxory-vpn
 mkdir -p "$BUILD_DIR/$PKG_NAME/usr/local/bin"
@@ -81,11 +82,17 @@ if [[ "$1" == "--publish" ]]; then
 
     DEB_URL="https://github.com/beardrubyblue/VroxVPN/releases/download/v${VERSION}/vroxory-vpn_${VERSION}_${ARCH}.deb"
 
+    # sha256 .deb-файла — AppUpdater проверяет его перед apt-get install,
+    # чтобы скачанный файл нельзя было незаметно подменить отдельно от
+    # version.json (например, при компрометации только хостинга релизов)
+    DEB_SHA256="$(sha256sum "$PROJECT_DIR/vroxory-vpn_${VERSION}_${ARCH}.deb" | awk '{print $1}')"
+
     # 3. Создаём version.json
     cat > "$PROJECT_DIR/version.json" << EOF
 {
   "version": "${VERSION}",
   "download_url": "${DEB_URL}",
+  "sha256": "${DEB_SHA256}",
   "changelog": "Обновление до версии ${VERSION}",
   "min_version": "1.0.0",
   "released_at": "$(date -u +%Y-%m-%dT%H:%M:%SZ)"

@@ -6,6 +6,7 @@ import threading
 from core import config_gen
 from core.installer import get_binary_path
 from core.dns_manager import DNSManager
+from core.privileged import run_privileged
 
 CONNECTED_MARKERS = ("tun started", "client up and running", "tun listening")
 TUN_IFACE = "tun-vroxory"
@@ -78,13 +79,7 @@ class TunManager:
     def _loosen_rp_filter(self) -> None:
         """Linux отбрасывает TUN-трафик строгим reverse-path filter — без
         этого пакеты к серверу маршрутизируются, но ответы дропаются ядром."""
-        args = [
-            "sysctl", "-w",
-            "net.ipv4.conf.all.rp_filter=2",
-            "net.ipv4.conf.default.rp_filter=2",
-        ]
-        cmd = ["pkexec"] + args if self._used_pkexec else args
-        subprocess.run(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        run_privileged(["loosen-rp-filter"])
 
     def _read_output(self) -> None:
         if not self.process or not self.process.stdout:
@@ -182,18 +177,11 @@ class TunManager:
         """Если hysteria2 запущен через pkexec, он работает с euid 0 — обычный
         os.kill() от непривилегированного процесса вернёт EPERM."""
         if self._used_pkexec:
-            subprocess.run(
-                ["pkexec", "kill", f"-{signal_name}", str(self.process.pid)],
-                stdout=subprocess.DEVNULL,
-                stderr=subprocess.DEVNULL,
-            )
+            run_privileged(["kill-process", signal_name, str(self.process.pid)])
         elif signal_name == "TERM":
             self.process.terminate()
         else:
             self.process.kill()
 
     def _cleanup_interface(self) -> None:
-        cmd = ["ip", "link", "delete", TUN_IFACE]
-        if self._used_pkexec:
-            cmd = ["pkexec"] + cmd
-        subprocess.run(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        run_privileged(["delete-tun", TUN_IFACE])

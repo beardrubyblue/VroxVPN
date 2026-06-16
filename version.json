@@ -1,7 +1,8 @@
 {
-  "version": "2.0.6",
-  "download_url": "https://github.com/beardrubyblue/VroxVPN/releases/download/v2.0.6/vroxory-vpn_2.0.6_amd64.deb",
-  "changelog": "Исправлена главная причина отсутствия иконки в системном трее: pystray требует GTK3, а главное окно использует GTK4 — в одном процессе они конфликтовали, и импорт pystray тихо проваливался. Трей теперь запускается отдельным GTK3-процессом (AppIndicator3 напрямую, без pystray) и общается с главным окном через stdin/stdout. Добавлены недостающие зависимости gir1.2-gtk-3.0 и gir1.2-ayatanaappindicator3-0.1 в пакет.",
+  "version": "2.1.0",
+  "download_url": "https://github.com/beardrubyblue/VroxVPN/releases/download/v2.1.0/vroxory-vpn_2.1.0_amd64.deb",
+  "sha256": "e5f67336375d006dc2366c19ef951d04f04f03635df3abf8a2d92106b9e21a36",
+  "changelog": "Security release. Polkit-правило больше не разрешает passwordless pkexec по подстроке пути (раньше /bin/sh, kill, ip, nft, sysctl, apt-get были доступны ЛЮБОМУ процессу пользователя из группы sudo без пароля) — теперь только точный путь к hysteria2 и единому helper-скрипту с жёстко заданными подкомандами. Добавлена sha256-проверка .deb перед авто-обновлением приложения и hysteria2-бинарника перед установкой. IP сервера для kill switch валидируется перед вставкой в nftables. Подписка с insecure=true (отключённая проверка TLS) теперь явно помечается предупреждением в интерфейсе.",
   "min_version": "1.0.0",
-  "released_at": "2026-06-16T15:53:11Z"
+  "released_at": "2026-06-16T16:18:09Z"
 }

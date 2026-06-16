@@ -20,6 +20,16 @@ class ServerRow(Adw.ActionRow):
         icon.set_pixel_size(20)
         self.add_prefix(icon)
 
+        if server.get("insecure"):
+            warning_icon = Gtk.Image.new_from_icon_name("dialog-warning-symbolic")
+            warning_icon.add_css_class("error")
+            warning_icon.set_tooltip_text(
+                "Подписка отключает проверку TLS-сертификата для этого сервера "
+                "(insecure=true) — соединение может быть перехвачено посредником, "
+                "если сервер скомпрометирован"
+            )
+            self.add_suffix(warning_icon)
+
         self.ping_label = Gtk.Label(label="—")
         self.ping_label.add_css_class("caption")
         self.ping_label.add_css_class("dim-label")

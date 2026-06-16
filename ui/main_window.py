@@ -21,7 +21,7 @@ from ui.server_row import ServerRow
 from ui.stats_bar import StatsBar
 from ui.log_panel import LogPanel
 
-APP_VERSION = "2.0.6"
+APP_VERSION = "2.1.0"
 
 
 class MainWindow(Adw.ApplicationWindow):
@@ -545,7 +545,9 @@ class MainWindow(Adw.ApplicationWindow):
 
         def worker():
             success = self.app_updater.download_and_install(
-                result["download_url"], progress_callback
+                result["download_url"],
+                result.get("sha256", ""),
+                progress_callback,
             )
             GLib.idle_add(self._on_app_update_finished, success)
 
@@ -837,6 +839,12 @@ class MainWindow(Adw.ApplicationWindow):
         self._state = "connecting"
         self._set_status("connecting", "Подключение…")
         self._update_connect_button()
+
+        if self._selected_server.get("insecure"):
+            self._show_banner(
+                "⚠ Этот сервер отключает проверку TLS-сертификата (insecure)",
+                warning=True,
+            )
 
         def worker():
             self.tun_manager.connect(self._selected_server)

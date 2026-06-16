@@ -4,23 +4,34 @@ set -e
 # Python зависимости
 pip3 install --break-system-packages requests PyYAML pillow 2>/dev/null || true
 
-# polkit правило
+# polkit правило: passwordless pkexec ТОЛЬКО для точного пути нашего
+# единого helper-скрипта и hysteria2-бинарника — без substring-matching
+# по системным утилитам (sh/kill/ip/nft/sysctl/apt-get), который раньше
+# давал любому процессу из группы sudo пройти pkexec без пароля вообще
+# для чего угодно с этими подстроками в пути.
 cat > /etc/polkit-1/rules.d/49-vroxory-vpn.rules << 'POLKIT'
 polkit.addRule(function(action, subject) {
-    if (action.id == "org.freedesktop.policykit.exec" && subject.isInGroup("sudo")) {
-        var program = action.lookup("program");
-        var allowed = ["hysteria2", "/sysctl", "/kill", "/ip", "/nft", "/apt-get", "/bin/sh"];
-        for (var i = 0; i < allowed.length; i++) {
-            if (program.indexOf(allowed[i]) !== -1) {
-                return polkit.Result.YES;
-            }
-        }
+    if (action.id != "org.freedesktop.policykit.exec") {
+        return;
+    }
+    if (!subject.isInGroup("sudo")) {
+        return;
+    }
+    var program = action.lookup("program");
+    var allowed = [
+        "/opt/vroxory-vpn/core/privileged_helper.sh",
+        "/usr/local/bin/hysteria2",
+        "/home/" + subject.user + "/.local/bin/hysteria2"
+    ];
+    if (allowed.indexOf(program) !== -1) {
+        return polkit.Result.YES;
     }
 });
 POLKIT
 
 # Права
 chmod +x /opt/vroxory-vpn/main.py
+chmod +x /opt/vroxory-vpn/core/privileged_helper.sh
 chmod 644 /usr/share/applications/vroxory-vpn.desktop
 
 echo "Vroxory VPN установлен. Запуск: vroxory-vpn"

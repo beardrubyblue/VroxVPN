@@ -1,6 +1,9 @@
 """Kill switch на nftables — блокирует трафик мимо TUN-интерфейса."""
-import os
+import ipaddress
+import socket
 import subprocess
+
+from core.privileged import run_privileged
 
 TABLE_NAME = "vroxory_killswitch"
 
@@ -19,26 +22,37 @@ table inet {table} {{
 """
 
 
+def _safe_server_ip(host: str) -> str:
+    """Возвращает host только если это валидный IPv4-литерал (резолвя
+    имя при необходимости) — никакая непроверенная строка из подписки не
+    должна попадать напрямую в текст nft-правил, выполняемых как root."""
+    if not host:
+        return "0.0.0.0/32"
+    try:
+        ipaddress.IPv4Address(host)
+        return host
+    except ValueError:
+        pass
+    try:
+        resolved = socket.gethostbyname(host)
+        ipaddress.IPv4Address(resolved)
+        return resolved
+    except (socket.gaierror, ValueError, OSError):
+        return "0.0.0.0/32"
+
+
 class KillSwitch:
     def enable(self, tun_interface: str = "tun-vroxory", vpn_server_ip: str = "") -> bool:
         rules = NFT_RULES_TEMPLATE.format(
             table=TABLE_NAME,
             tun_interface=tun_interface,
-            vpn_server_ip=vpn_server_ip or "0.0.0.0/32",
+            vpn_server_ip=_safe_server_ip(vpn_server_ip),
         )
-        cmd = ["nft", "-f", "-"]
-        if os.geteuid() != 0:
-            cmd = ["pkexec"] + cmd
-
-        result = subprocess.run(cmd, input=rules, text=True, capture_output=True)
+        result = run_privileged(["nft-apply"], input_data=rules)
         return result.returncode == 0
 
     def disable(self) -> bool:
-        cmd = ["nft", "delete", "table", "inet", TABLE_NAME]
-        if os.geteuid() != 0:
-            cmd = ["pkexec"] + cmd
-
-        result = subprocess.run(cmd, capture_output=True, text=True)
+        result = run_privileged(["nft-delete-table", TABLE_NAME])
         return result.returncode == 0
 
     def is_active(self) -> bool:
