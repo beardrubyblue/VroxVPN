@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Точка входа VroxVPN."""
+"""Точка входа vrox.vpn."""
 import sys
 import threading
 from pathlib import Path
@@ -116,7 +116,7 @@ class VroxoryVPN(Adw.Application):
 
 
 def main():
-    GLib.set_application_name("VroxVPN")
+    GLib.set_application_name("vrox.vpn")
     app = VroxoryVPN()
     return app.run(sys.argv)
 

@@ -4,12 +4,12 @@ set -e
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PROJECT_DIR="$(cd "$SCRIPT_DIR/../.." && pwd)"
 BUILD_DIR="$SCRIPT_DIR/build"
-VERSION="2.2.0"
+VERSION="2.2.1"
 ARCH="amd64"
 PKG_NAME="vroxory-vpn_${VERSION}_${ARCH}"
 
 echo "═══════════════════════════════════"
-echo "  Сборка VroxVPN .deb пакета"
+echo "  Сборка vrox.vpn .deb пакета"
 echo "═══════════════════════════════════"
 
 # Чистим
@@ -45,7 +45,7 @@ chmod +x "$BUILD_DIR/$PKG_NAME/usr/local/bin/vroxory-vpn"
 mkdir -p "$BUILD_DIR/$PKG_NAME/usr/share/applications"
 cat > "$BUILD_DIR/$PKG_NAME/usr/share/applications/com.vroxory.vpn.desktop" << EOF
 [Desktop Entry]
-Name=VroxVPN
+Name=vrox.vpn
 Comment=Hysteria2 VPN клиент
 Exec=vroxory-vpn
 Icon=com.vroxory.vpn
@@ -90,7 +90,7 @@ if [[ "$1" == "--publish" ]]; then
     # 2. Создаём GitHub Release и загружаем .deb
     gh release create "v${VERSION}" \
         "$PROJECT_DIR/vroxory-vpn_${VERSION}_${ARCH}.deb" \
-        --title "VroxVPN v${VERSION}" \
+        --title "vrox.vpn v${VERSION}" \
         --notes "Обновление версии ${VERSION}" \
         --repo "beardrubyblue/VroxVPN"
 

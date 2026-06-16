@@ -39,8 +39,8 @@ chmod 644 /usr/share/applications/com.vroxory.vpn.desktop
 rm -f /usr/share/applications/vroxory-vpn.desktop
 
 # обновляем кэш иконок и базу .desktop-файлов, чтобы новая иконка и
-# имя "VroxVPN" подхватились сразу, без перезахода в сессию
+# имя "vrox.vpn" подхватились сразу, без перезахода в сессию
 gtk-update-icon-cache -f /usr/share/icons/hicolor 2>/dev/null || true
 update-desktop-database /usr/share/applications 2>/dev/null || true
 
-echo "VroxVPN установлен. Запуск: vroxory-vpn"
+echo "vrox.vpn установлен. Запуск: vroxory-vpn"

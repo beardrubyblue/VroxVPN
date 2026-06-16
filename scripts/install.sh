@@ -43,11 +43,11 @@ done
 
 # .desktop файл — имя файла совпадает с application_id ("com.vroxory.vpn"),
 # иначе GNOME Shell не сопоставит окно с записью и в доке/Alt-Tab будет
-# виден голый application_id вместо "VroxVPN"
+# виден голый application_id вместо "vrox.vpn"
 mkdir -p "$HOME/.local/share/applications"
 cat > "$HOME/.local/share/applications/com.vroxory.vpn.desktop" << EOF
 [Desktop Entry]
-Name=VroxVPN
+Name=vrox.vpn
 Comment=Hysteria2 VPN клиент
 Exec=python3 $APP_DIR/main.py
 Icon=com.vroxory.vpn

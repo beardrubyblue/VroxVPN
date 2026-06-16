@@ -1,8 +1,8 @@
 {
-  "version": "2.2.0",
-  "download_url": "https://github.com/beardrubyblue/VroxVPN/releases/download/v2.2.0/vroxory-vpn_2.2.0_amd64.deb",
-  "sha256": "b93cb15f45c36feda5f5f80df7ca66d1fb650baa4f02a32368ae22a517cf5194",
-  "changelog": "Исправлено отображение названия в доке/Alt-Tab: показывался голый com.vroxory.vpn вместо имени приложения — причина в том, что имя .desktop-файла не совпадало с application_id. Файл переименован в com.vroxory.vpn.desktop. Везде название унифицировано на VroxVPN. Добавлен собственный логотип (щит с галочкой) во всех стандартных размерах вместо системной иконки-заглушки.",
+  "version": "2.2.1",
+  "download_url": "https://github.com/beardrubyblue/VroxVPN/releases/download/v2.2.1/vroxory-vpn_2.2.1_amd64.deb",
+  "sha256": "e588ebf30600f7f43c78f220ce58bbf17ab4fdef415d8ed7429d3ed0facf9a4b",
+  "changelog": "Название приложения исправлено на vrox.vpn (везде: заголовок окна, трей, About, .desktop, README).",
   "min_version": "1.0.0",
-  "released_at": "2026-06-16T17:09:49Z"
+  "released_at": "2026-06-16T19:52:12Z"
 }

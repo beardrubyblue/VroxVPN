@@ -62,7 +62,7 @@ class TrayProcess:
             AppIndicator3.IndicatorCategory.APPLICATION_STATUS,
         )
         self.indicator.set_status(AppIndicator3.IndicatorStatus.ACTIVE)
-        self.indicator.set_title("VroxVPN")
+        self.indicator.set_title("vrox.vpn")
         self._rebuild_menu()
 
         threading.Thread(target=self._read_stdin, daemon=True).start()
