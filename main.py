@@ -22,6 +22,7 @@ class VroxoryVPN(Adw.Application):
         self.tray.on_show = self._on_tray_show
         self.tray.on_toggle = self._on_tray_toggle
         self.tray.on_quit = self._on_tray_quit
+        self.tray.on_select_server = self._on_tray_select_server
         self._window = None
 
     def do_activate(self):
@@ -34,6 +35,7 @@ class VroxoryVPN(Adw.Application):
             self._window.tun_manager.on_disconnected = self._wrap(
                 self._window.tun_manager.on_disconnected, self._on_vpn_disconnected
             )
+            self._window.on_servers_updated = self._on_servers_updated
             self.tray.start()
         self._window.present()
 
@@ -61,7 +63,20 @@ class VroxoryVPN(Adw.Application):
     def _on_vpn_disconnected(self):
         self.tray.update_status(False)
 
+    def _on_servers_updated(self, servers):
+        selected = self._window._selected_server
+        selected_name = selected["name"] if selected else ""
+        self.tray.update_servers(servers, selected_name)
+
+    def _on_tray_select_server(self, name: str):
+        GLib.idle_add(self._window.select_server_by_name, name)
+
     def _on_tray_quit(self):
+        self.request_full_quit()
+
+    def request_full_quit(self):
+        """Полностью завершает приложение: отключает VPN (рвёт TUN-
+        интерфейс), останавливает трей и закрывает процесс."""
         def worker():
             self._window.tun_manager.disconnect()
             GLib.idle_add(self._finish_quit)

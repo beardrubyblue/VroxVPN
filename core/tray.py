@@ -27,9 +27,12 @@ class TrayIcon:
         self.on_show = None
         self.on_toggle = None
         self.on_quit = None
+        self.on_select_server = None
 
         self._connected = False
         self._server_name = ""
+        self._selected_server_name = ""
+        self._servers = []
         self._icon = None
         self._thread = None
 
@@ -41,6 +44,37 @@ class TrayIcon:
                 menu=self._build_menu(),
             )
 
+    def _build_servers_menu(self):
+        if not self._servers:
+            return pystray.Menu(pystray.MenuItem("Нет серверов", None, enabled=False))
+
+        items = []
+        for server in self._servers:
+            name = server["name"]
+            items.append(
+                pystray.MenuItem(
+                    name,
+                    self._make_select_handler(name),
+                    checked=self._make_checked_fn(name),
+                    radio=True,
+                )
+            )
+        return pystray.Menu(*items)
+
+    def _make_select_handler(self, name: str):
+        def handler(_icon, _item):
+            self._selected_server_name = name
+            if self._icon:
+                self._icon.menu = self._build_menu()
+            if self.on_select_server:
+                self.on_select_server(name)
+        return handler
+
+    def _make_checked_fn(self, name: str):
+        def fn(_item):
+            return self._selected_server_name == name
+        return fn
+
     def _build_menu(self):
         status_text = (
             f"Подключено к: {self._server_name}" if self._connected else "Не подключено"
@@ -50,6 +84,7 @@ class TrayIcon:
             pystray.MenuItem("Vroxory VPN", None, enabled=False),
             pystray.Menu.SEPARATOR,
             pystray.MenuItem(status_text, None, enabled=False),
+            pystray.MenuItem("Серверы", self._build_servers_menu()),
             pystray.Menu.SEPARATOR,
             pystray.MenuItem("Показать окно", self._handle_show),
             pystray.MenuItem(toggle_text, self._handle_toggle),
@@ -82,7 +117,16 @@ class TrayIcon:
     def update_status(self, connected: bool, server_name: str = "") -> None:
         self._connected = connected
         self._server_name = server_name
+        if server_name:
+            self._selected_server_name = server_name
         if not self._icon:
             return
         self._icon.icon = _make_icon_image(connected)
         self._icon.menu = self._build_menu()
+
+    def update_servers(self, servers: list, selected_name: str = "") -> None:
+        self._servers = servers
+        if selected_name:
+            self._selected_server_name = selected_name
+        if self._icon:
+            self._icon.menu = self._build_menu()

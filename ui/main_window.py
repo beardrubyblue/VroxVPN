@@ -21,7 +21,7 @@ from ui.server_row import ServerRow
 from ui.stats_bar import StatsBar
 from ui.log_panel import LogPanel
 
-APP_VERSION = "2.0.4"
+APP_VERSION = "2.0.5"
 
 
 class MainWindow(Adw.ApplicationWindow):
@@ -50,6 +50,7 @@ class MainWindow(Adw.ApplicationWindow):
         self._servers = []
         self._selected_server = None
         self._state = "idle"  # idle | connecting | connected | disconnecting
+        self.on_servers_updated = None
 
         self._setup_actions()
         self._build_ui()
@@ -72,6 +73,10 @@ class MainWindow(Adw.ApplicationWindow):
 
         action = Gio.SimpleAction.new("about", None)
         action.connect("activate", lambda *_a: self._show_about_dialog())
+        self.add_action(action)
+
+        action = Gio.SimpleAction.new("quit", None)
+        action.connect("activate", lambda *_a: self._on_quit_clicked())
         self.add_action(action)
 
     # ---------------------------------------------------------------- UI
@@ -98,6 +103,10 @@ class MainWindow(Adw.ApplicationWindow):
         about_section = Gio.Menu()
         about_section.append("О программе", "win.about")
         menu.append_section(None, about_section)
+
+        quit_section = Gio.Menu()
+        quit_section.append("Выйти полностью", "win.quit")
+        menu.append_section(None, quit_section)
 
         menu_button = Gtk.MenuButton()
         menu_button.set_icon_name("open-menu-symbolic")
@@ -350,7 +359,9 @@ class MainWindow(Adw.ApplicationWindow):
             GLib.source_remove(self._banner_timeout_id)
             self._banner_timeout_id = None
 
-        if not persistent:
+        # ошибки не прячем автоматически — пользователь должен успеть
+        # прочитать, что именно пошло не так (например, сеть недоступна)
+        if not persistent and not warning:
             self._banner_timeout_id = GLib.timeout_add_seconds(5, self._auto_hide_banner)
         return False
 
@@ -397,6 +408,13 @@ class MainWindow(Adw.ApplicationWindow):
             license_type=Gtk.License.MIT_X11,
         )
         dialog.present(self)
+
+    def _on_quit_clicked(self):
+        app = self.get_application()
+        if hasattr(app, "request_full_quit"):
+            app.request_full_quit()
+        else:
+            app.quit()
 
     # ----------------------------------------------------------- loading
 
@@ -463,7 +481,7 @@ class MainWindow(Adw.ApplicationWindow):
         if success:
             self._show_banner("✓ hysteria2 обновлён")
         else:
-            self._show_banner("Ошибка обновления hysteria2")
+            self._show_banner("Ошибка обновления hysteria2", warning=True)
         return False
 
     # ----------------------------------------------- обновление приложения
@@ -585,6 +603,24 @@ class MainWindow(Adw.ApplicationWindow):
             row = self.list_box.get_row_at_index(index_to_select)
             self.list_box.select_row(row)
 
+        if self.on_servers_updated:
+            self.on_servers_updated(servers)
+
+    def select_server_by_name(self, name: str) -> bool:
+        """Выбирает сервер по имени — используется треем для выбора без
+        открытия главного окна."""
+        for i, server in enumerate(self._servers):
+            if server["name"] != name:
+                continue
+            row = self.list_box.get_row_at_index(i)
+            if row is not None:
+                self.list_box.select_row(row)
+            else:
+                self._selected_server = server
+                settings.set("last_selected_server", name)
+            return True
+        return False
+
     def _fetch_subscription(self, url: str):
         self.progress_bar.set_visible(True)
         self.progress_bar.pulse()
@@ -651,7 +687,7 @@ class MainWindow(Adw.ApplicationWindow):
 
     def _on_fetch_error(self, message: str):
         self.progress_bar.set_visible(False)
-        self._show_banner(f"Ошибка загрузки подписки: {message}")
+        self._show_banner(f"Ошибка загрузки подписки: {message}", warning=True)
         return False
 
     # ------------------------------------------------------------ events
@@ -792,7 +828,7 @@ class MainWindow(Adw.ApplicationWindow):
 
     def _on_install_error(self, message: str):
         self.progress_bar.set_visible(False)
-        self._show_banner(f"Ошибка установки: {message}")
+        self._show_banner(f"Ошибка установки: {message}", warning=True)
         return False
 
     # --------------------------------------------------------- connection
