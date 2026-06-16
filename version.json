@@ -1,7 +1,7 @@
 {
-  "version": "2.0.1",
-  "download_url": "https://github.com/beardrubyblue/VroxVPN/releases/download/v2.0.1/vroxory-vpn_2.0.1_amd64.deb",
-  "changelog": "Исправлен пинг серверов (hysteria2 работает по UDP, TCP-проверка всегда показывала недоступность — заменили на ICMP). Добавлена кнопка ручного запуска пинга всех серверов рядом с заголовком \"Серверы\". Установка через apt теперь не требует apt-get install -f.",
+  "version": "2.0.2",
+  "download_url": "https://github.com/beardrubyblue/VroxVPN/releases/download/v2.0.2/vroxory-vpn_2.0.2_amd64.deb",
+  "changelog": "Убрано дублирование скорости трафика в блоке \"Трафик\" (показывалось дважды). Подтверждено polkit-правило без запроса пароля при подключении/отключении из 2.0.1.",
   "min_version": "1.0.0",
-  "released_at": "2026-06-16T14:34:40Z"
+  "released_at": "2026-06-16T14:51:16Z"
 }
