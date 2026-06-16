@@ -15,7 +15,6 @@ class StatsBar(Adw.PreferencesGroup):
 
         row = Adw.ActionRow()
         row.set_title("Трафик")
-        row.set_subtitle("↑ 0 B/s · ↓ 0 B/s")
 
         icon = Gtk.Image.new_from_icon_name("network-transmit-receive-symbolic")
         row.add_prefix(icon)
@@ -28,12 +27,8 @@ class StatsBar(Adw.PreferencesGroup):
         self.download_label.add_css_class("accent")
         row.add_suffix(self.download_label)
 
-        self._row = row
         self.add(row)
 
     def update(self, upload_bps: int, download_bps: int) -> None:
-        up = format_speed(upload_bps)
-        down = format_speed(download_bps)
-        self.upload_label.set_label(f"↑ {up}")
-        self.download_label.set_label(f"↓ {down}")
-        self._row.set_subtitle(f"↑ {up} · ↓ {down}")
+        self.upload_label.set_label(f"↑ {format_speed(upload_bps)}")
+        self.download_label.set_label(f"↓ {format_speed(download_bps)}")
