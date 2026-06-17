@@ -93,9 +93,18 @@ if [[ "$1" == "--publish" ]]; then
         exit 1
     fi
 
-    # 2. Создаём GitHub Release и загружаем .deb
+    # копия со стабильным именем (без версии) — чтобы
+    # releases/latest/download/vroxory-vpn_amd64.deb в README всегда
+    # указывал на актуальный .deb без ручной правки ссылки на каждый релиз
+    STABLE_DEB="$PROJECT_DIR/vroxory-vpn_${ARCH}.deb"
+    cp "$PROJECT_DIR/vroxory-vpn_${VERSION}_${ARCH}.deb" "$STABLE_DEB"
+
+    # 2. Создаём GitHub Release и загружаем оба файла: версионный (на него
+    # ссылается version.json/AppUpdater — имя фиксирует конкретную версию)
+    # и со стабильным именем (для прямой ссылки на "latest" в README)
     gh release create "v${VERSION}" \
         "$PROJECT_DIR/vroxory-vpn_${VERSION}_${ARCH}.deb" \
+        "$STABLE_DEB" \
         --title "vrox.vpn v${VERSION}" \
         --notes "Обновление версии ${VERSION}" \
         --repo "beardrubyblue/VroxVPN"
