@@ -19,10 +19,17 @@ AyatanaAppIndicator3 (без него GNOME Shell не показывает тр
   QUIT           — клик "Выход"
   SELECT:<name>  — выбран сервер в подменю
 """
+import ctypes
 import sys
 import tempfile
 import threading
 from pathlib import Path
+
+try:
+    ctypes.CDLL(None).prctl(15, b"vrox.vpn", 0, 0, 0)  # PR_SET_NAME — иначе в системном
+    # мониторе/ps этот процесс виден как голый "python3", а не "vrox.vpn"
+except (OSError, AttributeError):
+    pass
 
 import gi
 

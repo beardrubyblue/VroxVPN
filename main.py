@@ -14,6 +14,9 @@ from gi.repository import Adw, GLib
 
 from ui.main_window import MainWindow
 from core.tray import TrayIcon
+from core.procname import set_process_name
+
+set_process_name("vrox.vpn")
 
 # Сколько максимум ждём корректное отключение VPN перед выходом. pkexec
 # при очистке TUN/DNS иногда отвечает не мгновенно (несколько секунд) —

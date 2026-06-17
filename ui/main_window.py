@@ -22,7 +22,7 @@ from ui.compat import CompatBanner, CompatSwitchRow, CompatAlertDialog, SUGGESTE
 from ui.stats_bar import StatsBar
 from ui.log_panel import LogPanel
 
-APP_VERSION = "2.2.9"
+APP_VERSION = "2.2.10"
 
 
 class MainWindow(Adw.ApplicationWindow):
@@ -636,6 +636,17 @@ class MainWindow(Adw.ApplicationWindow):
 
         def on_response(_dialog, response):
             if response == "restart":
+                # os.execv() заменяет только образ ТЕКУЩЕГО процесса — отдельный
+                # GTK3-процесс трея (core/tray_process.py), запущенный через
+                # subprocess.Popen, продолжает жить как есть и теряет связь с
+                # новым (перезапущенным) процессом. tray.start() после
+                # перезапуска поднимает ещё один — получаются два процесса
+                # трея, один из которых не закрыть иначе как из системного
+                # монитора. Поэтому старый процесс трея нужно остановить
+                # явно, ДО execv.
+                app = self.get_application()
+                if hasattr(app, "tray"):
+                    app.tray.stop()
                 os.execv(sys.executable, [sys.executable] + sys.argv)
 
         dialog.connect("response", on_response)
