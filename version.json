@@ -1,8 +1,8 @@
 {
-  "version": "2.2.7",
-  "download_url": "https://github.com/beardrubyblue/VroxVPN/releases/download/v2.2.7/vroxory-vpn_2.2.7_amd64.deb",
-  "sha256": "c886e047a9c59bda1b3fd04a65ada6984418ec9b16fc030e58af148ab5bb9536",
-  "changelog": "Исправлен молчаливый краш при запуске на Ubuntu 22.04: приложение использовало Adw.Banner/Adw.AboutDialog/Adw.AlertDialog/Adw.SwitchRow — виджеты, которых нет в libadwaita 1.1 (репозитории jammy ставят именно её). Окно падало при сборке UI без вывода ошибки в терминал. Добавлены совместимые замены этих виджетов на чистом GTK4. Проверено живым тестом в чистом контейнере ubuntu:22.04 с libadwaita 1.1.7 — окно строится и приложение работает.",
+  "version": "2.2.8",
+  "download_url": "https://github.com/beardrubyblue/VroxVPN/releases/download/v2.2.8/vroxory-vpn_2.2.8_amd64.deb",
+  "sha256": "8d443483859c22e0e8b89660154268f70019a87dbde931d06cbf581f4bb8089e",
+  "changelog": "Окно \"О программе\" снова выезжает снизу (как раньше делал Adw.AboutDialog) — теперь это собственный bottom-sheet поверх содержимого окна, без зависимости от libadwaita 1.5, поэтому продолжает работать и на Ubuntu 22.04 (libadwaita 1.1).",
   "min_version": "1.0.0",
-  "released_at": "2026-06-17T11:43:30Z"
+  "released_at": "2026-06-17T12:15:37Z"
 }

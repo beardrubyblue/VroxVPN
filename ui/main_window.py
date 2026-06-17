@@ -18,11 +18,11 @@ from core.kill_switch import KillSwitch
 from core.stats import TrafficStats
 from core.updater import Updater, AppUpdater
 from ui.server_row import ServerRow
-from ui.compat import CompatBanner, CompatSwitchRow, CompatAlertDialog, SUGGESTED
+from ui.compat import CompatBanner, CompatSwitchRow, CompatAlertDialog, SUGGESTED, BottomSheet
 from ui.stats_bar import StatsBar
 from ui.log_panel import LogPanel
 
-APP_VERSION = "2.2.7"
+APP_VERSION = "2.2.8"
 
 
 class MainWindow(Adw.ApplicationWindow):
@@ -84,7 +84,14 @@ class MainWindow(Adw.ApplicationWindow):
 
     def _build_ui(self):
         root = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
-        self.set_content(root)
+
+        # overlay нужен, чтобы "О программе" могло выезжать снизу поверх
+        # содержимого окна (см. _show_about_dialog) — как раньше делал
+        # Adw.AboutDialog на узких окнах через адаптивную bottom-sheet
+        # презентацию (libadwaita 1.5+, недоступна на Ubuntu 22.04)
+        self._overlay = Gtk.Overlay()
+        self._overlay.set_child(root)
+        self.set_content(self._overlay)
 
         header = Adw.HeaderBar()
 
@@ -279,6 +286,19 @@ class MainWindow(Adw.ApplicationWindow):
             font-size: 15px;
             font-weight: 600;
         }
+        .vrox-sheet-scrim {
+            background-color: rgba(0, 0, 0, 0);
+            transition: background-color 250ms ease-out;
+        }
+        .vrox-sheet-scrim.visible {
+            background-color: rgba(0, 0, 0, 0.45);
+        }
+        .vrox-sheet {
+            background-color: @window_bg_color;
+            border-top-left-radius: 14px;
+            border-top-right-radius: 14px;
+            box-shadow: 0 -2px 12px rgba(0, 0, 0, 0.25);
+        }
         """
         provider = Gtk.CssProvider()
         provider.load_from_data(css)
@@ -399,20 +419,58 @@ class MainWindow(Adw.ApplicationWindow):
             self._app_banner_click_handler()
 
     def _show_about_dialog(self):
-        # Gtk.AboutDialog, а не Adw.AboutDialog — последний появился только
-        # в libadwaita 1.5, на Ubuntu 22.04 (libadwaita 1.1) его нет вообще
-        dialog = Gtk.AboutDialog(
-            program_name="vrox.vpn",
-            logo_icon_name="com.vroxory.vpn",
-            version=APP_VERSION,
-            comments="Hysteria2 VPN клиент с TUN режимом для Linux",
-            website="https://net.vroxory.com",
-            authors=["Vroxory"],
-            license_type=Gtk.License.MIT_X11,
-        )
-        dialog.set_transient_for(self)
-        dialog.set_modal(True)
-        dialog.present()
+        # Выезжающий снизу sheet вместо отдельного окна — раньше так же
+        # выглядел Adw.AboutDialog на узких окнах (адаптивная bottom-sheet
+        # презентация, появилась в libadwaita 1.5, недоступна на Ubuntu
+        # 22.04 / libadwaita 1.1, поэтому сам класс заменён на Gtk-виджеты,
+        # но визуальное поведение "выезжает снизу" сохранено через BottomSheet)
+        box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8)
+        box.set_margin_top(24)
+        box.set_margin_bottom(24)
+        box.set_margin_start(24)
+        box.set_margin_end(24)
+
+        close_row = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL)
+        close_row.set_halign(Gtk.Align.END)
+        close_btn = Gtk.Button()
+        close_btn.set_icon_name("window-close-symbolic")
+        close_btn.add_css_class("flat")
+        close_btn.add_css_class("circular")
+        close_btn.connect("clicked", lambda _b: sheet.close())
+        close_row.append(close_btn)
+        box.append(close_row)
+
+        icon = Gtk.Image.new_from_icon_name("com.vroxory.vpn")
+        icon.set_pixel_size(64)
+        icon.set_margin_bottom(8)
+        box.append(icon)
+
+        name_label = Gtk.Label(label="vrox.vpn")
+        name_label.add_css_class("title-1")
+        box.append(name_label)
+
+        version_label = Gtk.Label(label=f"Версия {APP_VERSION}")
+        version_label.add_css_class("dim-label")
+        box.append(version_label)
+
+        comments_label = Gtk.Label(label="Hysteria2 VPN клиент с TUN режимом для Linux")
+        comments_label.set_wrap(True)
+        comments_label.set_justify(Gtk.Justification.CENTER)
+        comments_label.set_margin_top(12)
+        box.append(comments_label)
+
+        website_btn = Gtk.LinkButton(uri="https://net.vroxory.com", label="net.vroxory.com")
+        website_btn.set_halign(Gtk.Align.CENTER)
+        box.append(website_btn)
+
+        license_label = Gtk.Label(label="Vroxory · Лицензия MIT")
+        license_label.add_css_class("dim-label")
+        license_label.add_css_class("caption")
+        license_label.set_margin_top(12)
+        box.append(license_label)
+
+        sheet = BottomSheet(self._overlay, box)
+        sheet.present()
 
     def _on_quit_clicked(self):
         app = self.get_application()

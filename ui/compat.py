@@ -7,7 +7,7 @@ import gi
 
 gi.require_version("Gtk", "4.0")
 gi.require_version("Adw", "1")
-from gi.repository import Gtk, Adw, GObject
+from gi.repository import Gtk, Adw, GObject, GLib
 
 
 class CompatBanner(Gtk.Revealer):
@@ -165,3 +165,57 @@ class CompatAlertDialog(Gtk.Window):
         if parent is not None:
             self.set_transient_for(parent)
         super().present()
+
+
+SHEET_TRANSITION_MS = 250
+
+
+class BottomSheet:
+    """Выезжающий снизу 'sheet' с затемнением фона — повторяет адаптивную
+    презентацию Adw.Dialog на узких окнах (появилась в libadwaita 1.5,
+    которой нет в 1.1 на Ubuntu 22.04). Рисуется внутри Gtk.Overlay
+    родительского окна, а не отдельным top-level окном — поэтому может
+    выезжать именно из нижнего края окна приложения, а не появляться
+    обычным окном ОС."""
+
+    def __init__(self, overlay: Gtk.Overlay, content: Gtk.Widget):
+        self._overlay = overlay
+
+        self._scrim = Gtk.Box()
+        self._scrim.add_css_class("vrox-sheet-scrim")
+        self._scrim.set_hexpand(True)
+        self._scrim.set_vexpand(True)
+        click = Gtk.GestureClick()
+        click.connect("released", lambda *_a: self.close())
+        self._scrim.add_controller(click)
+
+        sheet_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
+        sheet_box.add_css_class("vrox-sheet")
+        sheet_box.append(content)
+
+        self._revealer = Gtk.Revealer()
+        self._revealer.set_transition_type(Gtk.RevealerTransitionType.SLIDE_UP)
+        self._revealer.set_transition_duration(SHEET_TRANSITION_MS)
+        self._revealer.set_valign(Gtk.Align.END)
+        self._revealer.set_child(sheet_box)
+
+        overlay.add_overlay(self._scrim)
+        overlay.add_overlay(self._revealer)
+
+    def present(self) -> None:
+        GLib.idle_add(self._reveal)
+
+    def _reveal(self) -> bool:
+        self._scrim.add_css_class("visible")
+        self._revealer.set_reveal_child(True)
+        return False
+
+    def close(self) -> None:
+        self._scrim.remove_css_class("visible")
+        self._revealer.set_reveal_child(False)
+        GLib.timeout_add(SHEET_TRANSITION_MS, self._cleanup)
+
+    def _cleanup(self) -> bool:
+        self._overlay.remove_overlay(self._scrim)
+        self._overlay.remove_overlay(self._revealer)
+        return False
