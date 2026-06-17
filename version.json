@@ -1,8 +1,8 @@
 {
-  "version": "2.2.4",
-  "download_url": "https://github.com/beardrubyblue/VroxVPN/releases/download/v2.2.4/vroxory-vpn_2.2.4_amd64.deb",
-  "sha256": "88542eea1df6ddbae5c916358e1ed0101861674d82ccb0c4a5abf419c6aaf2d2",
-  "changelog": "Исправлен запрос пароля при старте/отключении и недоудаляемый туннель: helper-скрипт теперь живёт по фиксированному системному пути (а не зависит от того, откуда запущен main.py), а отключение hysteria2 убивает настоящий root-процесс по пути конфига, а не pid pkexec-обёртки (который раньше не совпадал с реальным процессом и оставлял TUN-устройство висеть).",
+  "version": "2.2.5",
+  "download_url": "https://github.com/beardrubyblue/VroxVPN/releases/download/v2.2.5/vroxory-vpn_2.2.5_amd64.deb",
+  "sha256": "c6f3ea964d607b653a40de6d85f2d214717e97a7821ad759e6486e6383eaf110",
+  "changelog": "Исправлена зависимость пакета: требовался python3 >= 3.11, хотя код использует только синтаксис 3.10 (\"str | None\") — на Ubuntu с python3 3.10 .deb не ставился. Также исправлены логи: hysteria2 выводит ANSI-коды раскраски (INFO/WARN/FATAL) даже не в терминал — теперь они вырезаются перед показом в панели логов вместо отображения как мусорные символы.",
   "min_version": "1.0.0",
-  "released_at": "2026-06-17T10:06:29Z"
+  "released_at": "2026-06-17T11:05:00Z"
 }

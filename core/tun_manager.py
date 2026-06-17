@@ -1,5 +1,6 @@
 """Управление подключением hysteria2 в TUN-режиме."""
 import os
+import re
 import subprocess
 import threading
 
@@ -10,6 +11,10 @@ from core.privileged import run_privileged
 
 CONNECTED_MARKERS = ("tun started", "client up and running", "tun listening")
 TUN_IFACE = "tun-vroxory"
+# hysteria2 раскрашивает уровни (INFO/WARN/FATAL) ANSI-кодами даже когда
+# stdout не терминал, а пайп — без очистки в логах видны "странные символы"
+# (\x1b[34m...\x1b[0m) вместо чистого текста
+ANSI_ESCAPE_RE = re.compile(r"\x1b\[[0-9;]*[a-zA-Z]")
 
 
 class TunManager:
@@ -91,7 +96,7 @@ class TunManager:
         last_fatal_message = ""
 
         for line in self.process.stdout:
-            line = line.rstrip()
+            line = ANSI_ESCAPE_RE.sub("", line.rstrip())
             if not line:
                 continue
             if self.on_log:
