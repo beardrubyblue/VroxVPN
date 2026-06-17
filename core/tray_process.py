@@ -82,6 +82,10 @@ class TrayProcess:
         status_item.set_sensitive(False)
         menu.append(status_item)
 
+        toggle_item = Gtk.MenuItem(label="Отключить" if self.connected else "Подключить")
+        toggle_item.connect("activate", lambda _i: self._send("TOGGLE"))
+        menu.append(toggle_item)
+
         menu.append(Gtk.SeparatorMenuItem())
 
         servers_item = Gtk.MenuItem(label="Серверы")
@@ -109,10 +113,6 @@ class TrayProcess:
         show_item = Gtk.MenuItem(label="Показать окно")
         show_item.connect("activate", lambda _i: self._send("SHOW"))
         menu.append(show_item)
-
-        toggle_item = Gtk.MenuItem(label="Отключить" if self.connected else "Подключить")
-        toggle_item.connect("activate", lambda _i: self._send("TOGGLE"))
-        menu.append(toggle_item)
 
         menu.append(Gtk.SeparatorMenuItem())
 

@@ -22,7 +22,7 @@ from ui.compat import CompatBanner, CompatSwitchRow, CompatAlertDialog, SUGGESTE
 from ui.stats_bar import StatsBar
 from ui.log_panel import LogPanel
 
-APP_VERSION = "2.2.10"
+APP_VERSION = "2.2.11"
 
 
 class MainWindow(Adw.ApplicationWindow):
