@@ -23,7 +23,7 @@ from ui.compat import CompatBanner, CompatSwitchRow, CompatAlertDialog, SUGGESTE
 from ui.stats_bar import StatsBar
 from ui.log_panel import LogPanel
 
-APP_VERSION = "2.2.12"
+APP_VERSION = "2.2.13"
 
 
 def _format_userinfo(userinfo: dict) -> str:

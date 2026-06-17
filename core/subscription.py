@@ -21,6 +21,11 @@ QUIC_FIELD_MAP = {
     "disablePathMTUDiscovery": "disablePathMTUDiscovery",
 }
 
+# Эти поля в 3x-ui хранятся как целые секунды (xray-core делает
+# time.Duration(value) * time.Second), а в hysteria2 quic: ожидают
+# строку вида "30s" — голое число hysteria2 распарсит как наносекунды.
+QUIC_DURATION_FIELDS = {"maxIdleTimeout", "keepAlivePeriod"}
+
 
 def fetch_subscription(url: str, timeout: int = 15) -> tuple:
     """Скачивает подписку по URL. Возвращает (список серверов, userinfo).
@@ -79,11 +84,15 @@ def _parse_quic_params(fm_raw: str) -> dict:
     quic_params = finalmask.get("quicParams")
     if not isinstance(quic_params, dict):
         return {}
-    return {
-        hysteria_key: quic_params[sub_key]
-        for sub_key, hysteria_key in QUIC_FIELD_MAP.items()
-        if sub_key in quic_params
-    }
+    result = {}
+    for sub_key, hysteria_key in QUIC_FIELD_MAP.items():
+        if sub_key not in quic_params:
+            continue
+        value = quic_params[sub_key]
+        if hysteria_key in QUIC_DURATION_FIELDS:
+            value = f"{value}s"
+        result[hysteria_key] = value
+    return result
 
 
 def _try_base64_decode(text: str) -> str:

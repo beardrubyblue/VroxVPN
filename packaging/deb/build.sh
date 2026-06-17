@@ -4,7 +4,7 @@ set -e
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PROJECT_DIR="$(cd "$SCRIPT_DIR/../.." && pwd)"
 BUILD_DIR="$SCRIPT_DIR/build"
-VERSION="2.2.12"
+VERSION="2.2.13"
 ARCH="amd64"
 PKG_NAME="vroxory-vpn_${VERSION}_${ARCH}"
 
