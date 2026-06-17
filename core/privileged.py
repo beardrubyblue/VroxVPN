@@ -16,10 +16,9 @@ from pathlib import Path
 # на установленную копию). При несовпадении пути pkexec не находит
 # подходящего passwordless-правила и откатывается на интерактивный запрос
 # пароля — именно это происходило при старте (loosen-rp-filter) и при
-# отключении (kill-hysteria/delete-tun). install.sh и postinst .deb-пакета
-# всегда кладут helper именно по этому пути — независимо от того, откуда
-# запускается сам main.py — поэтому правило отныне ровно одно и совпадает
-# всегда.
+# отключении (kill-hysteria/delete-tun). postinst .deb-пакета всегда кладёт
+# helper именно по этому пути — независимо от того, откуда запускается сам
+# main.py — поэтому правило отныне ровно одно и совпадает всегда.
 HELPER_SCRIPT = Path("/opt/vroxory-vpn/core/privileged_helper.sh")
 
 
@@ -40,7 +39,7 @@ def run_privileged(
     вызов в try/except.
     """
     if not HELPER_SCRIPT.exists():
-        msg = f"{HELPER_SCRIPT} не найден — выполни scripts/install.sh (или установи .deb)"
+        msg = f"{HELPER_SCRIPT} не найден — установи .deb-пакет vrox.vpn (см. README)"
         print(f"[privileged] {msg}")
         return subprocess.CompletedProcess([str(HELPER_SCRIPT)] + args, returncode=127, stdout="", stderr=msg)
 

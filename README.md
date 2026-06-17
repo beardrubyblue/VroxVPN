@@ -37,19 +37,27 @@ VPN-клиент для Linux Ubuntu на базе hysteria2, работающи
 
 ## Установка
 
+Единственный поддерживаемый способ — `.deb`-пакет с GitHub Releases:
+
 ```bash
-./scripts/install.sh
+wget -O /tmp/vroxory-vpn.deb "https://github.com/beardrubyblue/VroxVPN/releases/latest/download/vroxory-vpn_<версия>_amd64.deb"
+sudo apt install /tmp/vroxory-vpn.deb
 ```
 
-Скрипт установит системные зависимости (GTK4, libadwaita, polkit, nftables,
-AppIndicator), Python-пакеты (`requests`, `PyYAML`, `pystray`, `pillow`),
-добавит правило polkit для `hysteria2`/`sysctl`/`kill`/`ip`/`nft` и создаст
-ярлык приложения.
+Пакет ставит зависимости, добавляет polkit-правило, helper-скрипт в
+`/opt/vroxory-vpn/`, команду `vroxory-vpn` и ярлык в меню приложений.
+
+Запускать `python3 main.py` напрямую из исходников не нужно и не
+поддерживается для обычного использования — privileged-операции
+(подключение/отключение TUN) рассчитаны на установленную через `.deb`
+копию по фиксированному пути; запуск из произвольного чекаута параллельно
+с установленным пакетом создаёт два независимых "образа" приложения и
+путаницу при обновлении/удалении.
 
 ## Запуск
 
 ```bash
-python3 main.py
+vroxory-vpn
 ```
 
 При первом запуске откройте настройки (иконка шестерёнки) и укажите URL
@@ -78,8 +86,6 @@ vroxory-vpn/
 │   ├── server_row.py      # строка списка серверов с пингом
 │   ├── stats_bar.py       # индикатор скорости ↑/↓
 │   └── log_panel.py       # вкладка логов с цветовой подсветкой
-├── scripts/
-│   └── install.sh         # установка зависимостей и polkit-правила
 └── packaging/deb/
     ├── build.sh            # сборка .deb пакета
     └── DEBIAN/             # control, postinst, prerm
