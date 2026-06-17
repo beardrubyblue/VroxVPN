@@ -1,8 +1,8 @@
 {
-  "version": "2.2.8",
-  "download_url": "https://github.com/beardrubyblue/VroxVPN/releases/download/v2.2.8/vroxory-vpn_2.2.8_amd64.deb",
-  "sha256": "8d443483859c22e0e8b89660154268f70019a87dbde931d06cbf581f4bb8089e",
-  "changelog": "Окно \"О программе\" снова выезжает снизу (как раньше делал Adw.AboutDialog) — теперь это собственный bottom-sheet поверх содержимого окна, без зависимости от libadwaita 1.5, поэтому продолжает работать и на Ubuntu 22.04 (libadwaita 1.1).",
+  "version": "2.2.9",
+  "download_url": "https://github.com/beardrubyblue/VroxVPN/releases/download/v2.2.9/vroxory-vpn_2.2.9_amd64.deb",
+  "sha256": "e5ed98f9f96e71bf1eef3c21444fa9baddfddb38134022700e7ffe40cd458abb",
+  "changelog": "Диалог обновления (с changelog) теперь тоже выезжает снизу внутри окна приложения вместо отдельного окна ОС — раньше он не был ограничен шириной нашего окна и раздувался в ширину на длинном тексте changelog. Заодно вернулся более приятный вид (скруглённые углы, затемнение фона), как было до перехода на чистый GTK4.",
   "min_version": "1.0.0",
-  "released_at": "2026-06-17T12:15:37Z"
+  "released_at": "2026-06-17T12:21:54Z"
 }

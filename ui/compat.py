@@ -80,93 +80,6 @@ SUGGESTED = "suggested"
 DESTRUCTIVE = "destructive"
 
 
-class CompatAlertDialog(Gtk.Window):
-    """Замена Adw.AlertDialog/Adw.ResponseAppearance (появились в
-    libadwaita 1.5) — простое модальное окно с тем же узким API:
-    heading/body в конструкторе, add_response, set_response_appearance,
-    set_default_response, set_extra_child, сигнал "response" с
-    (dialog, response_id: str), present(parent)."""
-
-    __gsignals__ = {
-        "response": (GObject.SignalFlags.RUN_FIRST, None, (str,)),
-    }
-
-    def __init__(self, heading: str = "", body: str = ""):
-        super().__init__(modal=True, resizable=False)
-        self._buttons = {}
-        self._default_response = None
-        self._responded = False
-
-        box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=12)
-        box.set_margin_top(20)
-        box.set_margin_bottom(20)
-        box.set_margin_start(20)
-        box.set_margin_end(20)
-
-        if heading:
-            heading_label = Gtk.Label(label=heading)
-            heading_label.add_css_class("title-2")
-            heading_label.set_wrap(True)
-            heading_label.set_halign(Gtk.Align.START)
-            box.append(heading_label)
-
-        if body:
-            body_label = Gtk.Label(label=body)
-            body_label.set_wrap(True)
-            body_label.set_halign(Gtk.Align.START)
-            box.append(body_label)
-
-        self._extra_slot = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
-        box.append(self._extra_slot)
-
-        self._button_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
-        self._button_box.set_halign(Gtk.Align.END)
-        box.append(self._button_box)
-
-        self.set_child(box)
-        self.connect("close-request", self._on_close_request)
-
-    def set_extra_child(self, widget: Gtk.Widget) -> None:
-        self._extra_slot.append(widget)
-
-    def add_response(self, response_id: str, label: str) -> None:
-        button = Gtk.Button(label=label)
-        button.connect("clicked", lambda _b, rid=response_id: self._respond(rid))
-        self._button_box.append(button)
-        self._buttons[response_id] = button
-
-    def set_response_appearance(self, response_id: str, appearance: str) -> None:
-        button = self._buttons.get(response_id)
-        if not button:
-            return
-        if appearance == SUGGESTED:
-            button.add_css_class("suggested-action")
-        elif appearance == DESTRUCTIVE:
-            button.add_css_class("destructive-action")
-
-    def set_default_response(self, response_id: str) -> None:
-        self._default_response = response_id
-
-    def _respond(self, response_id: str) -> None:
-        if self._responded:
-            return
-        self._responded = True
-        self.emit("response", response_id)
-        self.close()
-
-    def _on_close_request(self, _win) -> bool:
-        if not self._responded:
-            self._responded = True
-            fallback = "cancel" if "cancel" in self._buttons else (self._default_response or "")
-            self.emit("response", fallback)
-        return False
-
-    def present(self, parent=None) -> None:
-        if parent is not None:
-            self.set_transient_for(parent)
-        super().present()
-
-
 SHEET_TRANSITION_MS = 250
 
 
@@ -219,3 +132,87 @@ class BottomSheet:
         self._overlay.remove_overlay(self._scrim)
         self._overlay.remove_overlay(self._revealer)
         return False
+
+
+class CompatAlertDialog:
+    """Замена Adw.AlertDialog/Adw.ResponseAppearance (появились в
+    libadwaita 1.5) — выезжающий снизу sheet внутри окна (BottomSheet),
+    а не отдельное окно ОС: раньше это было Gtk.Window, которое не
+    ограничено шириной нашего окна и раздувалось в ширину на длинном
+    тексте (например, changelog обновления). Тот же узкий API:
+    heading/body в конструкторе, add_response, set_response_appearance,
+    set_default_response, set_extra_child, сигнал "response" с
+    (dialog, response_id: str), present(parent), где parent — окно с
+    атрибутом _overlay (см. MainWindow)."""
+
+    def __init__(self, heading: str = "", body: str = ""):
+        self._buttons = {}
+        self._default_response = None
+        self._responded = False
+        self._response_callbacks = []
+        self._sheet = None
+
+        self._box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=12)
+        self._box.set_margin_top(20)
+        self._box.set_margin_bottom(20)
+        self._box.set_margin_start(20)
+        self._box.set_margin_end(20)
+
+        if heading:
+            heading_label = Gtk.Label(label=heading)
+            heading_label.add_css_class("title-2")
+            heading_label.set_wrap(True)
+            heading_label.set_halign(Gtk.Align.START)
+            self._box.append(heading_label)
+
+        if body:
+            body_label = Gtk.Label(label=body)
+            body_label.set_wrap(True)
+            body_label.set_halign(Gtk.Align.START)
+            self._box.append(body_label)
+
+        self._extra_slot = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
+        self._box.append(self._extra_slot)
+
+        self._button_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
+        self._button_box.set_halign(Gtk.Align.END)
+        self._button_box.set_margin_top(8)
+        self._box.append(self._button_box)
+
+    def set_extra_child(self, widget: Gtk.Widget) -> None:
+        self._extra_slot.append(widget)
+
+    def add_response(self, response_id: str, label: str) -> None:
+        button = Gtk.Button(label=label)
+        button.connect("clicked", lambda _b, rid=response_id: self._respond(rid))
+        self._button_box.append(button)
+        self._buttons[response_id] = button
+
+    def set_response_appearance(self, response_id: str, appearance: str) -> None:
+        button = self._buttons.get(response_id)
+        if not button:
+            return
+        if appearance == SUGGESTED:
+            button.add_css_class("suggested-action")
+        elif appearance == DESTRUCTIVE:
+            button.add_css_class("destructive-action")
+
+    def set_default_response(self, response_id: str) -> None:
+        self._default_response = response_id
+
+    def connect(self, signal_name: str, callback) -> None:
+        if signal_name == "response":
+            self._response_callbacks.append(callback)
+
+    def _respond(self, response_id: str) -> None:
+        if self._responded:
+            return
+        self._responded = True
+        for callback in self._response_callbacks:
+            callback(self, response_id)
+        if self._sheet:
+            self._sheet.close()
+
+    def present(self, parent) -> None:
+        self._sheet = BottomSheet(parent._overlay, self._box)
+        self._sheet.present()
