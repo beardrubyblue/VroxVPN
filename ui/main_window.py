@@ -18,10 +18,11 @@ from core.kill_switch import KillSwitch
 from core.stats import TrafficStats
 from core.updater import Updater, AppUpdater
 from ui.server_row import ServerRow
+from ui.compat import CompatBanner, CompatSwitchRow, CompatAlertDialog, SUGGESTED
 from ui.stats_bar import StatsBar
 from ui.log_panel import LogPanel
 
-APP_VERSION = "2.2.6"
+APP_VERSION = "2.2.7"
 
 
 class MainWindow(Adw.ApplicationWindow):
@@ -119,7 +120,7 @@ class MainWindow(Adw.ApplicationWindow):
         self.progress_bar.set_visible(False)
         root.append(self.progress_bar)
 
-        self.banner = Adw.Banner()
+        self.banner = CompatBanner()
         self.banner.set_revealed(False)
         self.banner.connect("button-clicked", self._on_banner_button_clicked)
         self._banner_click_handler = None
@@ -127,7 +128,7 @@ class MainWindow(Adw.ApplicationWindow):
         root.append(self.banner)
 
         # отдельный баннер для обновлений самого приложения (не hysteria2)
-        self.app_update_banner = Adw.Banner()
+        self.app_update_banner = CompatBanner()
         self.app_update_banner.set_revealed(False)
         self.app_update_banner.connect("button-clicked", self._on_app_banner_button_clicked)
         self._app_banner_click_handler = None
@@ -226,7 +227,7 @@ class MainWindow(Adw.ApplicationWindow):
         protection_group.set_title("Защита")
         protection_group.set_visible(False)
 
-        self.kill_switch_toggle = Adw.SwitchRow()
+        self.kill_switch_toggle = CompatSwitchRow()
         self.kill_switch_toggle.set_title("Kill Switch")
         self.kill_switch_toggle.set_subtitle("Блокировать трафик без VPN")
         self.kill_switch_toggle.set_icon_name("network-offline-symbolic")
@@ -234,7 +235,7 @@ class MainWindow(Adw.ApplicationWindow):
         self.kill_switch_toggle.connect("notify::active", self._on_kill_switch_toggled)
         protection_group.add(self.kill_switch_toggle)
 
-        self.dns_toggle = Adw.SwitchRow()
+        self.dns_toggle = CompatSwitchRow()
         self.dns_toggle.set_title("DNS защита")
         self.dns_toggle.set_subtitle("Предотвращение DNS утечек")
         self.dns_toggle.set_icon_name("system-lock-screen-symbolic")
@@ -398,16 +399,20 @@ class MainWindow(Adw.ApplicationWindow):
             self._app_banner_click_handler()
 
     def _show_about_dialog(self):
-        dialog = Adw.AboutDialog(
-            application_name="vrox.vpn",
-            application_icon="com.vroxory.vpn",
+        # Gtk.AboutDialog, а не Adw.AboutDialog — последний появился только
+        # в libadwaita 1.5, на Ubuntu 22.04 (libadwaita 1.1) его нет вообще
+        dialog = Gtk.AboutDialog(
+            program_name="vrox.vpn",
+            logo_icon_name="com.vroxory.vpn",
             version=APP_VERSION,
             comments="Hysteria2 VPN клиент с TUN режимом для Linux",
             website="https://net.vroxory.com",
-            developer_name="Vroxory",
+            authors=["Vroxory"],
             license_type=Gtk.License.MIT_X11,
         )
-        dialog.present(self)
+        dialog.set_transient_for(self)
+        dialog.set_modal(True)
+        dialog.present()
 
     def _on_quit_clicked(self):
         app = self.get_application()
@@ -518,13 +523,13 @@ class MainWindow(Adw.ApplicationWindow):
         return False
 
     def _prompt_app_update(self, result: dict):
-        dialog = Adw.AlertDialog(
+        dialog = CompatAlertDialog(
             heading=f"Обновление до версии {result['latest']}",
             body=f"{result['changelog']}\n\nПриложение будет перезапущено после обновления.",
         )
         dialog.add_response("cancel", "Отмена")
         dialog.add_response("install", "Установить")
-        dialog.set_response_appearance("install", Adw.ResponseAppearance.SUGGESTED)
+        dialog.set_response_appearance("install", SUGGESTED)
         dialog.set_default_response("install")
 
         def on_response(_dialog, response):
@@ -562,13 +567,13 @@ class MainWindow(Adw.ApplicationWindow):
         return False
 
     def _prompt_restart(self):
-        dialog = Adw.AlertDialog(
+        dialog = CompatAlertDialog(
             heading="Обновление установлено",
             body="Обновление установлено. Перезапустите приложение.",
         )
         dialog.add_response("later", "Позже")
         dialog.add_response("restart", "Перезапустить")
-        dialog.set_response_appearance("restart", Adw.ResponseAppearance.SUGGESTED)
+        dialog.set_response_appearance("restart", SUGGESTED)
         dialog.set_default_response("restart")
 
         def on_response(_dialog, response):
@@ -702,7 +707,7 @@ class MainWindow(Adw.ApplicationWindow):
         self._fetch_subscription(url)
 
     def _on_settings_clicked(self, _button):
-        dialog = Adw.AlertDialog(
+        dialog = CompatAlertDialog(
             heading="URL подписки",
             body="Введите ссылку на подписку hysteria2",
         )
@@ -711,7 +716,7 @@ class MainWindow(Adw.ApplicationWindow):
         dialog.set_extra_child(entry)
         dialog.add_response("cancel", "Отмена")
         dialog.add_response("save", "Сохранить")
-        dialog.set_response_appearance("save", Adw.ResponseAppearance.SUGGESTED)
+        dialog.set_response_appearance("save", SUGGESTED)
         dialog.set_default_response("save")
 
         def on_response(_dialog, response):
@@ -789,13 +794,13 @@ class MainWindow(Adw.ApplicationWindow):
         self._start_connect()
 
     def _prompt_install(self):
-        dialog = Adw.AlertDialog(
+        dialog = CompatAlertDialog(
             heading="hysteria2 не установлен",
             body="Для подключения нужен бинарник hysteria2. Скачать сейчас?",
         )
         dialog.add_response("cancel", "Отмена")
         dialog.add_response("install", "Установить")
-        dialog.set_response_appearance("install", Adw.ResponseAppearance.SUGGESTED)
+        dialog.set_response_appearance("install", SUGGESTED)
         dialog.set_default_response("install")
 
         def on_response(_dialog, response):

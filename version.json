@@ -1,8 +1,8 @@
 {
-  "version": "2.2.6",
-  "download_url": "https://github.com/beardrubyblue/VroxVPN/releases/download/v2.2.6/vroxory-vpn_2.2.6_amd64.deb",
-  "sha256": "38eb02a3347e32b20586066defef7d52f5fbd692549696916307dc863409cf1e",
-  "changelog": "Исправлена установка пакета: postinst писал polkit-правило в /etc/polkit-1/rules.d/ без предварительного mkdir -p — на системах, где эта папка не создана заранее (например, чистый Ubuntu 22.04 с минимальным polkitd), установка падала с ошибкой postinst. Подтверждено тестом в чистом контейнере.",
+  "version": "2.2.7",
+  "download_url": "https://github.com/beardrubyblue/VroxVPN/releases/download/v2.2.7/vroxory-vpn_2.2.7_amd64.deb",
+  "sha256": "c886e047a9c59bda1b3fd04a65ada6984418ec9b16fc030e58af148ab5bb9536",
+  "changelog": "Исправлен молчаливый краш при запуске на Ubuntu 22.04: приложение использовало Adw.Banner/Adw.AboutDialog/Adw.AlertDialog/Adw.SwitchRow — виджеты, которых нет в libadwaita 1.1 (репозитории jammy ставят именно её). Окно падало при сборке UI без вывода ошибки в терминал. Добавлены совместимые замены этих виджетов на чистом GTK4. Проверено живым тестом в чистом контейнере ubuntu:22.04 с libadwaita 1.1.7 — окно строится и приложение работает.",
   "min_version": "1.0.0",
-  "released_at": "2026-06-17T11:09:09Z"
+  "released_at": "2026-06-17T11:43:30Z"
 }
