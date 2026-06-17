@@ -81,6 +81,9 @@ def generate_config(server: dict) -> Path:
             "salamander": {"password": server.get("obfs_password", "")},
         }
 
+    if server.get("quic"):
+        config["quic"] = server["quic"]
+
     filename = f"{_safe_filename(server.get('name', 'server'))}.yaml"
     path = CONFIG_DIR / filename
     with open(path, "w", encoding="utf-8") as f:

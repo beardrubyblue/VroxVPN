@@ -2,6 +2,7 @@
 import os
 import sys
 import threading
+import time
 
 import gi
 
@@ -22,7 +23,27 @@ from ui.compat import CompatBanner, CompatSwitchRow, CompatAlertDialog, SUGGESTE
 from ui.stats_bar import StatsBar
 from ui.log_panel import LogPanel
 
-APP_VERSION = "2.2.11"
+APP_VERSION = "2.2.12"
+
+
+def _format_userinfo(userinfo: dict) -> str:
+    """Строка вида " · 2.1/50 ГБ · до 30.07.2026" из заголовка
+    Subscription-Userinfo (upload/download/total/expire). total/expire
+    равные 0 у 3x-ui означают "без лимита"/"бессрочно" — в этом случае
+    соответствующую часть не показываем."""
+    parts = []
+
+    total = userinfo.get("total", 0)
+    if total:
+        used_gb = (userinfo.get("upload", 0) + userinfo.get("download", 0)) / (1024 ** 3)
+        total_gb = total / (1024 ** 3)
+        parts.append(f"{used_gb:.1f}/{total_gb:.1f} ГБ")
+
+    expire = userinfo.get("expire", 0)
+    if expire:
+        parts.append(f"до {time.strftime('%d.%m.%Y', time.localtime(expire))}")
+
+    return " · " + " · ".join(parts) if parts else ""
 
 
 class MainWindow(Adw.ApplicationWindow):
@@ -652,7 +673,7 @@ class MainWindow(Adw.ApplicationWindow):
         dialog.connect("response", on_response)
         dialog.present(self)
 
-    def _populate_servers(self, servers: list):
+    def _populate_servers(self, servers: list, userinfo: dict = None):
         self._servers = servers
 
         while True:
@@ -666,7 +687,9 @@ class MainWindow(Adw.ApplicationWindow):
             self.list_box.append(row)
 
         count = len(servers)
-        self.servers_group.set_description(f"{count} доступно" if count else "Нет серверов")
+        base = f"{count} доступно" if count else "Нет серверов"
+        suffix = _format_userinfo(userinfo or {})
+        self.servers_group.set_description(base + suffix)
 
         last_name = settings.get("last_selected_server", "")
         index_to_select = 0
@@ -703,17 +726,17 @@ class MainWindow(Adw.ApplicationWindow):
 
         def worker():
             try:
-                servers = fetch_subscription(url)
+                servers, userinfo = fetch_subscription(url)
             except Exception as exc:
                 GLib.idle_add(self._on_fetch_error, str(exc))
                 return
-            GLib.idle_add(self._on_fetch_success, servers)
+            GLib.idle_add(self._on_fetch_success, servers, userinfo)
 
         threading.Thread(target=worker, daemon=True).start()
 
-    def _on_fetch_success(self, servers: list):
+    def _on_fetch_success(self, servers: list, userinfo: dict):
         self.progress_bar.set_visible(False)
-        self._populate_servers(servers)
+        self._populate_servers(servers, userinfo)
         if servers:
             self._show_banner(f"Загружено серверов: {len(servers)}")
             self._ping_servers()

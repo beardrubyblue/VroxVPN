@@ -1,8 +1,8 @@
 {
-  "version": "2.2.11",
-  "download_url": "https://github.com/beardrubyblue/VroxVPN/releases/download/v2.2.11/vroxory-vpn_2.2.11_amd64.deb",
-  "sha256": "872b64e2412a1f4dd184ceab12528ae773b655ecdbb654045458d080927e5669",
-  "changelog": "В меню трея пункт \"Подключить\"/\"Отключить\" перенесён сразу после статуса (раньше был ниже списка серверов и кнопки \"Показать окно\").",
+  "version": "2.2.12",
+  "download_url": "https://github.com/beardrubyblue/VroxVPN/releases/download/v2.2.12/vroxory-vpn_2.2.12_amd64.deb",
+  "sha256": "21c6a5091dff958734528827d3d9560a1e882a2dc69ea31cc02505dca692583b",
+  "changelog": "Учёт настроек QUIC из подписки и отображение остатка трафика/срока действия подключения.",
   "min_version": "1.0.0",
-  "released_at": "2026-06-17T12:49:57Z"
+  "released_at": "2026-06-17T15:50:13Z"
 }
