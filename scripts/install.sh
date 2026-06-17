@@ -9,6 +9,18 @@ pip3 install --user --break-system-packages requests PyYAML pillow
 APP_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 chmod +x "$APP_DIR/core/privileged_helper.sh"
 
+# Helper-скрипт копируется в ОДИН фиксированный системный путь
+# (/opt/vroxory-vpn/core/privileged_helper.sh) — тот же, что использует
+# .deb-пакет. core/privileged.py всегда обращается именно туда, независимо
+# от того, из какого каталога запускается main.py (dev-чекаут или
+# установленная копия) — иначе polkit-правило привязывалось бы к
+# конкретному пути чекаута и "внезапно" просило пароль при запуске
+# из любого другого места (другой клон, переименованная папка и т.п.).
+sudo mkdir -p /opt/vroxory-vpn/core
+sudo cp "$APP_DIR/core/privileged_helper.sh" /opt/vroxory-vpn/core/privileged_helper.sh
+sudo chown root:root /opt/vroxory-vpn/core/privileged_helper.sh
+sudo chmod 755 /opt/vroxory-vpn/core/privileged_helper.sh
+
 # polkit правило: passwordless pkexec ТОЛЬКО для точного пути нашего
 # единого helper-скрипта и hysteria2-бинарника — без substring-matching
 # по системным утилитам (sh/kill/ip/nft/sysctl/apt-get), который раньше
@@ -24,7 +36,7 @@ polkit.addRule(function(action, subject) {
     }
     var program = action.lookup("program");
     var allowed = [
-        "$APP_DIR/core/privileged_helper.sh",
+        "/opt/vroxory-vpn/core/privileged_helper.sh",
         "/usr/local/bin/hysteria2",
         "$HOME/.local/bin/hysteria2"
     ];

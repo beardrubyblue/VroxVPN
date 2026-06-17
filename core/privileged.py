@@ -9,7 +9,18 @@ import os
 import subprocess
 from pathlib import Path
 
-HELPER_SCRIPT = Path(__file__).resolve().parent / "privileged_helper.sh"
+# Путь ВСЕГДА фиксирован, а не вычисляется относительно текущего main.py.
+# Раньше он указывал на core/privileged_helper.sh рядом с тем main.py,
+# который сейчас выполняется — то есть при запуске из dev-чекаута путь
+# отличался от того, что записан в polkit-правиле (которое всегда ссылается
+# на установленную копию). При несовпадении пути pkexec не находит
+# подходящего passwordless-правила и откатывается на интерактивный запрос
+# пароля — именно это происходило при старте (loosen-rp-filter) и при
+# отключении (kill-hysteria/delete-tun). install.sh и postinst .deb-пакета
+# всегда кладут helper именно по этому пути — независимо от того, откуда
+# запускается сам main.py — поэтому правило отныне ровно одно и совпадает
+# всегда.
+HELPER_SCRIPT = Path("/opt/vroxory-vpn/core/privileged_helper.sh")
 
 
 def run_privileged(
@@ -28,6 +39,11 @@ def run_privileged(
     выброса исключения — вызывающему коду не нужно оборачивать каждый
     вызов в try/except.
     """
+    if not HELPER_SCRIPT.exists():
+        msg = f"{HELPER_SCRIPT} не найден — выполни scripts/install.sh (или установи .deb)"
+        print(f"[privileged] {msg}")
+        return subprocess.CompletedProcess([str(HELPER_SCRIPT)] + args, returncode=127, stdout="", stderr=msg)
+
     cmd = [str(HELPER_SCRIPT)] + args
     if os.geteuid() != 0:
         cmd = ["pkexec"] + cmd

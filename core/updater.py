@@ -67,7 +67,7 @@ def _version_tuple(version: str) -> tuple:
 
 
 class AppUpdater:
-    CURRENT_VERSION = "2.2.3"
+    CURRENT_VERSION = "2.2.4"
     VERSION_URL = "https://net.vroxory.com/vpn/version.json"
     # Fallback если основной сервер недоступен
     VERSION_URL_FALLBACK = "https://raw.githubusercontent.com/beardrubyblue/VroxVPN/main/version.json"

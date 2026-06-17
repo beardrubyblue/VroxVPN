@@ -20,6 +20,7 @@ class TunManager:
         self._stop_requested = False
         self._used_pkexec = False
         self._last_server = None
+        self._config_path = None
 
         self._auto_reconnect = True
         self._reconnect_attempts = 0
@@ -47,6 +48,7 @@ class TunManager:
         self._last_server = server
 
         config_path = config_gen.generate_config(server)
+        self._config_path = config_path
         binary = get_binary_path()
 
         self._loosen_rp_filter()
@@ -175,9 +177,18 @@ class TunManager:
 
     def _signal_process(self, signal_name: str) -> None:
         """Если hysteria2 запущен через pkexec, он работает с euid 0 — обычный
-        os.kill() от непривилегированного процесса вернёт EPERM."""
+        os.kill() от непривилегированного процесса вернёт EPERM.
+
+        self.process.pid — pid pkexec-обёртки (supervisor), а НЕ настоящего
+        root-процесса hysteria2: pkexec форкает целевую программу отдельным
+        процессом и сам остаётся жить как монитор. Сигнал, отправленный
+        Popen.pid, убивал только supervisor — сам hysteria2 оставался висеть
+        и держать TUN-устройство захваченным, из-за чего следующее
+        подключение падало с "device or resource busy". Поэтому ищем
+        настоящий процесс по уникальному пути конфига (см. privileged_helper.sh
+        kill-hysteria), а не по pid."""
         if self._used_pkexec:
-            run_privileged(["kill-process", signal_name, str(self.process.pid)])
+            run_privileged(["kill-hysteria", signal_name, str(self._config_path)])
         elif signal_name == "TERM":
             self.process.terminate()
         else:

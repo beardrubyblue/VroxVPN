@@ -1,8 +1,8 @@
 {
-  "version": "2.2.3",
-  "download_url": "https://github.com/beardrubyblue/VroxVPN/releases/download/v2.2.3/vroxory-vpn_2.2.3_amd64.deb",
-  "sha256": "dfa5756a71174a90917f9c4e5a34de408fa564e084f35be6689f34c1a0cc2bfe",
-  "changelog": "Логотип стал плавнее: добавлено сглаживание (антиалиасинг) штрихов и скруглённые стыки вместо острых углов; добавлена векторная SVG-иконка (hicolor/scalable) для чёткого отображения на любом размере и DPI.",
+  "version": "2.2.4",
+  "download_url": "https://github.com/beardrubyblue/VroxVPN/releases/download/v2.2.4/vroxory-vpn_2.2.4_amd64.deb",
+  "sha256": "88542eea1df6ddbae5c916358e1ed0101861674d82ccb0c4a5abf419c6aaf2d2",
+  "changelog": "Исправлен запрос пароля при старте/отключении и недоудаляемый туннель: helper-скрипт теперь живёт по фиксированному системному пути (а не зависит от того, откуда запущен main.py), а отключение hysteria2 убивает настоящий root-процесс по пути конфига, а не pid pkexec-обёртки (который раньше не совпадал с реальным процессом и оставлял TUN-устройство висеть).",
   "min_version": "1.0.0",
-  "released_at": "2026-06-17T09:46:48Z"
+  "released_at": "2026-06-17T10:06:29Z"
 }

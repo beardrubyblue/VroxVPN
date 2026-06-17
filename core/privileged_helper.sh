@@ -25,18 +25,23 @@ case "$cmd" in
         sysctl -w net.ipv4.conf.all.rp_filter=2 net.ipv4.conf.default.rp_filter=2
         ;;
 
-    kill-process)
+    kill-hysteria)
+        # pkexec — не сам процесс hysteria2, а отдельный supervisor: сигнал,
+        # отправленный pid-у, который видит Python (Popen.pid), убивает
+        # только supervisor, а настоящий root-процесс hysteria2 остаётся
+        # висеть и держит TUN-устройство захваченным. Поэтому ищем
+        # настоящий процесс по уникальному пути конфига, а не по pid.
         signal="${1:?missing signal}"
-        pid="${2:?missing pid}"
+        config="${2:?missing config path}"
         case "$signal" in
             TERM|KILL) ;;
             *) echo "недопустимый сигнал: $signal" >&2; exit 1 ;;
         esac
-        if ! [[ "$pid" =~ ^[0-9]+$ ]]; then
-            echo "недопустимый pid: $pid" >&2
-            exit 1
-        fi
-        kill "-$signal" "$pid"
+        case "$config" in
+            /tmp/vroxory-vpn/*.yaml) ;;
+            *) echo "недопустимый путь конфига: $config" >&2; exit 1 ;;
+        esac
+        pkill "-$signal" -f "hysteria2 .*--config $config" || true
         ;;
 
     delete-tun)
