@@ -4,7 +4,7 @@ set -e
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PROJECT_DIR="$(cd "$SCRIPT_DIR/../.." && pwd)"
 BUILD_DIR="$SCRIPT_DIR/build"
-VERSION="2.2.2"
+VERSION="2.2.3"
 ARCH="amd64"
 PKG_NAME="vroxory-vpn_${VERSION}_${ARCH}"
 
@@ -64,6 +64,12 @@ for size in 16 32 48 64 128 256 512; do
     cp "$PROJECT_DIR/assets/icons/com.vroxory.vpn-${size}.png" \
         "$icon_dir/com.vroxory.vpn.png"
 done
+
+# SVG → hicolor/scalable/apps/ — GTK предпочитает векторную иконку
+# растровым при выборе размера/масштаба (HiDPI), даёт чёткие края
+scalable_dir="$BUILD_DIR/$PKG_NAME/usr/share/icons/hicolor/scalable/apps"
+mkdir -p "$scalable_dir"
+cp "$PROJECT_DIR/assets/icons/com.vroxory.vpn.svg" "$scalable_dir/com.vroxory.vpn.svg"
 
 # Собираем .deb
 cd "$BUILD_DIR"

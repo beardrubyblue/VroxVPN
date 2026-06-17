@@ -1,8 +1,8 @@
 {
-  "version": "2.2.2",
-  "download_url": "https://github.com/beardrubyblue/VroxVPN/releases/download/v2.2.2/vroxory-vpn_2.2.2_amd64.deb",
-  "sha256": "4f93e1ece5e8f39146d6a8ee41d29360f92da87b6fce9e2b43075c7f2fa0d06c",
-  "changelog": "Применён официальный логотип из дизайн-макета: знак V из двух пересекающихся \"лезвий\" на тёмной подложке, во всех размерах иконки приложения.",
+  "version": "2.2.3",
+  "download_url": "https://github.com/beardrubyblue/VroxVPN/releases/download/v2.2.3/vroxory-vpn_2.2.3_amd64.deb",
+  "sha256": "dfa5756a71174a90917f9c4e5a34de408fa564e084f35be6689f34c1a0cc2bfe",
+  "changelog": "Логотип стал плавнее: добавлено сглаживание (антиалиасинг) штрихов и скруглённые стыки вместо острых углов; добавлена векторная SVG-иконка (hicolor/scalable) для чёткого отображения на любом размере и DPI.",
   "min_version": "1.0.0",
-  "released_at": "2026-06-16T20:05:43Z"
+  "released_at": "2026-06-17T09:46:48Z"
 }

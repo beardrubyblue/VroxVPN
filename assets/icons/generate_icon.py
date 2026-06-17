@@ -30,37 +30,44 @@ def draw_stroke(draw, points, scale, ox, oy, color, width_px):
         draw.ellipse([p[0] - r, p[1] - r, p[0] + r, p[1] + r], fill=color)
 
 
+# рендерим в SS раз крупнее и затем уменьшаем с LANCZOS — у ImageDraw нет
+# антиалиасинга, без супersampling края штрихов получаются ступенчатыми
+SUPERSAMPLE = 4
+
+
 def make_icon(size: int) -> Image.Image:
-    img = Image.new("RGBA", (size, size), (0, 0, 0, 0))
+    ss = size * SUPERSAMPLE
+    img = Image.new("RGBA", (ss, ss), (0, 0, 0, 0))
     draw = ImageDraw.Draw(img)
 
-    radius = size * 0.22
-    draw.rounded_rectangle([0, 0, size - 1, size - 1], radius=radius, fill=BG_COLOR + (255,))
+    radius = ss * 0.22
+    draw.rounded_rectangle([0, 0, ss - 1, ss - 1], radius=radius, fill=BG_COLOR + (255,))
 
     # знак занимает ~60% площади иконки, по центру
-    box = size * 0.62
+    box = ss * 0.62
     scale = box / ART_UNIT
-    ox = (size - ART_UNIT * scale) / 2
-    oy = (size - ART_UNIT * scale) / 2
+    ox = (ss - ART_UNIT * scale) / 2
+    oy = (ss - ART_UNIT * scale) / 2
 
-    line_w = max(UNIT_LINE_WIDTH * scale, size * 0.045)
+    line_w = max(UNIT_LINE_WIDTH * scale, ss * 0.045)
     back_color = blend(WHITE, BG_COLOR, 0.4)
 
     draw_stroke(draw, BACK_BLADE, scale, ox, oy, back_color, line_w)
     draw_stroke(draw, FRONT_BLADE, scale, ox, oy, WHITE, line_w)
 
-    return img
+    return img.resize((size, size), Image.LANCZOS)
 
 
 def make_wordmark(height: int) -> Image.Image:
     """mark + 'vrox' (белый) + '.vpn' (40% альфа) — для README/баннеров."""
     from PIL import ImageFont
 
-    scale = height / 48
+    ss = SUPERSAMPLE
+    height_px = height * ss
+    scale = height_px / 48
     mark_unit = 36 * scale
     gap = 10 * scale
     pad_x = 14 * scale
-    pad_y = 10 * scale
     font_px = round(32 * scale)
 
     try:
@@ -73,25 +80,47 @@ def make_wordmark(height: int) -> Image.Image:
     w_full = tmp_draw.textlength("vrox.vpn", font=font)
     w_vrox = tmp_draw.textlength("vrox", font=font)
 
-    width = pad_x + mark_unit + gap + w_full + pad_x
-    img = Image.new("RGBA", (round(width), height), (0, 0, 0, 0))
+    width_px = pad_x + mark_unit + gap + w_full + pad_x
+    img = Image.new("RGBA", (round(width_px), height_px), (0, 0, 0, 0))
     draw = ImageDraw.Draw(img)
-    draw.rounded_rectangle([0, 0, width - 1, height - 1], radius=height * 0.22, fill=BG_COLOR + (255,))
+    draw.rounded_rectangle([0, 0, width_px - 1, height_px - 1], radius=height_px * 0.22, fill=BG_COLOR + (255,))
 
     art_scale = mark_unit / ART_UNIT
     ox = pad_x + (mark_unit - ART_UNIT * art_scale) / 2
-    oy = (height - ART_UNIT * art_scale) / 2
+    oy = (height_px - ART_UNIT * art_scale) / 2
     line_w = UNIT_LINE_WIDTH * art_scale
     back_color = blend(WHITE, BG_COLOR, 0.4)
     draw_stroke(draw, BACK_BLADE, art_scale, ox, oy, back_color, line_w)
     draw_stroke(draw, FRONT_BLADE, art_scale, ox, oy, WHITE, line_w)
 
     tx = pad_x + mark_unit + gap
-    ty = height / 2
+    ty = height_px / 2
     draw.text((tx, ty), "vrox", font=font, fill=WHITE, anchor="lm")
     draw.text((tx + w_vrox, ty), ".vpn", font=font, fill=blend(WHITE, BG_COLOR, 0.4), anchor="lm")
 
-    return img
+    return img.resize((round(width_px / ss), height), Image.LANCZOS)
+
+
+def make_svg() -> str:
+    """Векторная версия знака — для hicolor/scalable/apps: чёткая на любом
+    размере и DPI, со скруглёнными концами и стыками штрихов (linecap/
+    linejoin round) вместо острых углов растровой версии."""
+    radius = ART_UNIT * 0.22
+    line_w = UNIT_LINE_WIDTH
+    back_color = "rgb({}, {}, {})".format(*blend(WHITE, BG_COLOR, 0.4))
+
+    def path(points):
+        return " ".join(f"{'M' if i == 0 else 'L'}{x} {y}" for i, (x, y) in enumerate(points))
+
+    return f'''<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {ART_UNIT} {ART_UNIT}">
+  <rect x="0" y="0" width="{ART_UNIT}" height="{ART_UNIT}" rx="{radius}" fill="rgb{BG_COLOR}"/>
+  <path d="{path(BACK_BLADE)}" fill="none" stroke="{back_color}"
+        stroke-width="{line_w}" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="{path(FRONT_BLADE)}" fill="none" stroke="rgb{WHITE}"
+        stroke-width="{line_w}" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>
+'''
 
 
 def main():
@@ -100,6 +129,9 @@ def main():
         print(f"saved {ICON_NAME}-{size}.png")
     make_wordmark(96).save(f"{OUT_DIR}/wordmark.png")
     print("saved wordmark.png")
+    with open(f"{OUT_DIR}/{ICON_NAME}.svg", "w") as f:
+        f.write(make_svg())
+    print(f"saved {ICON_NAME}.svg")
 
 
 if __name__ == "__main__":

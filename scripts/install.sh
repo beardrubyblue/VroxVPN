@@ -41,6 +41,12 @@ for size in 16 32 48 64 128 256 512; do
     cp "$APP_DIR/assets/icons/com.vroxory.vpn-${size}.png" "$icon_dir/com.vroxory.vpn.png"
 done
 
+# SVG → hicolor/scalable/apps/ — GTK предпочитает векторную иконку
+# растровым при выборе размера/масштаба (HiDPI), даёт чёткие края
+scalable_dir="$HOME/.local/share/icons/hicolor/scalable/apps"
+mkdir -p "$scalable_dir"
+cp "$APP_DIR/assets/icons/com.vroxory.vpn.svg" "$scalable_dir/com.vroxory.vpn.svg"
+
 # .desktop файл — имя файла совпадает с application_id ("com.vroxory.vpn"),
 # иначе GNOME Shell не сопоставит окно с записью и в доке/Alt-Tab будет
 # виден голый application_id вместо "vrox.vpn"
