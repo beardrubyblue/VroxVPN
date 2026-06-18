@@ -23,7 +23,7 @@ from ui.compat import CompatBanner, CompatSwitchRow, CompatAlertDialog, SUGGESTE
 from ui.stats_bar import StatsBar
 from ui.log_panel import LogPanel
 
-APP_VERSION = "2.2.14"
+APP_VERSION = "2.2.15"
 
 
 def _format_userinfo(userinfo: dict) -> str:
@@ -308,7 +308,7 @@ class MainWindow(Adw.ApplicationWindow):
 
         self.geoip_update_row = Adw.ActionRow()
         self.geoip_update_row.set_title("База IP-адресов России")
-        self.geoip_update_row.set_subtitle(f"Обновлено: {geoip.last_updated()}")
+        self.geoip_update_row.set_subtitle(f"Обновлено: {geoip.last_updated()} · {geoip.current_size_kb():.0f} КБ")
         self.geoip_update_row.set_icon_name("view-refresh-symbolic")
 
         self.geoip_update_button = Gtk.Button(label="Обновить")
@@ -906,18 +906,19 @@ class MainWindow(Adw.ApplicationWindow):
 
         def worker():
             try:
-                count = geoip.update_ru_cidrs()
+                result = geoip.update_ru_cidrs()
             except Exception as exc:
                 GLib.idle_add(self._on_geoip_update_error, str(exc))
                 return
-            GLib.idle_add(self._on_geoip_update_success, count)
+            GLib.idle_add(self._on_geoip_update_success, result)
 
         threading.Thread(target=worker, daemon=True).start()
 
-    def _on_geoip_update_success(self, count: int):
+    def _on_geoip_update_success(self, result: dict):
         self.geoip_update_button.set_sensitive(True)
-        self.geoip_update_row.set_subtitle(f"Обновлено: {geoip.last_updated()}")
-        self._show_banner(f"База обновлена, диапазонов: {count}")
+        size_kb = result["bytes"] / 1024
+        self.geoip_update_row.set_subtitle(f"Обновлено: {geoip.last_updated()} · {size_kb:.0f} КБ")
+        self._show_banner(f"База обновлена: {result['count']} диапазонов, {size_kb:.0f} КБ")
         return False
 
     def _on_geoip_update_error(self, message: str):

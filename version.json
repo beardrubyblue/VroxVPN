@@ -1,8 +1,8 @@
 {
-  "version": "2.2.14",
-  "download_url": "https://github.com/beardrubyblue/VroxVPN/releases/download/v2.2.14/vroxory-vpn_2.2.14_amd64.deb",
-  "sha256": "a56171263b9ab0d11fb92fb7b8614f6a6f804ea3ea8a26c7e1001c22bbe0cf5d",
-  "changelog": "Новая вкладка «Настройки»: опция «Российские сервисы напрямую» — IP-адреса российских сервисов не идут через VPN. База IP обновляется отдельной кнопкой.",
+  "version": "2.2.15",
+  "download_url": "https://github.com/beardrubyblue/VroxVPN/releases/download/v2.2.15/vroxory-vpn_2.2.15_amd64.deb",
+  "sha256": "2078e16a59985c14155cceb6097f5464481e2eff7ead06921ff3f62f75a29fdb",
+  "changelog": "В настройках теперь показывается размер базы IP-адресов (КБ) — и при первом открытии, и после нажатия «Обновить».",
   "min_version": "1.0.0",
-  "released_at": "2026-06-18T11:25:37Z"
+  "released_at": "2026-06-18T11:31:19Z"
 }

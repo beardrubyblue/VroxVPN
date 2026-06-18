@@ -48,12 +48,29 @@ def last_updated() -> str:
     return "встроенная база (из установки)"
 
 
-def update_ru_cidrs(timeout: int = 20) -> int:
-    """Скачивает свежие списки и сохраняет в USER_DIR. Возвращает суммарное
-    количество CIDR-диапазонов. Бросает исключение при сетевой ошибке —
-    вызывающий код должен показать его пользователю."""
-    USER_DIR.mkdir(parents=True, exist_ok=True)
+def current_size_kb() -> float:
+    """Размер файлов, которые сейчас реально используются (см. get_ru_cidrs)."""
+    ipv4_path = USER_DIR / "ru_ipv4.txt"
+    ipv6_path = USER_DIR / "ru_ipv6.txt"
+    if not ipv4_path.exists():
+        ipv4_path = BUNDLED_DIR / "ru_ipv4.txt"
+    if not ipv6_path.exists():
+        ipv6_path = BUNDLED_DIR / "ru_ipv6.txt"
     total = 0
+    for path in (ipv4_path, ipv6_path):
+        if path.exists():
+            total += path.stat().st_size
+    return total / 1024
+
+
+def update_ru_cidrs(timeout: int = 20) -> dict:
+    """Скачивает свежие списки и сохраняет в USER_DIR. Возвращает
+    {"count": кол-во CIDR, "bytes": суммарный размер скачанного}.
+    Бросает исключение при сетевой ошибке — вызывающий код должен
+    показать его пользователю."""
+    USER_DIR.mkdir(parents=True, exist_ok=True)
+    total_count = 0
+    total_bytes = 0
     for key, filename in (("ipv4", "ru_ipv4.txt"), ("ipv6", "ru_ipv6.txt")):
         resp = requests.get(SOURCE_URLS[key], timeout=timeout)
         resp.raise_for_status()
@@ -63,5 +80,6 @@ def update_ru_cidrs(timeout: int = 20) -> int:
             raise ValueError(f"Пустой ответ при обновлении базы {key}")
         with open(USER_DIR / filename, "w", encoding="utf-8") as f:
             f.write(text)
-        total += len(cidrs)
-    return total
+        total_count += len(cidrs)
+        total_bytes += len(resp.content)
+    return {"count": total_count, "bytes": total_bytes}
