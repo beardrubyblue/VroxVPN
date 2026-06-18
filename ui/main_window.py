@@ -10,7 +10,7 @@ gi.require_version("Gtk", "4.0")
 gi.require_version("Adw", "1")
 from gi.repository import Gtk, Adw, GLib, Gio
 
-from core import settings
+from core import settings, geoip
 from core.subscription import fetch_subscription
 from core.tun_manager import TunManager
 from core.installer import is_installed, download_hysteria2
@@ -23,7 +23,7 @@ from ui.compat import CompatBanner, CompatSwitchRow, CompatAlertDialog, SUGGESTE
 from ui.stats_bar import StatsBar
 from ui.log_panel import LogPanel
 
-APP_VERSION = "2.2.13"
+APP_VERSION = "2.2.14"
 
 
 def _format_userinfo(userinfo: dict) -> str:
@@ -175,6 +175,10 @@ class MainWindow(Adw.ApplicationWindow):
         logs_page_ref = self.stack.add_titled(self.log_panel, "logs", "Логи")
         logs_page_ref.set_icon_name("text-x-generic-symbolic")
 
+        settings_page = self._build_settings_page()
+        settings_page_ref = self.stack.add_titled(settings_page, "settings", "Настройки")
+        settings_page_ref.set_icon_name("preferences-system-symbolic")
+
         view_switcher = Adw.ViewSwitcherBar()
         view_switcher.set_stack(self.stack)
         view_switcher.set_reveal(True)
@@ -281,6 +285,39 @@ class MainWindow(Adw.ApplicationWindow):
         self.connect_button.set_margin_top(8)
         self.connect_button.connect("clicked", self._on_connect_clicked)
         page.append(self.connect_button)
+
+        return page
+
+    def _build_settings_page(self) -> Gtk.Widget:
+        page = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=18)
+        page.set_margin_top(18)
+        page.set_margin_bottom(12)
+        page.set_margin_start(18)
+        page.set_margin_end(18)
+
+        routing_group = Adw.PreferencesGroup()
+        routing_group.set_title("Маршрутизация")
+
+        self.ru_bypass_toggle = CompatSwitchRow()
+        self.ru_bypass_toggle.set_title("Российские сервисы напрямую")
+        self.ru_bypass_toggle.set_subtitle("Не пускать IP-адреса российских сервисов через VPN")
+        self.ru_bypass_toggle.set_icon_name("network-transmit-receive-symbolic")
+        self.ru_bypass_toggle.set_active(settings.get("ru_bypass_enabled", False))
+        self.ru_bypass_toggle.connect("notify::active", self._on_ru_bypass_toggled)
+        routing_group.add(self.ru_bypass_toggle)
+
+        self.geoip_update_row = Adw.ActionRow()
+        self.geoip_update_row.set_title("База IP-адресов России")
+        self.geoip_update_row.set_subtitle(f"Обновлено: {geoip.last_updated()}")
+        self.geoip_update_row.set_icon_name("view-refresh-symbolic")
+
+        self.geoip_update_button = Gtk.Button(label="Обновить")
+        self.geoip_update_button.set_valign(Gtk.Align.CENTER)
+        self.geoip_update_button.connect("clicked", self._on_geoip_update_clicked)
+        self.geoip_update_row.add_suffix(self.geoip_update_button)
+        routing_group.add(self.geoip_update_row)
+
+        page.append(routing_group)
 
         return page
 
@@ -857,6 +894,36 @@ class MainWindow(Adw.ApplicationWindow):
                     self.tun_manager.dns_manager.disable()
 
             threading.Thread(target=worker, daemon=True).start()
+
+    def _on_ru_bypass_toggled(self, switch, _pspec):
+        enabled = switch.get_active()
+        settings.set("ru_bypass_enabled", enabled)
+        if self._state == "connected":
+            self._show_banner("Изменения применятся при следующем подключении")
+
+    def _on_geoip_update_clicked(self, _button):
+        self.geoip_update_button.set_sensitive(False)
+
+        def worker():
+            try:
+                count = geoip.update_ru_cidrs()
+            except Exception as exc:
+                GLib.idle_add(self._on_geoip_update_error, str(exc))
+                return
+            GLib.idle_add(self._on_geoip_update_success, count)
+
+        threading.Thread(target=worker, daemon=True).start()
+
+    def _on_geoip_update_success(self, count: int):
+        self.geoip_update_button.set_sensitive(True)
+        self.geoip_update_row.set_subtitle(f"Обновлено: {geoip.last_updated()}")
+        self._show_banner(f"База обновлена, диапазонов: {count}")
+        return False
+
+    def _on_geoip_update_error(self, message: str):
+        self.geoip_update_button.set_sensitive(True)
+        self._show_banner(f"Не удалось обновить базу: {message}", warning=True)
+        return False
 
     def _on_row_selected(self, _list_box, row):
         if row is None:

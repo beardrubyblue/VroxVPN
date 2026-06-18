@@ -9,6 +9,7 @@ DEFAULTS = {
     "subscription_url": "",
     "last_selected_server": "",
     "auto_reconnect": False,
+    "ru_bypass_enabled": False,
 }
 
 

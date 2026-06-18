@@ -5,6 +5,8 @@ from pathlib import Path
 
 import yaml
 
+from core import geoip, settings
+
 CONFIG_DIR = Path("/tmp/vroxory-vpn")
 
 
@@ -41,6 +43,11 @@ def generate_config(server: dict) -> Path:
         "127.0.0.0/8",
     ] + [f"{ip}/32" for ip in server_ipv4]
     ipv6_exclude = ["fc00::/7", "fe80::/10"] + [f"{ip}/128" for ip in server_ipv6]
+
+    if settings.get("ru_bypass_enabled", False):
+        ru_ipv4, ru_ipv6 = geoip.get_ru_cidrs()
+        ipv4_exclude += ru_ipv4
+        ipv6_exclude += ru_ipv6
 
     # socks5/http секции omitted намеренно: hysteria2 не поддерживает их "disable",
     # присутствие ключа само запускает сервер — отсутствие ключа отключает его.

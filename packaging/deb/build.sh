@@ -4,7 +4,7 @@ set -e
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PROJECT_DIR="$(cd "$SCRIPT_DIR/../.." && pwd)"
 BUILD_DIR="$SCRIPT_DIR/build"
-VERSION="2.2.13"
+VERSION="2.2.14"
 ARCH="amd64"
 PKG_NAME="vroxory-vpn_${VERSION}_${ARCH}"
 
@@ -24,7 +24,7 @@ chmod 755 "$BUILD_DIR/$PKG_NAME/DEBIAN/postrm"
 
 # Копируем файлы приложения → /opt/vroxory-vpn/
 mkdir -p "$BUILD_DIR/$PKG_NAME/opt/vroxory-vpn"
-cp -r "$PROJECT_DIR/"{main.py,core,ui,requirements.txt} \
+cp -r "$PROJECT_DIR/"{main.py,core,ui,data,requirements.txt} \
     "$BUILD_DIR/$PKG_NAME/opt/vroxory-vpn/"
 find "$BUILD_DIR/$PKG_NAME/opt/vroxory-vpn" -name "__pycache__" -type d -exec rm -rf {} +
 chmod +x "$BUILD_DIR/$PKG_NAME/opt/vroxory-vpn/core/privileged_helper.sh"

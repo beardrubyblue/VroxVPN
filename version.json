@@ -1,8 +1,8 @@
 {
-  "version": "2.2.13",
-  "download_url": "https://github.com/beardrubyblue/VroxVPN/releases/download/v2.2.13/vroxory-vpn_2.2.13_amd64.deb",
-  "sha256": "bcc44523740054060f40af9644408ebb92d9867d28d5d0752b373becd00f8701",
-  "changelog": "Исправлено падение подключения из-за неверного формата maxIdleTimeout/keepAlivePeriod в QUIC-настройках из подписки.",
+  "version": "2.2.14",
+  "download_url": "https://github.com/beardrubyblue/VroxVPN/releases/download/v2.2.14/vroxory-vpn_2.2.14_amd64.deb",
+  "sha256": "a56171263b9ab0d11fb92fb7b8614f6a6f804ea3ea8a26c7e1001c22bbe0cf5d",
+  "changelog": "Новая вкладка «Настройки»: опция «Российские сервисы напрямую» — IP-адреса российских сервисов не идут через VPN. База IP обновляется отдельной кнопкой.",
   "min_version": "1.0.0",
-  "released_at": "2026-06-17T15:59:30Z"
+  "released_at": "2026-06-18T11:25:37Z"
 }
