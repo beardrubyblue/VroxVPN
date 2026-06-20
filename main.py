@@ -26,8 +26,9 @@ QUIT_TIMEOUT_SECONDS = 8
 
 
 class VroxoryVPN(Adw.Application):
-    def __init__(self):
+    def __init__(self, start_minimized: bool = False):
         super().__init__(application_id="com.vroxory.vpn")
+        self._start_minimized = start_minimized
         self.tray = TrayIcon()
         self.tray.on_show = self._on_tray_show
         self.tray.on_toggle = self._on_tray_toggle
@@ -38,7 +39,8 @@ class VroxoryVPN(Adw.Application):
         self._quit_finished = False
 
     def do_activate(self):
-        if self._window is None:
+        first_activation = self._window is None
+        if first_activation:
             self._window = MainWindow(self)
             self._window.connect("close-request", self._on_close_request)
             self._window.tun_manager.on_connected = self._wrap(
@@ -49,6 +51,11 @@ class VroxoryVPN(Adw.Application):
             )
             self._window.on_servers_updated = self._on_servers_updated
             self.tray.start()
+
+        # автозапуск (--minimized): окно сразу уходит в трей, не мигая
+        # на экране при каждом входе в систему
+        if first_activation and self._start_minimized:
+            return
         self._window.present()
 
     def _wrap(self, original, extra):
@@ -120,8 +127,15 @@ class VroxoryVPN(Adw.Application):
 
 def main():
     GLib.set_application_name("vrox.vpn")
-    app = VroxoryVPN()
-    return app.run(sys.argv)
+    # GApplication.run() сам парсит argv и падает на незнакомых опциях —
+    # поэтому --minimized убираем из argv до передачи, а не оставляем
+    # GLib'у разбираться с ним
+    argv = sys.argv
+    start_minimized = "--minimized" in argv
+    if start_minimized:
+        argv = [a for a in argv if a != "--minimized"]
+    app = VroxoryVPN(start_minimized=start_minimized)
+    return app.run(argv)
 
 
 if __name__ == "__main__":

@@ -5,7 +5,7 @@ from pathlib import Path
 
 import yaml
 
-from core import geoip, settings
+from core import geoip, geosite, settings
 
 CONFIG_DIR = Path("/tmp/vroxory-vpn")
 
@@ -44,10 +44,16 @@ def generate_config(server: dict) -> Path:
     ] + [f"{ip}/32" for ip in server_ipv4]
     ipv6_exclude = ["fc00::/7", "fe80::/10"] + [f"{ip}/128" for ip in server_ipv6]
 
+    direct_domains = []
     if settings.get("ru_bypass_enabled", False):
         ru_ipv4, ru_ipv6 = geoip.get_ru_cidrs()
         ipv4_exclude += ru_ipv4
         ipv6_exclude += ru_ipv6
+        # geoip покрывает IP-диапазоны России, но сайты на зарубежном CDN
+        # под него не попадают — для них передаём список доменов в наш
+        # патч hysteria2 (directDomains), который сам узнаёт текущий IP
+        # через DNS-сниффинг на реальном интерфейсе
+        direct_domains = geosite.get_ru_domains()
 
     # socks5/http секции omitted намеренно: hysteria2 не поддерживает их "disable",
     # присутствие ключа само запускает сервер — отсутствие ключа отключает его.
@@ -90,6 +96,9 @@ def generate_config(server: dict) -> Path:
 
     if server.get("quic"):
         config["quic"] = server["quic"]
+
+    if direct_domains:
+        config["tun"]["directDomains"] = direct_domains
 
     filename = f"{_safe_filename(server.get('name', 'server'))}.yaml"
     path = CONFIG_DIR / filename

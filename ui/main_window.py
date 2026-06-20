@@ -10,7 +10,7 @@ gi.require_version("Gtk", "4.0")
 gi.require_version("Adw", "1")
 from gi.repository import Gtk, Adw, GLib, Gio
 
-from core import settings, geoip
+from core import settings, geoip, geosite, autostart
 from core.subscription import fetch_subscription
 from core.tun_manager import TunManager
 from core.installer import is_installed, download_hysteria2
@@ -23,7 +23,7 @@ from ui.compat import CompatBanner, CompatSwitchRow, CompatAlertDialog, SUGGESTE
 from ui.stats_bar import StatsBar
 from ui.log_panel import LogPanel
 
-APP_VERSION = "2.2.15"
+APP_VERSION = "3.0.0"
 
 
 def _format_userinfo(userinfo: dict) -> str:
@@ -295,12 +295,28 @@ class MainWindow(Adw.ApplicationWindow):
         page.set_margin_start(18)
         page.set_margin_end(18)
 
+        general_group = Adw.PreferencesGroup()
+        general_group.set_title("Запуск")
+
+        self.autostart_toggle = CompatSwitchRow()
+        self.autostart_toggle.set_title("Запускать при входе в систему")
+        self.autostart_toggle.set_subtitle("Приложение запустится свёрнутым в трей")
+        self.autostart_toggle.set_icon_name("system-run-symbolic")
+        # источник истины — реальный .desktop файл, а не settings.json:
+        # если пользователь вручную удалил автозапуск, переключатель должен
+        # это отразить, а не молча врать "включено"
+        self.autostart_toggle.set_active(autostart.is_enabled())
+        self.autostart_toggle.connect("notify::active", self._on_autostart_toggled)
+        general_group.add(self.autostart_toggle)
+
+        page.append(general_group)
+
         routing_group = Adw.PreferencesGroup()
         routing_group.set_title("Маршрутизация")
 
         self.ru_bypass_toggle = CompatSwitchRow()
         self.ru_bypass_toggle.set_title("Российские сервисы напрямую")
-        self.ru_bypass_toggle.set_subtitle("Не пускать IP-адреса российских сервисов через VPN")
+        self.ru_bypass_toggle.set_subtitle("Российские сервисы (по IP и по списку доменов) не через VPN")
         self.ru_bypass_toggle.set_icon_name("network-transmit-receive-symbolic")
         self.ru_bypass_toggle.set_active(settings.get("ru_bypass_enabled", False))
         self.ru_bypass_toggle.connect("notify::active", self._on_ru_bypass_toggled)
@@ -316,6 +332,19 @@ class MainWindow(Adw.ApplicationWindow):
         self.geoip_update_button.connect("clicked", self._on_geoip_update_clicked)
         self.geoip_update_row.add_suffix(self.geoip_update_button)
         routing_group.add(self.geoip_update_row)
+
+        self.geosite_update_row = Adw.ActionRow()
+        self.geosite_update_row.set_title("Список доменов российских сервисов")
+        self.geosite_update_row.set_subtitle(
+            f"Обновлено: {geosite.last_updated()} · {geosite.current_size_kb():.0f} КБ"
+        )
+        self.geosite_update_row.set_icon_name("view-refresh-symbolic")
+
+        self.geosite_update_button = Gtk.Button(label="Обновить")
+        self.geosite_update_button.set_valign(Gtk.Align.CENTER)
+        self.geosite_update_button.connect("clicked", self._on_geosite_update_clicked)
+        self.geosite_update_row.add_suffix(self.geosite_update_button)
+        routing_group.add(self.geosite_update_row)
 
         page.append(routing_group)
 
@@ -901,6 +930,16 @@ class MainWindow(Adw.ApplicationWindow):
         if self._state == "connected":
             self._show_banner("Изменения применятся при следующем подключении")
 
+    def _on_autostart_toggled(self, switch, _pspec):
+        enabled = switch.get_active()
+        try:
+            autostart.enable() if enabled else autostart.disable()
+        except OSError as exc:
+            switch.set_active(not enabled)
+            self._show_banner(f"Не удалось изменить автозапуск: {exc}", warning=True)
+            return
+        settings.set("autostart_enabled", enabled)
+
     def _on_geoip_update_clicked(self, _button):
         self.geoip_update_button.set_sensitive(False)
 
@@ -924,6 +963,31 @@ class MainWindow(Adw.ApplicationWindow):
     def _on_geoip_update_error(self, message: str):
         self.geoip_update_button.set_sensitive(True)
         self._show_banner(f"Не удалось обновить базу: {message}", warning=True)
+        return False
+
+    def _on_geosite_update_clicked(self, _button):
+        self.geosite_update_button.set_sensitive(False)
+
+        def worker():
+            try:
+                result = geosite.update_ru_domains()
+            except Exception as exc:
+                GLib.idle_add(self._on_geosite_update_error, str(exc))
+                return
+            GLib.idle_add(self._on_geosite_update_success, result)
+
+        threading.Thread(target=worker, daemon=True).start()
+
+    def _on_geosite_update_success(self, result: dict):
+        self.geosite_update_button.set_sensitive(True)
+        size_kb = result["bytes"] / 1024
+        self.geosite_update_row.set_subtitle(f"Обновлено: {geosite.last_updated()} · {size_kb:.0f} КБ")
+        self._show_banner(f"Список доменов обновлён: {result['count']}, {size_kb:.0f} КБ")
+        return False
+
+    def _on_geosite_update_error(self, message: str):
+        self.geosite_update_button.set_sensitive(True)
+        self._show_banner(f"Не удалось обновить список доменов: {message}", warning=True)
         return False
 
     def _on_row_selected(self, _list_box, row):

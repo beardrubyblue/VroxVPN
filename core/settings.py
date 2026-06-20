@@ -10,6 +10,7 @@ DEFAULTS = {
     "last_selected_server": "",
     "auto_reconnect": False,
     "ru_bypass_enabled": False,
+    "autostart_enabled": False,
 }
 
 
