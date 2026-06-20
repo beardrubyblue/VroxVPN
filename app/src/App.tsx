@@ -1,6 +1,12 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import "./App.css";
+
+interface Settings {
+  subscription_url: string;
+  last_selected_server: string;
+  ru_bypass_enabled: boolean;
+}
 
 interface ConnectionStatus {
   connected: boolean;
@@ -39,16 +45,31 @@ function App() {
     setStatus(await invoke<ConnectionStatus>("get_status"));
   }
 
-  async function loadServers() {
+  async function loadServers(url: string, preferredName?: string) {
     setError("");
     try {
-      const list = await invoke<Server[]>("fetch_servers", { url: subUrl });
+      const list = await invoke<Server[]>("fetch_servers", { url });
       setServers(list);
-      setSelectedIndex(0);
+      const idx = preferredName ? list.findIndex((s) => s.name === preferredName) : -1;
+      setSelectedIndex(idx >= 0 ? idx : 0);
+      await invoke("set_setting", { key: "subscription_url", value: url });
     } catch (err) {
       setError(String(err));
     }
   }
+
+  // подгружаем сохранённые настройки при старте — тот же settings.json,
+  // что у старого Python-приложения (core/settings.py в ветке main)
+  useEffect(() => {
+    (async () => {
+      const saved = await invoke<Settings>("get_settings");
+      setSubUrl(saved.subscription_url);
+      setRuBypass(saved.ru_bypass_enabled);
+      if (saved.subscription_url) {
+        await loadServers(saved.subscription_url, saved.last_selected_server);
+      }
+    })();
+  }, []);
 
   async function toggleConnection() {
     setError("");
@@ -62,11 +83,17 @@ function App() {
           return;
         }
         await invoke("connect", { server, ruBypass });
+        await invoke("set_setting", { key: "last_selected_server", value: server.name });
       }
     } catch (err) {
       setError(String(err));
     }
     await refreshStatus();
+  }
+
+  async function onRuBypassChange(checked: boolean) {
+    setRuBypass(checked);
+    await invoke("set_setting", { key: "ru_bypass_enabled", value: checked });
   }
 
   return (
@@ -81,7 +108,7 @@ function App() {
         disabled={status.connected}
         style={{ width: "100%" }}
       />
-      <button onClick={loadServers} disabled={status.connected}>
+      <button onClick={() => loadServers(subUrl)} disabled={status.connected}>
         Получить серверы
       </button>
 
@@ -103,7 +130,7 @@ function App() {
         <input
           type="checkbox"
           checked={ruBypass}
-          onChange={(e) => setRuBypass(e.currentTarget.checked)}
+          onChange={(e) => onRuBypassChange(e.currentTarget.checked)}
           disabled={status.connected}
         />
         Российские сервисы напрямую (geoip + geosite)

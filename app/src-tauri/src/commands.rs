@@ -8,6 +8,7 @@ use crate::config_gen;
 use crate::engine::{self, ActiveConnection, EngineState};
 use crate::geoip;
 use crate::geosite;
+use crate::settings;
 use crate::subscription::{self, Server};
 
 #[derive(Serialize, Clone)]
@@ -72,6 +73,16 @@ pub fn disconnect(state: State<EngineState>) -> Result<(), String> {
     // hysteria2 (см. engine.rs); реальный процесс уже убит выше
     drop(conn.child);
     Ok(())
+}
+
+#[tauri::command]
+pub fn get_settings() -> serde_json::Value {
+    serde_json::Value::Object(settings::load())
+}
+
+#[tauri::command]
+pub fn set_setting(key: String, value: serde_json::Value) -> Result<(), String> {
+    settings::set(&key, value)
 }
 
 #[tauri::command]

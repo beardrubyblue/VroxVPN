@@ -3,6 +3,7 @@ mod config_gen;
 mod engine;
 mod geoip;
 mod geosite;
+mod settings;
 mod subscription;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -19,6 +20,8 @@ pub fn run() {
             commands::fetch_servers,
             commands::update_geoip,
             commands::update_geosite,
+            commands::get_settings,
+            commands::set_setting,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
