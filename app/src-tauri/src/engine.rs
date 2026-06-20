@@ -38,14 +38,18 @@ pub struct EngineState(pub Mutex<Option<ActiveConnection>>);
 /// приложении), а `ShellExt::sidecar()` сам его сразу запускает и не
 /// отдаёт путь — а нам путь нужен отдельно, чтобы передать его в pkexec.
 /// Поэтому резолвим вручную по той же конвенции: сначала рядом с
-/// текущим exe (собранное приложение), иначе — src-tauri/binaries/
-/// (`tauri dev`, бинарник не "собран", лежит рядом с исходниками).
+/// текущим exe (собранное приложение — Tauri при бандлинге убирает
+/// суффикс target-triple из имени, проверено на реальном .deb: лежит
+/// просто как "vroxcore"), иначе — src-tauri/binaries/ (`tauri dev`,
+/// бинарник не "собран", лежит с суффиксом рядом с исходниками).
 fn sidecar_binary_path() -> Result<PathBuf, String> {
     if let Ok(exe) = std::env::current_exe() {
         if let Some(dir) = exe.parent() {
-            let candidate = dir.join(SIDECAR_NAME);
-            if candidate.exists() {
-                return Ok(candidate);
+            for name in ["vroxcore", SIDECAR_NAME] {
+                let candidate = dir.join(name);
+                if candidate.exists() {
+                    return Ok(candidate);
+                }
             }
         }
     }
@@ -54,9 +58,7 @@ fn sidecar_binary_path() -> Result<PathBuf, String> {
     if dev_candidate.exists() {
         return Ok(dev_candidate);
     }
-    Err(format!(
-        "бинарник {SIDECAR_NAME} не найден ни рядом с исполняемым файлом, ни в src-tauri/binaries/"
-    ))
+    Err("бинарник vroxcore не найден ни рядом с исполняемым файлом, ни в src-tauri/binaries/".into())
 }
 
 fn run_helper(app: &AppHandle, args: &[&str]) -> Result<(), String> {
