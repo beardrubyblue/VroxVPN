@@ -1,0 +1,139 @@
+diff --git a/app/cmd/client.go b/app/cmd/client.go
+index e04ce54..36c83d9 100644
+--- a/app/cmd/client.go
++++ b/app/cmd/client.go
+@@ -229,6 +229,9 @@ type tunConfig struct {
+ 		IPv4Exclude []string `mapstructure:"ipv4Exclude"`
+ 		IPv6Exclude []string `mapstructure:"ipv6Exclude"`
+ 	} `mapstructure:"route"`
++	// домены, чей трафик идёт мимо тоннеля — IP определяется по DNS-ответам,
++	// проходящим через тот же TUN (см. app/internal/tun/directmatch.go)
++	DirectDomains []string `mapstructure:"directDomains"`
+ }
+ 
+ func (c *clientConfig) fillServerAddr(hyConfig *client.Config) error {
+@@ -1130,8 +1133,9 @@ func clientTUN(config tunConfig, c client.Client) error {
+ 		IfName:       config.Name,
+ 		MTU:          config.MTU,
+ 		Timeout:      timeout,
+-		Inet4Address: []netip.Prefix{prefix4},
+-		Inet6Address: []netip.Prefix{prefix6},
++		Inet4Address:  []netip.Prefix{prefix4},
++		Inet6Address:  []netip.Prefix{prefix6},
++		DirectDomains: config.DirectDomains,
+ 	}
+ 	if config.Route != nil {
+ 		server.AutoRoute = true
+diff --git a/app/go.mod b/app/go.mod
+index 140f951..c5556ff 100644
+--- a/app/go.mod
++++ b/app/go.mod
+@@ -18,6 +18,7 @@ require (
+ 	github.com/libdns/vultr v1.0.0
+ 	github.com/mdp/qrterminal/v3 v3.1.1
+ 	github.com/mholt/acmez v1.0.4
++	github.com/miekg/dns v1.1.59
+ 	github.com/sagernet/sing v0.3.2
+ 	github.com/spf13/cobra v1.10.2
+ 	github.com/spf13/viper v1.21.0
+@@ -53,7 +54,6 @@ require (
+ 	github.com/libdns/libdns v0.2.2 // indirect
+ 	github.com/libp2p/go-nat v1.0.1-0.20250821073202-01afc089f138 // indirect
+ 	github.com/libp2p/go-netroute v0.2.1 // indirect
+-	github.com/miekg/dns v1.1.59 // indirect
+ 	github.com/patrickmn/go-cache v2.1.0+incompatible // indirect
+ 	github.com/pelletier/go-toml/v2 v2.2.4 // indirect
+ 	github.com/pion/dtls/v3 v3.1.2 // indirect
+diff --git a/app/internal/tun/server.go b/app/internal/tun/server.go
+index c9ad011..1661238 100644
+--- a/app/internal/tun/server.go
++++ b/app/internal/tun/server.go
+@@ -39,6 +39,10 @@ type Server struct {
+ 	Inet6RouteAddress        []netip.Prefix
+ 	Inet4RouteExcludeAddress []netip.Prefix
+ 	Inet6RouteExcludeAddress []netip.Prefix
++
++	// домены, чей трафик должен идти мимо тоннеля — IP узнаём, подсматривая
++	// за DNS-ответами, проходящими через этот же TUN (см. directmatch.go)
++	DirectDomains []string
+ }
+ 
+ type EventLogger interface {
+@@ -76,12 +80,25 @@ func (s *Server) Serve() error {
+ 	}
+ 	defer tunIf.Close()
+ 
++	var realIface string
++	if len(s.DirectDomains) > 0 {
++		realIface, err = defaultInterfaceName()
++		if err != nil {
++			s.Logger.Warn("direct domains: не нашёл реальный интерфейс, фича отключена", zap.Error(err))
++		}
++	}
++	matcher := newDirectMatcher(s.DirectDomains, realIface)
++	if matcher.enabled() && realIface != "" {
++		s.Logger.Info("TUN direct domains enabled", zap.Int("count", len(s.DirectDomains)), zap.String("interface", realIface))
++		startDNSSniffer(matcher, s.Logger, realIface)
++	}
++
+ 	tunStack, err := tun.NewSystem(tun.StackOptions{
+ 		Context:    context.Background(),
+ 		Tun:        tunIf,
+ 		TunOptions: tunOpts,
+ 		UDPTimeout: s.Timeout,
+-		Handler:    &tunHandler{s},
++		Handler:    &tunHandler{s, matcher},
+ 		Logger: &singLogger{
+ 			tag:       "tun-stack",
+ 			zapLogger: s.Logger,
+@@ -98,6 +115,7 @@ func (s *Server) Serve() error {
+ 
+ type tunHandler struct {
+ 	*Server
++	matcher *directMatcher
+ }
+ 
+ var _ tun.Handler = (*tunHandler)(nil)
+@@ -114,11 +132,25 @@ func (t *tunHandler) NewConnection(ctx context.Context, conn net.Conn, m metadat
+ 			t.EventLogger.TCPError(addr, reqAddr, closeErr)
+ 		}
+ 	}()
+-	rc, err := t.HyClient.TCP(reqAddr)
+-	if err != nil {
+-		closeErr = err
+-		// the returned err is ignored by caller
+-		return nil
++	var rc io.ReadWriteCloser
++	if host, _, splitErr := net.SplitHostPort(reqAddr); splitErr == nil && t.matcher.isDirectIP(host) {
++		if t.Logger != nil {
++			t.Logger.Info("TUN direct dial (bypass tunnel)", zap.String("reqAddr", reqAddr))
++		}
++		directConn, dialErr := t.matcher.dialDirect("tcp", reqAddr)
++		if dialErr != nil {
++			closeErr = dialErr
++			return nil
++		}
++		rc = directConn
++	} else {
++		hyConn, dialErr := t.HyClient.TCP(reqAddr)
++		if dialErr != nil {
++			closeErr = dialErr
++			// the returned err is ignored by caller
++			return nil
++		}
++		rc = hyConn
+ 	}
+ 	defer rc.Close()
+ 
+@@ -140,6 +172,11 @@ func (t *tunHandler) NewConnection(ctx context.Context, conn net.Conn, m metadat
+ 	return nil
+ }
+ 
++// NewPacketConnection НЕ видит DNS-трафик (порт 53) — sing-tun сам исключает
++// его из TUN на уровне политики маршрутизации ("not dport 53" в AutoRoute,
++// см. apernet/sing-tun tun_linux.go), DNS идёт прямо через настоящий
++// интерфейс. Поэтому domain->IP для directMatcher узнаём отдельным
++// пассивным сниффером на реальном интерфейсе (см. dnssniff.go), не здесь.
+ func (t *tunHandler) NewPacketConnection(ctx context.Context, conn network.PacketConn, m metadata.Metadata) error {
+ 	addr := m.Source.String()
+ 	if t.EventLogger != nil {

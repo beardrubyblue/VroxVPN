@@ -2,6 +2,7 @@ __pycache__/
 *.pyc
 *.deb
 packaging/deb/build/
+packaging/hysteria2-patch/build/
 .vscode/
 *.egg-info/
 VroxVPN.html

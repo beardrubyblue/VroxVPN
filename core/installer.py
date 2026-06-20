@@ -1,4 +1,11 @@
-"""Установка бинарника hysteria2."""
+"""Установка бинарника hysteria2 — из НАШЕГО форка apernet/hysteria
+(см. packaging/hysteria2-patch/), а не из оригинальных релизов apernet:
+форк добавляет directDomains (обход VPN по списку доменов через
+DNS-сниффинг на реальном интерфейсе), которого в оригинале нет.
+
+Тег релиза фиксированный, не "latest" — хотим явно контролировать,
+какая версия апстрима/патча ставится пользователям, а не подхватывать
+произвольный новый релиз форка автоматически."""
 import hashlib
 import os
 import platform
@@ -7,7 +14,7 @@ from pathlib import Path
 
 import requests
 
-GITHUB_API_LATEST = "https://api.github.com/repos/apernet/hysteria/releases/latest"
+GITHUB_API_RELEASE = "https://api.github.com/repos/beardrubyblue/VroxVPN/releases/tags/hysteria2-fork-v2.9.2-1"
 
 ARCH_MAP = {
     "x86_64": "amd64",
@@ -37,10 +44,10 @@ def is_installed() -> bool:
 
 
 def _fetch_expected_hash(release: dict, asset_name: str) -> str:
-    """Ищет sha256 для asset_name в hashes.txt релиза (если опубликован).
-    Возвращает пустую строку, если hashes.txt отсутствует — это не должно
-    блокировать установку на случай, если апстрим перестанет публиковать
-    хэши, но позволяет проверить целостность, когда они есть."""
+    """Ищет sha256 для asset_name в hashes.txt релиза (наш hashes.txt,
+    публикуется packaging/hysteria2-patch/build.sh — формат sha256sum:
+    "<hash>  <filename>"). Возвращает пустую строку, если hashes.txt
+    почему-то недоступен — это не должно блокировать установку."""
     hashes_url = None
     for asset in release.get("assets", []):
         if asset.get("name") == "hashes.txt":
@@ -58,25 +65,25 @@ def _fetch_expected_hash(release: dict, asset_name: str) -> str:
 
     for line in resp.text.splitlines():
         parts = line.split()
-        if len(parts) == 2 and parts[1].endswith(f"/{asset_name}"):
+        if len(parts) == 2 and parts[1] == asset_name:
             return parts[0].lower()
     return ""
 
 
 def download_hysteria2(progress_callback=None) -> Path:
-    """Скачивает последний релиз hysteria2 для текущей архитектуры.
+    """Скачивает наш форк hysteria2 (фиксированный релиз-тег, см. модуль)
+    для текущей архитектуры.
 
-    Перед заменой текущего бинарника проверяет sha256 против hashes.txt,
-    публикуемого apernet/hysteria в том же релизе (если найден) — без
-    этого скачанный с GitHub файл устанавливался бы без какой-либо
-    проверки целостности.
+    Перед заменой текущего бинарника проверяет sha256 против hashes.txt
+    в том же релизе (если найден) — без этого скачанный с GitHub файл
+    устанавливался бы без какой-либо проверки целостности.
 
     progress_callback(downloaded_bytes, total_bytes) вызывается по ходу загрузки.
     """
     arch = _target_arch()
-    asset_name = f"hysteria-linux-{arch}"
+    asset_name = f"hysteria2-vroxory-linux-{arch}"
 
-    resp = requests.get(GITHUB_API_LATEST, timeout=15)
+    resp = requests.get(GITHUB_API_RELEASE, timeout=15)
     resp.raise_for_status()
     release = resp.json()
 

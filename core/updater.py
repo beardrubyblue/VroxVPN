@@ -1,7 +1,6 @@
 """Проверка и установка обновлений бинарника hysteria2 и самого приложения."""
 import hashlib
 import os
-import re
 import subprocess
 import urllib.request
 
@@ -10,20 +9,16 @@ import requests
 from core.installer import download_hysteria2, get_binary_path, is_installed
 from core.privileged import run_privileged
 
-GITHUB_API = "https://api.github.com/repos/apernet/hysteria/releases/latest"
-
-VERSION_RE = re.compile(r"v\d+\.\d+\.\d+")
+# hysteria2 ставится из нашего форка с пином на фиксированный тег (см.
+# core/installer.py), а не с "latest" апстрима — поэтому "последняя версия"
+# это просто та, что мы сами сейчас публикуем, без обращения к GitHub API.
+# Строка должна совпадать с VERSION в packaging/hysteria2-patch/build.sh.
+EXPECTED_VERSION = "v2.9.2-vroxory1"
 
 
 class Updater:
     def get_latest_version(self) -> str:
-        resp = requests.get(GITHUB_API, timeout=5)
-        resp.raise_for_status()
-        release = resp.json()
-        # тег в репозитории hysteria выглядит как "app/v2.9.2", нам нужна
-        # только версия для сравнения с выводом `hysteria2 version`
-        match = VERSION_RE.search(release["tag_name"])
-        return match.group(0) if match else release["tag_name"]
+        return EXPECTED_VERSION
 
     def get_installed_version(self) -> str | None:
         if not is_installed():
@@ -39,8 +34,8 @@ class Updater:
         except (OSError, subprocess.TimeoutExpired):
             return None
 
-        match = VERSION_RE.search(result.stdout + result.stderr)
-        return match.group(0) if match else None
+        output = result.stdout + result.stderr
+        return EXPECTED_VERSION if EXPECTED_VERSION in output else None
 
     def check_update(self) -> dict:
         installed = self.get_installed_version()
