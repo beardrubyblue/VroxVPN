@@ -4,7 +4,9 @@ use serde::Serialize;
 use tauri::{AppHandle, State};
 use tauri_plugin_shell::ShellExt;
 
+use crate::config_gen;
 use crate::engine::{self, ActiveConnection, EngineState};
+use crate::subscription::{self, Server};
 
 #[derive(Serialize, Clone)]
 pub struct ConnectionStatus {
@@ -17,15 +19,21 @@ pub fn get_status(state: State<EngineState>) -> ConnectionStatus {
     let guard = state.0.lock().unwrap();
     ConnectionStatus {
         connected: guard.is_some(),
-        server_name: guard.as_ref().map(|c| c.config_path.clone()),
+        server_name: guard.as_ref().map(|c| c.server_name.clone()),
     }
+}
+
+#[tauri::command]
+pub async fn fetch_servers(url: String) -> Result<Vec<Server>, String> {
+    let (servers, _userinfo) = subscription::fetch_subscription(&url, 15).await?;
+    Ok(servers)
 }
 
 #[tauri::command]
 pub async fn connect(
     app: AppHandle,
     state: State<'_, EngineState>,
-    config_path: String,
+    server: Server,
 ) -> Result<(), String> {
     {
         let guard = state.0.lock().unwrap();
@@ -34,12 +42,19 @@ pub async fn connect(
         }
     }
 
+    let config_path = config_gen::generate_config(&server)?;
+    let config_path = config_path.to_string_lossy().to_string();
+
     engine::loosen_rp_filter()?;
     engine::cleanup_interface();
     let child = engine::spawn_client(&app, &config_path).await?;
 
     let mut guard = state.0.lock().unwrap();
-    *guard = Some(ActiveConnection { child, config_path });
+    *guard = Some(ActiveConnection {
+        child,
+        config_path,
+        server_name: server.name,
+    });
     Ok(())
 }
 

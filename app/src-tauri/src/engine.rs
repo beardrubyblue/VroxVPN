@@ -27,6 +27,7 @@ const SIDECAR_BINARY: &str =
 pub struct ActiveConnection {
     pub child: CommandChild,
     pub config_path: String,
+    pub server_name: String,
 }
 
 #[derive(Default)]
