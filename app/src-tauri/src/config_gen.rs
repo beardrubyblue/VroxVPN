@@ -6,6 +6,8 @@ use std::path::PathBuf;
 
 use serde_yaml::{Mapping, Value};
 
+use crate::geoip;
+use crate::geosite;
 use crate::subscription::Server;
 
 const CONFIG_DIR: &str = "/tmp/vroxory-vpn";
@@ -73,9 +75,10 @@ fn str_seq(items: impl IntoIterator<Item = String>) -> Value {
 
 /// Генерирует YAML конфиг для сервера и возвращает путь к файлу.
 ///
-/// TODO: ru_bypass_enabled (geoip-исключения IP-диапазонов России +
-/// directDomains из geosite) пока не портирован — см. docs/ARCHITECTURE.md.
-pub fn generate_config(server: &Server) -> Result<PathBuf, String> {
+/// `ru_bypass`: добавляет geoip-исключения IP-диапазонов России в
+/// маршруты TUN и directDomains (geosite) для сайтов на зарубежном CDN,
+/// которые под geoip не попадают — см. docs/ARCHITECTURE.md.
+pub fn generate_config(server: &Server, ru_bypass: bool) -> Result<PathBuf, String> {
     std::fs::create_dir_all(CONFIG_DIR).map_err(|e| e.to_string())?;
 
     let (server_ipv4, server_ipv6) = resolve_server_addresses(&server.host);
@@ -90,6 +93,14 @@ pub fn generate_config(server: &Server) -> Result<PathBuf, String> {
 
     let mut ipv6_exclude: Vec<String> = vec!["fc00::/7".into(), "fe80::/10".into()];
     ipv6_exclude.extend(server_ipv6.iter().map(|ip| format!("{ip}/128")));
+
+    let mut direct_domains: Vec<String> = Vec::new();
+    if ru_bypass {
+        let (ru_ipv4, ru_ipv6) = geoip::get_ru_cidrs();
+        ipv4_exclude.extend(ru_ipv4);
+        ipv6_exclude.extend(ru_ipv6);
+        direct_domains = geosite::get_ru_domains();
+    }
 
     let mut address = Mapping::new();
     address.insert(s("ipv4"), s("100.100.100.101/30"));
@@ -107,6 +118,9 @@ pub fn generate_config(server: &Server) -> Result<PathBuf, String> {
     tun.insert(s("timeout"), Value::Number(300.into()));
     tun.insert(s("address"), Value::Mapping(address));
     tun.insert(s("route"), Value::Mapping(route));
+    if !direct_domains.is_empty() {
+        tun.insert(s("directDomains"), str_seq(direct_domains));
+    }
 
     let sni = if server.sni.is_empty() {
         server.host.clone()

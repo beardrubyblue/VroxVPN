@@ -6,6 +6,8 @@ use tauri_plugin_shell::ShellExt;
 
 use crate::config_gen;
 use crate::engine::{self, ActiveConnection, EngineState};
+use crate::geoip;
+use crate::geosite;
 use crate::subscription::{self, Server};
 
 #[derive(Serialize, Clone)]
@@ -34,6 +36,7 @@ pub async fn connect(
     app: AppHandle,
     state: State<'_, EngineState>,
     server: Server,
+    ru_bypass: bool,
 ) -> Result<(), String> {
     {
         let guard = state.0.lock().unwrap();
@@ -42,7 +45,7 @@ pub async fn connect(
         }
     }
 
-    let config_path = config_gen::generate_config(&server)?;
+    let config_path = config_gen::generate_config(&server, ru_bypass)?;
     let config_path = config_path.to_string_lossy().to_string();
 
     engine::loosen_rp_filter()?;
@@ -69,6 +72,16 @@ pub fn disconnect(state: State<EngineState>) -> Result<(), String> {
     // hysteria2 (см. engine.rs); реальный процесс уже убит выше
     drop(conn.child);
     Ok(())
+}
+
+#[tauri::command]
+pub async fn update_geoip() -> Result<geoip::UpdateResult, String> {
+    geoip::update_ru_cidrs().await
+}
+
+#[tauri::command]
+pub async fn update_geosite() -> Result<geosite::UpdateResult, String> {
+    geosite::update_ru_domains().await
 }
 
 /// Проверочная команда: дёргает vroxcore-sidecar без привилегий и без

@@ -32,6 +32,10 @@
       "icons/icon.ico"
     ],
     "externalBin": ["binaries/vroxcore"],
-    "resources": ["resources/privileged_helper.sh"]
+    "resources": [
+      "resources/privileged_helper.sh",
+      "resources/geoip/*",
+      "resources/geosite/*"
+    ]
   }
 }
