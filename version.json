@@ -1,8 +1,8 @@
 {
-  "version": "2.2.15",
-  "download_url": "https://github.com/beardrubyblue/VroxVPN/releases/download/v2.2.15/vroxory-vpn_2.2.15_amd64.deb",
-  "sha256": "2078e16a59985c14155cceb6097f5464481e2eff7ead06921ff3f62f75a29fdb",
-  "changelog": "В настройках теперь показывается размер базы IP-адресов (КБ) — и при первом открытии, и после нажатия «Обновить».",
+  "version": "3.0.0",
+  "download_url": "https://github.com/beardrubyblue/VroxVPN/releases/download/v3.0.0/vroxory-vpn_3.0.0_amd64.deb",
+  "sha256": "39a3dd51d2f69d0764e82847ed4530c5c160e7b7ac57ea48d94dc1bad5ac800f",
+  "changelog": "Обновление до версии 3.0.0",
   "min_version": "1.0.0",
-  "released_at": "2026-06-18T11:31:19Z"
+  "released_at": "2026-06-20T11:13:40Z"
 }
