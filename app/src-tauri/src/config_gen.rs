@@ -5,6 +5,7 @@ use std::net::{SocketAddr, ToSocketAddrs};
 use std::path::PathBuf;
 
 use serde_yaml::{Mapping, Value};
+use tauri::AppHandle;
 
 use crate::geoip;
 use crate::geosite;
@@ -78,7 +79,11 @@ fn str_seq(items: impl IntoIterator<Item = String>) -> Value {
 /// `ru_bypass`: добавляет geoip-исключения IP-диапазонов России в
 /// маршруты TUN и directDomains (geosite) для сайтов на зарубежном CDN,
 /// которые под geoip не попадают — см. docs/ARCHITECTURE.md.
-pub fn generate_config(server: &Server, ru_bypass: bool) -> Result<PathBuf, String> {
+pub fn generate_config(
+    app: &AppHandle,
+    server: &Server,
+    ru_bypass: bool,
+) -> Result<PathBuf, String> {
     std::fs::create_dir_all(CONFIG_DIR).map_err(|e| e.to_string())?;
 
     let (server_ipv4, server_ipv6) = resolve_server_addresses(&server.host);
@@ -96,10 +101,10 @@ pub fn generate_config(server: &Server, ru_bypass: bool) -> Result<PathBuf, Stri
 
     let mut direct_domains: Vec<String> = Vec::new();
     if ru_bypass {
-        let (ru_ipv4, ru_ipv6) = geoip::get_ru_cidrs();
+        let (ru_ipv4, ru_ipv6) = geoip::get_ru_cidrs(app)?;
         ipv4_exclude.extend(ru_ipv4);
         ipv6_exclude.extend(ru_ipv6);
-        direct_domains = geosite::get_ru_domains();
+        direct_domains = geosite::get_ru_domains(app)?;
     }
 
     let mut address = Mapping::new();

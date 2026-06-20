@@ -3,6 +3,7 @@ mod config_gen;
 mod engine;
 mod geoip;
 mod geosite;
+mod resources;
 mod settings;
 mod subscription;
 

@@ -5,11 +5,9 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 use serde::Serialize;
+use tauri::AppHandle;
 
-// TODO(packaging): см. ту же заметку у PRIVILEGED_HELPER в engine.rs —
-// работает только в dev-окружении этой машины.
-const BUNDLED_IPV4: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/resources/geoip/ru_ipv4.txt");
-const BUNDLED_IPV6: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/resources/geoip/ru_ipv6.txt");
+use crate::resources;
 
 const SOURCE_IPV4: &str =
     "https://raw.githubusercontent.com/ipverse/country-ip-blocks/master/country/ru/ipv4-aggregated.txt";
@@ -36,18 +34,20 @@ fn parse_cidr_file(path: &Path) -> Vec<String> {
 }
 
 /// Файл из user_dir (после "Обновить") приоритетнее встроенного снимка.
-fn pick_path(user_file: PathBuf, bundled: &str) -> PathBuf {
+fn pick_path(user_file: PathBuf, bundled: PathBuf) -> PathBuf {
     if user_file.exists() {
         user_file
     } else {
-        PathBuf::from(bundled)
+        bundled
     }
 }
 
-pub fn get_ru_cidrs() -> (Vec<String>, Vec<String>) {
-    let ipv4_path = pick_path(user_dir().join("ru_ipv4.txt"), BUNDLED_IPV4);
-    let ipv6_path = pick_path(user_dir().join("ru_ipv6.txt"), BUNDLED_IPV6);
-    (parse_cidr_file(&ipv4_path), parse_cidr_file(&ipv6_path))
+pub fn get_ru_cidrs(app: &AppHandle) -> Result<(Vec<String>, Vec<String>), String> {
+    let bundled_ipv4 = resources::resolve(app, "resources/geoip/ru_ipv4.txt")?;
+    let bundled_ipv6 = resources::resolve(app, "resources/geoip/ru_ipv6.txt")?;
+    let ipv4_path = pick_path(user_dir().join("ru_ipv4.txt"), bundled_ipv4);
+    let ipv6_path = pick_path(user_dir().join("ru_ipv6.txt"), bundled_ipv6);
+    Ok((parse_cidr_file(&ipv4_path), parse_cidr_file(&ipv6_path)))
 }
 
 #[derive(Serialize)]

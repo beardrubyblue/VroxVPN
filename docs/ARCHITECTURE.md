@@ -114,21 +114,46 @@ Hiddify).
   Проверено end-to-end на реальной подписке: список серверов, YAML
   совпадает по структуре с питоновским (включая QUIC-тюнинг и
   obfs/salamander), TUN поднимается и чисто гасится.
-- **Geoip/geosite (ru_bypass) пока НЕ портированы** — `config_gen.rs`
-  не добавляет ни geoip-исключения, ни `directDomains`. Это следующий
-  логический шаг, отдельный от базового подключения.
+- **Geoip/geosite (ru_bypass) портированы.** `geoip.rs`/`geosite.rs` —
+  порт `core/geoip.py`/`core/geosite.py`: встроенный снимок + обновление
+  в `~/.config/vroxory-vpn/geoip|geosite` (тот же путь, что у Python-
+  приложения). `config_gen::generate_config` принимает `ru_bypass: bool`
+  и добавляет geoip-исключения в `ipv4Exclude`/`ipv6Exclude` +
+  `directDomains` из geosite. Фронтенд: галочка + кнопки "Обновить
+  geoip/geosite". Проверено на реальном подключении: 8627 IPv4-
+  диапазонов, 1773 домена, `TUN direct domains enabled` + `DNS sniffer`
+  в логах движка.
+- **Настройки приложения портированы.** `settings.rs` — порт
+  `core/settings.py`, читает/пишет ТОТ ЖЕ `~/.config/vroxory-vpn/
+  settings.json`, что и Python-приложение — merge поверх дефолтов
+  сохраняет чужие ключи (`kill_switch_enabled`, `autostart_enabled` и
+  т.п.) нетронутыми. Фронтенд подгружает URL подписки/последний сервер/
+  ru_bypass при старте через `useEffect`, сохраняет при изменениях.
+  Проверено: перезапуск приложения восстанавливает всё без ручного
+  ввода.
+- **Резолвинг путей к ресурсам исправлен.** `resources.rs` —
+  `app.path().resolve(_, BaseDirectory::Resource)` вместо
+  `CARGO_MANIFEST_DIR` для `privileged_helper.sh` и встроенных снимков
+  geoip/geosite (`engine.rs`, `geoip.rs`, `geosite.rs` теперь принимают
+  `&AppHandle`). Работает одинаково в dev и в собранном приложении —
+  относительные пути совпадают с `tauri.conf.json` → `bundle.resources`.
+  Sidecar-бинарник (`vroxcore`) — отдельная конвенция (не "ресурс"):
+  `engine::sidecar_binary_path()` сначала ищет рядом с текущим
+  исполняемым файлом (так Tauri размещает `externalBin` в собранном
+  приложении), иначе — в `src-tauri/binaries/` (dev-режим). Нужен
+  путь, а не сразу запуск, поэтому `ShellExt::sidecar()` здесь не
+  подходит — он сам спавнит процесс, а нам нужно сначала обернуть его
+  в `pkexec`.
 
 ## Следующие шаги (не сделаны)
 
-1. Geoip/geosite bypass — порт `core/geoip.py` + `core/geosite.py`
-   (скачивание/обновление баз, добавление IP-исключений и
-   `directDomains` в `config_gen.rs`), плюс настройка-тумблер во
-   фронтенде (аналог `ru_bypass_toggle`).
-2. Настройки приложения (аналог `core/settings.py`) — сохранение URL
-   подписки/выбранного сервера между запусками, сейчас всё в памяти
-   фронтенда и стирается при перезапуске.
-3. Резолвинг путей к sidecar/ресурсам через `app.path()` +
-   `BaseDirectory::Resource` вместо `CARGO_MANIFEST_DIR` — текущий
-   способ работает только в dev-окружении этой машины, не переживёт
-   реальную сборку/установку.
-4. Только после geoip/geosite и настроек — переходить к Windows.
+1. Windows — новый слой платформенной интеграции (sidecar остаётся, но
+   привилегии через UAC вместо pkexec, kill switch через WFP вместо
+   nftables, DNS через `netsh` вместо resolv.conf). `engine.rs` в
+   текущем виде целиком про Linux, для Windows будет отдельный модуль,
+   не обобщение этого.
+2. Resource-резолвинг захардкожен на Linux-триплет
+   (`vroxcore-x86_64-unknown-linux-gnu` в `engine.rs`) — при портировании
+   на Windows/arm64 нужно либо прокинуть target triple через `build.rs`
+   (`cargo:rustc-env=TARGET=...`), либо завести отдельные константы
+   по платформе.

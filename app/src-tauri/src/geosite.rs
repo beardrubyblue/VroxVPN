@@ -7,9 +7,10 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 use serde::Serialize;
+use tauri::AppHandle;
 
-const BUNDLED_DOMAINS: &str =
-    concat!(env!("CARGO_MANIFEST_DIR"), "/resources/geosite/ru_domains.txt");
+use crate::resources;
+
 const SOURCE_BASE: &str = "https://raw.githubusercontent.com/v2fly/domain-list-community/master/data/";
 const ROOT_CATEGORY: &str = "category-ru";
 
@@ -32,14 +33,14 @@ fn parse_domain_file(path: &Path) -> Vec<String> {
         .unwrap_or_default()
 }
 
-pub fn get_ru_domains() -> Vec<String> {
+pub fn get_ru_domains(app: &AppHandle) -> Result<Vec<String>, String> {
     let user_file = user_dir().join("ru_domains.txt");
     let path = if user_file.exists() {
         user_file
     } else {
-        PathBuf::from(BUNDLED_DOMAINS)
+        resources::resolve(app, "resources/geosite/ru_domains.txt")?
     };
-    parse_domain_file(&path)
+    Ok(parse_domain_file(&path))
 }
 
 #[derive(Serialize)]

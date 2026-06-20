@@ -7,6 +7,7 @@
 //! pkexec, а не настоящего root-процесса hysteria2, поэтому убить его
 //! напрямую по pid невозможно (см. helper-скрипт, секция kill-hysteria).
 
+use std::path::PathBuf;
 use std::process::Command;
 use std::sync::Mutex;
 
@@ -14,15 +15,13 @@ use tauri::AppHandle;
 use tauri_plugin_shell::process::{CommandChild, CommandEvent};
 use tauri_plugin_shell::ShellExt;
 
-const TUN_IFACE: &str = "tun-vroxory";
+use crate::resources;
 
-// TODO(packaging): путь резолвится относительно исходников для разработки.
-// В собранном приложении нужно брать его через
-// app.path().resolve(_, BaseDirectory::Resource) — см. docs/ARCHITECTURE.md.
-const PRIVILEGED_HELPER: &str =
-    concat!(env!("CARGO_MANIFEST_DIR"), "/resources/privileged_helper.sh");
-const SIDECAR_BINARY: &str =
-    concat!(env!("CARGO_MANIFEST_DIR"), "/binaries/vroxcore-x86_64-unknown-linux-gnu");
+const TUN_IFACE: &str = "tun-vroxory";
+// TODO: захардкожен Linux-триплет — этот файл целиком про Linux-sidecar
+// (pkexec/privileged_helper.sh), для Windows/macOS будет отдельная
+// реализация этого слоя, не обобщение текущей.
+const SIDECAR_NAME: &str = "vroxcore-x86_64-unknown-linux-gnu";
 
 pub struct ActiveConnection {
     pub child: CommandChild,
@@ -33,9 +32,37 @@ pub struct ActiveConnection {
 #[derive(Default)]
 pub struct EngineState(pub Mutex<Option<ActiveConnection>>);
 
-fn run_helper(args: &[&str]) -> Result<(), String> {
+/// Путь к бинарнику vroxcore. Это sidecar (`bundle.externalBin`), а не
+/// обычный ресурс — у Tauri для sidecar-бинарников своя конвенция
+/// размещения (рядом с главным исполняемым файлом в собранном
+/// приложении), а `ShellExt::sidecar()` сам его сразу запускает и не
+/// отдаёт путь — а нам путь нужен отдельно, чтобы передать его в pkexec.
+/// Поэтому резолвим вручную по той же конвенции: сначала рядом с
+/// текущим exe (собранное приложение), иначе — src-tauri/binaries/
+/// (`tauri dev`, бинарник не "собран", лежит рядом с исходниками).
+fn sidecar_binary_path() -> Result<PathBuf, String> {
+    if let Ok(exe) = std::env::current_exe() {
+        if let Some(dir) = exe.parent() {
+            let candidate = dir.join(SIDECAR_NAME);
+            if candidate.exists() {
+                return Ok(candidate);
+            }
+        }
+    }
+    let dev_candidate =
+        PathBuf::from(concat!(env!("CARGO_MANIFEST_DIR"), "/binaries")).join(SIDECAR_NAME);
+    if dev_candidate.exists() {
+        return Ok(dev_candidate);
+    }
+    Err(format!(
+        "бинарник {SIDECAR_NAME} не найден ни рядом с исполняемым файлом, ни в src-tauri/binaries/"
+    ))
+}
+
+fn run_helper(app: &AppHandle, args: &[&str]) -> Result<(), String> {
+    let helper = resources::resolve(app, "resources/privileged_helper.sh")?;
     let status = Command::new("pkexec")
-        .arg(PRIVILEGED_HELPER)
+        .arg(helper)
         .args(args)
         .status()
         .map_err(|e| e.to_string())?;
@@ -50,24 +77,27 @@ fn run_helper(args: &[&str]) -> Result<(), String> {
     }
 }
 
-pub fn loosen_rp_filter() -> Result<(), String> {
+pub fn loosen_rp_filter(app: &AppHandle) -> Result<(), String> {
     // Linux отбрасывает TUN-трафик строгим reverse-path filter — без
     // этого пакеты к серверу маршрутизируются, но ответы дропаются ядром
-    run_helper(&["loosen-rp-filter"])
+    run_helper(app, &["loosen-rp-filter"])
 }
 
-pub fn cleanup_interface() {
+pub fn cleanup_interface(app: &AppHandle) {
     // best-effort, как в Python: если предыдущий запуск завершился
     // аварийно, интерфейс tun-vroxory может остаться висеть в ядре —
     // тогда hysteria2 падает с "device or resource busy"
-    let _ = run_helper(&["delete-tun", TUN_IFACE]);
+    let _ = run_helper(app, &["delete-tun", TUN_IFACE]);
 }
 
 pub async fn spawn_client(app: &AppHandle, config_path: &str) -> Result<CommandChild, String> {
+    let binary = sidecar_binary_path()?;
+    let binary = binary.to_string_lossy().to_string();
+
     let (mut rx, child) = app
         .shell()
         .command("pkexec")
-        .args([SIDECAR_BINARY, "client", "--config", config_path])
+        .args([binary.as_str(), "client", "--config", config_path])
         .spawn()
         .map_err(|e| e.to_string())?;
 
@@ -91,8 +121,8 @@ pub async fn spawn_client(app: &AppHandle, config_path: &str) -> Result<CommandC
     Ok(child)
 }
 
-pub fn kill_client(config_path: &str) -> Result<(), String> {
-    run_helper(&["kill-hysteria", "TERM", config_path])?;
-    cleanup_interface();
+pub fn kill_client(app: &AppHandle, config_path: &str) -> Result<(), String> {
+    run_helper(app, &["kill-hysteria", "TERM", config_path])?;
+    cleanup_interface(app);
     Ok(())
 }

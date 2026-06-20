@@ -46,11 +46,11 @@ pub async fn connect(
         }
     }
 
-    let config_path = config_gen::generate_config(&server, ru_bypass)?;
+    let config_path = config_gen::generate_config(&app, &server, ru_bypass)?;
     let config_path = config_path.to_string_lossy().to_string();
 
-    engine::loosen_rp_filter()?;
-    engine::cleanup_interface();
+    engine::loosen_rp_filter(&app)?;
+    engine::cleanup_interface(&app);
     let child = engine::spawn_client(&app, &config_path).await?;
 
     let mut guard = state.0.lock().unwrap();
@@ -63,12 +63,12 @@ pub async fn connect(
 }
 
 #[tauri::command]
-pub fn disconnect(state: State<EngineState>) -> Result<(), String> {
+pub fn disconnect(app: AppHandle, state: State<EngineState>) -> Result<(), String> {
     let conn = {
         let mut guard = state.0.lock().unwrap();
         guard.take().ok_or("не подключено")?
     };
-    engine::kill_client(&conn.config_path)?;
+    engine::kill_client(&app, &conn.config_path)?;
     // дочерний pkexec-процесс — это обёртка, не настоящий root-процесс
     // hysteria2 (см. engine.rs); реальный процесс уже убит выше
     drop(conn.child);
