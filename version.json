@@ -1,8 +1,8 @@
 {
-  "version": "3.0.0",
-  "download_url": "https://github.com/beardrubyblue/VroxVPN/releases/download/v3.0.0/vroxory-vpn_3.0.0_amd64.deb",
-  "sha256": "39a3dd51d2f69d0764e82847ed4530c5c160e7b7ac57ea48d94dc1bad5ac800f",
-  "changelog": "Обновление до версии 3.0.0",
+  "version": "4.0.0",
+  "download_url": "https://github.com/beardrubyblue/VroxVPN/releases/download/v4.0.0/vrox.vpn_4.0.0_amd64.deb",
+  "sha256": "e746695d7d8738b39e04149214c0549f54f8e0fd044b0343ad46261d1fdf9533",
+  "changelog": "Переход на Tauri (Rust + React): системный трей, kill switch, аудит безопасности, уменьшенный размер сборки",
   "min_version": "1.0.0",
-  "released_at": "2026-06-20T11:13:40Z"
+  "released_at": "2026-06-21T15:50:00Z"
 }
