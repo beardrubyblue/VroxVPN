@@ -14,7 +14,6 @@ set -euo pipefail
 
 TUN_IFACE="tun-vroxory"
 KILLSWITCH_TABLE="vroxory_killswitch"
-UPDATE_DEB_PATH="/tmp/vroxory-update.deb"
 
 cmd="${1:-}"
 shift || true
@@ -41,7 +40,29 @@ case "$cmd" in
             /tmp/vroxory-vpn/*.yaml) ;;
             *) echo "недопустимый путь конфига: $config" >&2; exit 1 ;;
         esac
-        pkill "-$signal" -f "hysteria2 .*--config $config" || true
+        # бинарник нашего форка называется vroxcore (sidecar Tauri-приложения),
+        # а не hysteria2, как в питоновской версии — паттерн под её имя
+        # здесь никогда бы не совпал
+        pkill "-$signal" -f "vroxcore .*--config $config" || true
+        ;;
+
+    kill-all-hysteria)
+        # вызывается при старте приложения — подчищает осиротевший
+        # root-процесс vroxcore, если прошлый запуск приложения убили/
+        # он крашнулся до disconnect (pkexec не наш child, поэтому сам
+        # процесс этого не замечает и продолжает держать TUN)
+        pkill -TERM -f "vroxcore .*--config /tmp/vroxory-vpn/" || true
+        ;;
+
+    is-running)
+        # опрос для kill_client: вместо фиксированной паузы ждём
+        # фактического завершения процесса перед delete-tun
+        config="${1:?missing config path}"
+        case "$config" in
+            /tmp/vroxory-vpn/*.yaml) ;;
+            *) echo "недопустимый путь конфига: $config" >&2; exit 1 ;;
+        esac
+        pgrep -f "vroxcore .*--config $config" > /dev/null
         ;;
 
     delete-tun)
@@ -67,26 +88,31 @@ case "$cmd" in
         nft delete table inet "$table"
         ;;
 
-    write-resolv-conf)
-        # новое содержимое /etc/resolv.conf читается из stdin как есть —
-        # никакой shell-интерполяции, поэтому экранирование не нужно
-        rm -f /etc/resolv.conf
-        cat > /etc/resolv.conf
-        ;;
-
-    relink-resolv-conf)
-        target="${1:?missing target}"
-        rm -f /etc/resolv.conf
-        ln -sf "$target" /etc/resolv.conf
-        ;;
-
-    apt-install)
-        path="${1:?missing path}"
-        if [[ "$path" != "$UPDATE_DEB_PATH" ]]; then
-            echo "недопустимый путь: $path" >&2
-            exit 1
-        fi
-        apt-get install -y "$path"
+    install-polkit-rule)
+        # Разрешает passwordless pkexec для ЭТОГО helper-скрипта и для
+        # vroxcore — без этого Rust-приложение спрашивало бы пароль на
+        # каждый отдельный pkexec-вызов (3 раза на connect, 2 на disconnect).
+        # Пути фиксированные константы, а не аргумент — иначе вызывающий
+        # (ещё не root) мог бы попросить разрешить passwordless root для
+        # произвольного пути.
+        mkdir -p /etc/polkit-1/rules.d
+        cat > /etc/polkit-1/rules.d/49-vrox-vpn-tauri.rules << 'POLKIT'
+polkit.addRule(function(action, subject) {
+    if (action.id != "org.freedesktop.policykit.exec") {
+        return;
+    }
+    if (!subject.isInGroup("sudo")) {
+        return;
+    }
+    var allowed = [
+        "/usr/lib/vrox.vpn/resources/privileged_helper.sh",
+        "/usr/bin/vroxcore"
+    ];
+    if (allowed.indexOf(action.lookup("program")) !== -1) {
+        return polkit.Result.YES;
+    }
+});
+POLKIT
         ;;
 
     *)

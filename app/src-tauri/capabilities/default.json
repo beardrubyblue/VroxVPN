@@ -6,20 +6,6 @@
   "permissions": [
     "core:default",
     "opener:default",
-    {
-      "identifier": "shell:allow-execute",
-      "allow": [
-        {
-          "name": "binaries/vroxcore",
-          "sidecar": true,
-          "args": true
-        },
-        {
-          "name": "pkexec",
-          "cmd": "pkexec",
-          "args": true
-        }
-      ]
-    }
+    "clipboard-manager:allow-read-text"
   ]
 }

@@ -7,8 +7,10 @@
 //! pkexec, а не настоящего root-процесса hysteria2, поэтому убить его
 //! напрямую по pid невозможно (см. helper-скрипт, секция kill-hysteria).
 
-use std::path::PathBuf;
-use std::process::Command;
+use std::io::Write;
+use std::net::{IpAddr, SocketAddr, ToSocketAddrs};
+use std::path::{Path, PathBuf};
+use std::process::{Command, Stdio};
 use std::sync::Mutex;
 
 use tauri::AppHandle;
@@ -18,6 +20,8 @@ use tauri_plugin_shell::ShellExt;
 use crate::resources;
 
 const TUN_IFACE: &str = "tun-vroxory";
+const KILLSWITCH_TABLE: &str = "vroxory_killswitch";
+const POLKIT_RULE_PATH: &str = "/etc/polkit-1/rules.d/49-vrox-vpn-tauri.rules";
 // TODO: захардкожен Linux-триплет — этот файл целиком про Linux-sidecar
 // (pkexec/privileged_helper.sh), для Windows/macOS будет отдельная
 // реализация этого слоя, не обобщение текущей.
@@ -29,8 +33,22 @@ pub struct ActiveConnection {
     pub server_name: String,
 }
 
+/// `Connecting`/`Disconnecting` — промежуточные состояния, которые
+/// occupying-блокируют слот на время асинхронной работы (spawn/kill),
+/// не отпуская Mutex между проверкой и записью — иначе два почти
+/// одновременных вызова connect (например, клик в окне + событие из
+/// трея) оба проходят проверку "не подключено" и оба запускают процесс.
 #[derive(Default)]
-pub struct EngineState(pub Mutex<Option<ActiveConnection>>);
+pub enum Slot {
+    #[default]
+    Idle,
+    Connecting,
+    Connected(ActiveConnection),
+    Disconnecting,
+}
+
+#[derive(Default)]
+pub struct EngineState(pub Mutex<Slot>);
 
 /// Путь к бинарнику vroxcore. Это sidecar (`bundle.externalBin`), а не
 /// обычный ресурс — у Tauri для sidecar-бинарников своя конвенция
@@ -79,10 +97,110 @@ fn run_helper(app: &AppHandle, args: &[&str]) -> Result<(), String> {
     }
 }
 
+fn run_helper_with_stdin(app: &AppHandle, args: &[&str], input: &str) -> Result<(), String> {
+    let helper = resources::resolve(app, "resources/privileged_helper.sh")?;
+    let mut child = Command::new("pkexec")
+        .arg(helper)
+        .args(args)
+        .stdin(Stdio::piped())
+        .spawn()
+        .map_err(|e| e.to_string())?;
+    child
+        .stdin
+        .take()
+        .ok_or("не удалось открыть stdin pkexec")?
+        .write_all(input.as_bytes())
+        .map_err(|e| e.to_string())?;
+    let status = child.wait().map_err(|e| e.to_string())?;
+    if status.success() {
+        Ok(())
+    } else {
+        Err(format!(
+            "privileged_helper.sh {:?} завершился с кодом {:?}",
+            args,
+            status.code()
+        ))
+    }
+}
+
+/// Резолвит host сервера в один IPv4-литерал для kill switch-правила —
+/// порт core/kill_switch.py::_safe_server_ip. Непроверенная строка из
+/// подписки никогда не должна попадать прямо в текст nft-правил,
+/// выполняемых от root, поэтому при неудаче резолва возвращаем
+/// заведомо нерабочий адрес, а не исходную строку.
+fn safe_server_ip(host: &str) -> String {
+    if let Ok(ip) = host.parse::<IpAddr>() {
+        if ip.is_ipv4() {
+            return ip.to_string();
+        }
+    }
+    if let Ok(addrs) = format!("{host}:0").to_socket_addrs() {
+        for addr in addrs {
+            if let SocketAddr::V4(a) = addr {
+                return a.ip().to_string();
+            }
+        }
+    }
+    "0.0.0.0/32".to_string()
+}
+
+/// Включает kill switch — nftables-таблица с `policy drop` на output,
+/// пропускающая только TUN/loopback/локальные сети/сам VPN-сервер.
+/// Порт core/kill_switch.py::KillSwitch.enable. Опциональная защита
+/// (тогл в настройках, выключена по умолчанию) — в Python-версии была
+/// спрятана из UI из-за нестабильности, здесь включается аккуратно:
+/// best-effort cleanup при старте приложения и при disconnect (см.
+/// disable_killswitch), чтобы неудачное отключение не блокировало сеть
+/// навсегда.
+pub fn enable_killswitch(app: &AppHandle, vpn_server_host: &str) -> Result<(), String> {
+    let ip = safe_server_ip(vpn_server_host);
+    let rules = format!(
+        "table inet {KILLSWITCH_TABLE} {{
+    chain output {{
+        type filter hook output priority 0; policy drop;
+        oifname \"lo\" accept
+        oifname \"{TUN_IFACE}\" accept
+        ip daddr {ip} accept
+        ip daddr 192.168.0.0/16 accept
+        ip daddr 10.0.0.0/8 accept
+        ip daddr 172.16.0.0/12 accept
+    }}
+}}
+"
+    );
+    run_helper_with_stdin(app, &["nft-apply"], &rules)
+}
+
+/// Снимает kill switch — best-effort: если таблицы нет (kill switch не
+/// был включён или уже снят), nft вернёт ошибку, которую игнорируем.
+pub fn disable_killswitch(app: &AppHandle) {
+    let _ = run_helper(app, &["nft-delete-table", KILLSWITCH_TABLE]);
+}
+
+/// Один pkexec-запрос пароля на весь жизненный цикл приложения (а не на
+/// каждый отдельный privileged-вызов): пишет polkit-правило, разрешающее
+/// passwordless pkexec для privileged_helper.sh и vroxcore. Если правило
+/// уже стоит (не первый запуск) — не дёргает pkexec вообще.
+pub fn ensure_polkit_rule(app: &AppHandle) -> Result<(), String> {
+    if Path::new(POLKIT_RULE_PATH).exists() {
+        return Ok(());
+    }
+    run_helper(app, &["install-polkit-rule"])
+}
+
 pub fn loosen_rp_filter(app: &AppHandle) -> Result<(), String> {
     // Linux отбрасывает TUN-трафик строгим reverse-path filter — без
     // этого пакеты к серверу маршрутизируются, но ответы дропаются ядром
     run_helper(app, &["loosen-rp-filter"])
+}
+
+/// Вызывается один раз при старте приложения — подчищает осиротевший
+/// root-процесс vroxcore и TUN-интерфейс, если предыдущий запуск
+/// приложения был убит/крашнулся до disconnect (см. kill-all-hysteria
+/// в privileged_helper.sh).
+pub fn cleanup_orphans(app: &AppHandle) {
+    let _ = run_helper(app, &["kill-all-hysteria"]);
+    cleanup_interface(app);
 }
 
 pub fn cleanup_interface(app: &AppHandle) {
@@ -123,8 +241,38 @@ pub async fn spawn_client(app: &AppHandle, config_path: &str) -> Result<CommandC
     Ok(child)
 }
 
+fn process_running(app: &AppHandle, config_path: &str) -> bool {
+    let Ok(helper) = resources::resolve(app, "resources/privileged_helper.sh") else {
+        return false;
+    };
+    Command::new("pkexec")
+        .arg(helper)
+        .args(["is-running", config_path])
+        .status()
+        .map(|s| s.success())
+        .unwrap_or(false)
+}
+
 pub fn kill_client(app: &AppHandle, config_path: &str) -> Result<(), String> {
     run_helper(app, &["kill-hysteria", "TERM", config_path])?;
+
+    // ждём фактического завершения процесса опросом, а не гадаем по
+    // фиксированной паузе — pkexec - обёртка, реальный root-процесс
+    // vroxcore не наш child, поэтому wait() недоступен, только опрос
+    // через helper. Без этого риск выдрать интерфейс из-под процесса,
+    // который ещё не успел выйти.
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(3);
+    while std::time::Instant::now() < deadline {
+        if !process_running(app, config_path) {
+            cleanup_interface(app);
+            return Ok(());
+        }
+        std::thread::sleep(std::time::Duration::from_millis(200));
+    }
+
+    // не ответил на TERM за 3с — добиваем SIGKILL
+    let _ = run_helper(app, &["kill-hysteria", "KILL", config_path]);
+    std::thread::sleep(std::time::Duration::from_millis(200));
     cleanup_interface(app);
     Ok(())
 }

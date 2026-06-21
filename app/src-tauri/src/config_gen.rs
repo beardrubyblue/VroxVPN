@@ -2,6 +2,7 @@
 //! core/config_gen.py (ветка main) на Rust.
 
 use std::net::{SocketAddr, ToSocketAddrs};
+use std::os::unix::fs::{DirBuilderExt, PermissionsExt};
 use std::path::PathBuf;
 
 use serde_yaml::{Mapping, Value};
@@ -44,6 +45,26 @@ fn safe_filename(name: &str) -> String {
     }
 }
 
+/// Создаёт CONFIG_DIR с правами 0700 (только текущий пользователь) —
+/// конфиг внутри содержит пароль сервера в открытом виде. Отдельно
+/// проверяет, что путь не подменили симлинком (классическая TOCTOU-
+/// атака на предсказуемое имя в общем `/tmp`): если по этому пути
+/// уже лежит симлинк — отказываемся следовать ему.
+fn ensure_private_config_dir() -> Result<(), String> {
+    if let Ok(meta) = std::fs::symlink_metadata(CONFIG_DIR) {
+        if meta.file_type().is_symlink() {
+            return Err(format!("{CONFIG_DIR} — симлинк, отказ"));
+        }
+        std::fs::set_permissions(CONFIG_DIR, std::fs::Permissions::from_mode(0o700))
+            .map_err(|e| e.to_string())?;
+        return Ok(());
+    }
+    std::fs::DirBuilder::new()
+        .mode(0o700)
+        .create(CONFIG_DIR)
+        .map_err(|e| e.to_string())
+}
+
 /// Резолвит host в IPv4/IPv6 адреса — нужны для exclude-маршрутов, иначе
 /// пакеты к самому VPN-серверу уйдут в TUN и получится routing loop.
 fn resolve_server_addresses(host: &str) -> (Vec<String>, Vec<String>) {
@@ -84,7 +105,7 @@ pub fn generate_config(
     server: &Server,
     ru_bypass: bool,
 ) -> Result<PathBuf, String> {
-    std::fs::create_dir_all(CONFIG_DIR).map_err(|e| e.to_string())?;
+    ensure_private_config_dir()?;
 
     let (server_ipv4, server_ipv6) = resolve_server_addresses(&server.host);
 
@@ -167,10 +188,24 @@ pub fn generate_config(
         config.insert(s("quic"), quic_value);
     }
 
-    let filename = format!("{}.yaml", safe_filename(&server.name));
+    // суффикс-хэш от host:port — без него два сервера, чьи имена совпадают
+    // после санитизации (например "Server #1" и "Server_#1" оба дают
+    // "Server_1"), перезаписывали бы конфиг друг друга
+    let filename = format!(
+        "{}_{:x}.yaml",
+        safe_filename(&server.name),
+        {
+            use std::hash::{Hash, Hasher};
+            let mut hasher = std::collections::hash_map::DefaultHasher::new();
+            (&server.host, server.port).hash(&mut hasher);
+            hasher.finish() & 0xffff
+        }
+    );
     let path = PathBuf::from(CONFIG_DIR).join(filename);
     let yaml_str = serde_yaml::to_string(&Value::Mapping(config)).map_err(|e| e.to_string())?;
     std::fs::write(&path, yaml_str).map_err(|e| e.to_string())?;
+    std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o600))
+        .map_err(|e| e.to_string())?;
 
     Ok(path)
 }

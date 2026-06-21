@@ -2,12 +2,13 @@
 
 use serde::Serialize;
 use tauri::{AppHandle, State};
-use tauri_plugin_shell::ShellExt;
 
+use crate::app_update;
 use crate::config_gen;
-use crate::engine::{self, ActiveConnection, EngineState};
+use crate::engine::{self, ActiveConnection, EngineState, Slot};
 use crate::geoip;
 use crate::geosite;
+use crate::ping;
 use crate::settings;
 use crate::subscription::{self, Server};
 
@@ -20,9 +21,15 @@ pub struct ConnectionStatus {
 #[tauri::command]
 pub fn get_status(state: State<EngineState>) -> ConnectionStatus {
     let guard = state.0.lock().unwrap();
-    ConnectionStatus {
-        connected: guard.is_some(),
-        server_name: guard.as_ref().map(|c| c.server_name.clone()),
+    match &*guard {
+        Slot::Connected(conn) => ConnectionStatus {
+            connected: true,
+            server_name: Some(conn.server_name.clone()),
+        },
+        _ => ConnectionStatus {
+            connected: false,
+            server_name: None,
+        },
     }
 }
 
@@ -38,41 +45,89 @@ pub async fn connect(
     state: State<'_, EngineState>,
     server: Server,
     ru_bypass: bool,
+    kill_switch: bool,
 ) -> Result<(), String> {
     {
-        let guard = state.0.lock().unwrap();
-        if guard.is_some() {
-            return Err("уже подключено".into());
+        let mut guard = state.0.lock().unwrap();
+        match &*guard {
+            Slot::Idle => *guard = Slot::Connecting,
+            _ => return Err("уже подключено или подключение уже выполняется".into()),
         }
     }
 
-    let config_path = config_gen::generate_config(&app, &server, ru_bypass)?;
-    let config_path = config_path.to_string_lossy().to_string();
-
-    engine::loosen_rp_filter(&app)?;
-    engine::cleanup_interface(&app);
-    let child = engine::spawn_client(&app, &config_path).await?;
+    let result = connect_inner(&app, &server, ru_bypass).await;
 
     let mut guard = state.0.lock().unwrap();
-    *guard = Some(ActiveConnection {
-        child,
-        config_path,
-        server_name: server.name,
-    });
-    Ok(())
+    match result {
+        Ok((child, config_path)) => {
+            *guard = Slot::Connected(ActiveConnection {
+                child,
+                config_path,
+                server_name: server.name,
+            });
+            drop(guard);
+            if kill_switch {
+                // best-effort: неудача kill switch не должна рвать уже
+                // установленное VPN-соединение, только лишает доп. защиты
+                if let Err(e) = engine::enable_killswitch(&app, &server.host) {
+                    eprintln!("[killswitch] не удалось включить: {e}");
+                }
+            }
+            Ok(())
+        }
+        Err(e) => {
+            *guard = Slot::Idle;
+            Err(e)
+        }
+    }
+}
+
+async fn connect_inner(
+    app: &AppHandle,
+    server: &Server,
+    ru_bypass: bool,
+) -> Result<(tauri_plugin_shell::process::CommandChild, String), String> {
+    let config_path = config_gen::generate_config(app, server, ru_bypass)?;
+    let config_path = config_path.to_string_lossy().to_string();
+
+    engine::ensure_polkit_rule(app)?;
+    engine::loosen_rp_filter(app)?;
+    engine::cleanup_interface(app);
+    let child = engine::spawn_client(app, &config_path).await?;
+    Ok((child, config_path))
 }
 
 #[tauri::command]
 pub fn disconnect(app: AppHandle, state: State<EngineState>) -> Result<(), String> {
     let conn = {
         let mut guard = state.0.lock().unwrap();
-        guard.take().ok_or("не подключено")?
+        match std::mem::replace(&mut *guard, Slot::Disconnecting) {
+            Slot::Connected(conn) => conn,
+            other => {
+                *guard = other;
+                return Err("не подключено".into());
+            }
+        }
     };
-    engine::kill_client(&app, &conn.config_path)?;
-    // дочерний pkexec-процесс — это обёртка, не настоящий root-процесс
-    // hysteria2 (см. engine.rs); реальный процесс уже убит выше
-    drop(conn.child);
-    Ok(())
+
+    match engine::kill_client(&app, &conn.config_path) {
+        Ok(()) => {
+            // дочерний pkexec-процесс — это обёртка, не настоящий root-процесс
+            // hysteria2 (см. engine.rs); реальный процесс уже убит выше
+            drop(conn.child);
+            *state.0.lock().unwrap() = Slot::Idle;
+            // best-effort: если kill switch не был включён, это безвредный
+            // no-op (см. disable_killswitch)
+            engine::disable_killswitch(&app);
+            Ok(())
+        }
+        Err(e) => {
+            // kill не подтверждён — возвращаем состояние "подключено",
+            // чтобы UI не показывал отключение, которое не произошло
+            *state.0.lock().unwrap() = Slot::Connected(conn);
+            Err(e)
+        }
+    }
 }
 
 #[tauri::command]
@@ -86,6 +141,12 @@ pub fn set_setting(key: String, value: serde_json::Value) -> Result<(), String> 
 }
 
 #[tauri::command]
+pub async fn ping_servers(servers: Vec<Server>) -> Vec<ping::PingResult> {
+    let pairs = servers.into_iter().map(|s| (s.name, s.host)).collect();
+    ping::ping_all(pairs).await
+}
+
+#[tauri::command]
 pub async fn update_geoip() -> Result<geoip::UpdateResult, String> {
     geoip::update_ru_cidrs().await
 }
@@ -95,15 +156,12 @@ pub async fn update_geosite() -> Result<geosite::UpdateResult, String> {
     geosite::update_ru_domains().await
 }
 
-/// Проверочная команда: дёргает vroxcore-sidecar без привилегий и без
-/// TUN, просто чтобы убедиться, что Rust находит и запускает бинарник.
 #[tauri::command]
-pub async fn engine_version(app: AppHandle) -> Result<String, String> {
-    let sidecar = app.shell().sidecar("vroxcore").map_err(|e| e.to_string())?;
-    let output = sidecar
-        .args(["version"])
-        .output()
-        .await
-        .map_err(|e| e.to_string())?;
-    Ok(String::from_utf8_lossy(&output.stdout).to_string())
+pub async fn check_app_update() -> Result<app_update::UpdateCheck, String> {
+    app_update::check_update(5).await
+}
+
+#[tauri::command]
+pub fn quit_app(app: AppHandle) {
+    app.exit(0);
 }

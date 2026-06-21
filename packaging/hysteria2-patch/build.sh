@@ -38,7 +38,7 @@ for arch in amd64 arm64; do
     asset_name="hysteria2-vroxory-linux-${arch}"
     echo "→ собираю ${asset_name}..."
     GOOS=linux GOARCH="$arch" go build \
-        -ldflags "-X github.com/apernet/hysteria/app/v2/cmd.appVersion=${VERSION}" \
+        -ldflags "-s -w -X github.com/apernet/hysteria/app/v2/cmd.appVersion=${VERSION}" \
         -o "$BUILD_DIR/$asset_name" .
     sha="$(sha256sum "$BUILD_DIR/$asset_name" | awk '{print $1}')"
     echo "$sha  $asset_name" >> "$BUILD_DIR/hashes.txt"

@@ -1,8 +1,8 @@
 //! Хранение настроек приложения в JSON файле — порт core/settings.py
 //! (ветка main). Тот же путь, что у Python-приложения
 //! (~/.config/vroxory-vpn/settings.json) — оба читают/пишут один файл,
-//! merge поверх DEFAULTS сохраняет чужие ключи нетронутыми (kill_switch_
-//! enabled, autostart_enabled и т.п., которых в Rust-версии пока нет).
+//! merge поверх DEFAULTS сохраняет чужие ключи нетронутыми (например,
+//! autostart_enabled, которого в Rust-версии пока нет).
 
 use std::fs;
 use std::path::PathBuf;
@@ -24,6 +24,7 @@ fn defaults() -> Map<String, Value> {
         "subscription_url": "",
         "last_selected_server": "",
         "ru_bypass_enabled": false,
+        "kill_switch_enabled": false,
     }) else {
         unreachable!()
     };
