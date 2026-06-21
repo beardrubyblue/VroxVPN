@@ -1,8 +1,0 @@
-<?xml version="1.0" encoding="UTF-8"?>
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
-  <rect x="0" y="0" width="32" height="32" rx="7.04" fill="rgb(10, 10, 10)"/>
-  <path d="M10 6 L16 16 L22 6" fill="none" stroke="rgb(108, 108, 108)"
-        stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
-  <path d="M4 6 L16 26 L28 6" fill="none" stroke="rgb(255, 255, 255)"
-        stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
-</svg>

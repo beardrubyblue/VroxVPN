@@ -1,9 +1,8 @@
 #!/bin/bash
 # Переключает пин версии нашего форка hysteria2 (см. build.sh) на новый
 # тег апстрима apernet/hysteria. Сам НЕ собирает и НЕ публикует — только
-# правит версию во всех местах, где она зашита (build.sh, core/installer.py,
-# core/updater.py), и заранее проверяет, что direct-domains.patch ещё
-# применяется к новому тегу, чтобы не проставить версию, для которой
+# правит версию в build.sh и заранее проверяет, что direct-domains.patch
+# ещё применяется к новому тегу, чтобы не проставить версию, для которой
 # build.sh потом молча упадёт или соберётся без directDomains.
 #
 # Использование:
@@ -27,9 +26,6 @@ if [[ "$NEW_TAG" != app/* ]]; then
 fi
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-PROJECT_DIR="$(cd "$SCRIPT_DIR/../.." && pwd)"
-INSTALLER_PY="$PROJECT_DIR/core/installer.py"
-UPDATER_PY="$PROJECT_DIR/core/updater.py"
 BUILD_SH="$SCRIPT_DIR/build.sh"
 
 NEW_VERSION="${NEW_TAG#app/}-vroxory${NEW_REVISION}"
@@ -73,17 +69,9 @@ echo "✓ Патч применяется без конфликтов"
 sed -i "s|^UPSTREAM_TAG=.*|UPSTREAM_TAG=\"${NEW_TAG}\"|" "$BUILD_SH"
 sed -i "s|^PATCH_REVISION=.*|PATCH_REVISION=\"${NEW_REVISION}\"|" "$BUILD_SH"
 
-# ── 3. Правим core/installer.py (тег GitHub-релиза форка) ──
-sed -i "s|releases/tags/hysteria2-fork-[^\"]*|releases/tags/${NEW_RELEASE_TAG}|" "$INSTALLER_PY"
-
-# ── 4. Правим core/updater.py (версия, которую updater считает "последней") ──
-sed -i "s|EXPECTED_VERSION = \"[^\"]*\"|EXPECTED_VERSION = \"${NEW_VERSION}\"|" "$UPDATER_PY"
-
 echo ""
 echo "✓ Обновлено:"
 echo "  packaging/hysteria2-patch/build.sh -> UPSTREAM_TAG=${NEW_TAG}, PATCH_REVISION=${NEW_REVISION}"
-echo "  core/installer.py -> releases/tags/${NEW_RELEASE_TAG}"
-echo "  core/updater.py -> EXPECTED_VERSION=\"${NEW_VERSION}\""
 echo ""
 echo "Дальше:"
 echo "  1. ./build.sh             — собрать и проверить бинарник локально"
