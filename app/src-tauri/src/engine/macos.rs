@@ -89,10 +89,33 @@ fn elevated_shell_command(args: &[&str]) -> String {
     )
 }
 
+/// Копирует privileged_helper_macos.sh в /tmp перед каждой эскалацией.
+/// Причина — НЕ косметика: `do shell script ... with administrator
+/// privileges` на macOS не может исполнить файл, лежащий в TCC-защищённой
+/// папке (~/Documents, ~/Desktop, ~/Downloads, iCloud Drive) — привилегиро-
+/// ванный процесс получает `Operation not permitted` независимо от прав
+/// файла (проверено вручную: тот же файл из /tmp выполняется нормально,
+/// `sudo` из Terminal с тем же путём в Documents — тоже нормально, так что
+/// дело именно в этом конкретном механизме эскалации). /tmp TCC не защищён.
+fn stage_helper_outside_tcc(original: &std::path::Path) -> Result<String, String> {
+    use std::os::unix::fs::PermissionsExt;
+    let dest = std::path::PathBuf::from("/tmp/vroxory-vpn-privileged-helper.sh");
+    std::fs::copy(original, &dest).map_err(|e| e.to_string())?;
+    std::fs::set_permissions(&dest, std::fs::Permissions::from_mode(0o755)).map_err(|e| e.to_string())?;
+    Ok(dest.to_string_lossy().to_string())
+}
+
 fn run_helper(app: &AppHandle, args: &[&str]) -> Result<(), String> {
     let helper = resources::resolve(app, "resources/privileged_helper_macos.sh")?;
-    let helper = helper.to_string_lossy().to_string();
-    let mut full_args = vec![helper.as_str()];
+    let helper = stage_helper_outside_tcc(&helper)?;
+    // Явно передаём скрипт как аргумент /bin/bash, а не полагаемся на его
+    // шебанг: на части macOS-версий `do shell script ... with
+    // administrator privileges` не может получить cwd для процесса,
+    // который ядро форкнуло САМО по шебангу скрипта ("shell-init: error
+    // retrieving current directory", exit 126) — а единичный прямой exec
+    // /bin/bash с путём к скрипту в аргументах (без форка по шебангу)
+    // этой проблемы не имеет (проверено вручную).
+    let mut full_args = vec!["/bin/bash", helper.as_str()];
     full_args.extend_from_slice(args);
     let script = elevated_shell_command(&full_args);
     let status = Command::new("osascript")

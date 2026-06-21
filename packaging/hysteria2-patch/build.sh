@@ -26,7 +26,9 @@ git checkout "$UPSTREAM_TAG"
 
 git apply --include="app/cmd/client.go" "$SCRIPT_DIR/direct-domains.patch"
 git apply --include="app/internal/tun/server.go" "$SCRIPT_DIR/direct-domains.patch"
-cp "$SCRIPT_DIR/directmatch.go" "$SCRIPT_DIR/dnssniff.go" app/internal/tun/
+cp "$SCRIPT_DIR/directmatch.go" "$SCRIPT_DIR/directmatch_linux.go" \
+   "$SCRIPT_DIR/directmatch_darwin.go" "$SCRIPT_DIR/dnssniff_linux.go" \
+   "$SCRIPT_DIR/dnssniff_darwin.go" app/internal/tun/
 
 cd app
 go get github.com/miekg/dns@v1.1.59
@@ -35,11 +37,13 @@ go mod tidy
 rm -f "$BUILD_DIR/hashes.txt"
 ASSETS=()
 # os:arch — добавлен darwin для Tauri-сборки под macOS (sidecar
-# vroxcore-{arch}-apple-darwin). ⚠ НЕ ПРОВЕРЕНО: darwin-сборка этим
-# скриптом ещё не запускалась ни разу, нужно проверить на самом Mac
-# (либо собрать через `GOOS=darwin go build` там же, кросс-сборка с
-# Linux для Go обычно работает без CGO, но TUN-код форка может на это
-# полагаться — проверить).
+# vroxcore-{arch}-apple-darwin). Проверено на самом Mac: TUN-код форка
+# (directmatch.go/dnssniff.go) использовал Linux-специфичные syscall
+# (AF_PACKET, SO_BINDTODEVICE, /proc/net/route) и не собирался под darwin —
+# вынесено в directmatch_linux.go/directmatch_darwin.go и
+# dnssniff_linux.go/dnssniff_darwin.go через `//go:build`. На macOS фича
+# directDomains пока отключена (defaultInterfaceName возвращает ошибку),
+# остальное собирается и работает одинаково на обеих платформах.
 for target in linux:amd64 linux:arm64 darwin:amd64 darwin:arm64; do
     os="${target%%:*}"
     arch="${target##*:}"

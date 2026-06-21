@@ -26,7 +26,11 @@ case "$cmd" in
             /tmp/vroxory-vpn/*.yaml) ;;
             *) echo "недопустимый путь конфига: $config" >&2; exit 1 ;;
         esac
-        pkill "-$signal" -f "vroxcore .*--config $config" || true
+        # без пробела после "vroxcore": реальный sidecar называется
+        # vroxcore-aarch64-apple-darwin/vroxcore-x86_64-apple-darwin (dev)
+        # либо просто vroxcore (бандл) — "vroxcore .*" не матчил ни то,
+        # ни другое надёжно
+        pkill "-$signal" -f "vroxcore.*--config $config" || true
         ;;
 
     is-running)
@@ -35,13 +39,13 @@ case "$cmd" in
             /tmp/vroxory-vpn/*.yaml) ;;
             *) echo "недопустимый путь конфига: $config" >&2; exit 1 ;;
         esac
-        pgrep -f "vroxcore .*--config $config" > /dev/null
+        pgrep -f "vroxcore.*--config $config" > /dev/null
         ;;
 
     kill-all-hysteria)
         # вызывается при старте приложения — подчищает осиротевший
         # root-процесс vroxcore от предыдущего краша
-        pkill -TERM -f "vroxcore .*--config /tmp/vroxory-vpn/" || true
+        pkill -TERM -f "vroxcore.*--config /tmp/vroxory-vpn/" || true
         ;;
 
     pf-apply)

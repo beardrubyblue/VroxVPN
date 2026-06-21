@@ -4,17 +4,20 @@ import (
 	"net"
 	"strings"
 	"sync"
-	"syscall"
 	"time"
 
 	"github.com/miekg/dns"
-	"golang.org/x/sys/unix"
 )
 
 // directMatcher решает, какие домены должны идти мимо тоннеля (direct), и
 // запоминает domain->IP, подсматривая за DNS-ответами, которые и так летят
 // через этот же TUN-хендлер (как обычный UDP-трафик) — без внешнего
 // DNS-сервера и без изменений в системной таблице маршрутизации.
+//
+// dialDirect, startDNSSniffer и defaultInterfaceName платформо-специфичны
+// (см. directmatch_linux.go/directmatch_darwin.go, dnssniff_linux.go/
+// dnssniff_darwin.go) — Linux даёт SO_BINDTODEVICE/AF_PACKET/proc, на
+// macOS аналоги другие (IP_BOUND_IF) либо вообще не реализованы.
 type directMatcher struct {
 	suffixes map[string]struct{} // домены в нижнем регистре, без точки на конце
 	iface    string              // настоящий интерфейс — нужен, чтобы наш
@@ -39,32 +42,11 @@ func newDirectMatcher(domains []string, iface string) *directMatcher {
 	return m
 }
 
-// dialDirect открывает соединение мимо тоннеля. SO_BINDTODEVICE обязателен:
-// без него новый сокет снова попадёт под политику маршрутизации TUN (тот же
-// самый default route 0.0.0.0/0 -> tun-vroxory) и зациклится сам на себя —
-// настоящий тоннель этой проблемы не имеет только потому, что его сокет к
-// VPN-серверу создаётся ДО того, как TUN включает свои правила.
-func (m *directMatcher) dialDirect(network, address string) (net.Conn, error) {
-	dialer := net.Dialer{
-		Control: func(_, _ string, c syscall.RawConn) error {
-			var bindErr error
-			ctrlErr := c.Control(func(fd uintptr) {
-				bindErr = unix.BindToDevice(int(fd), m.iface)
-			})
-			if ctrlErr != nil {
-				return ctrlErr
-			}
-			return bindErr
-		},
-	}
-	return dialer.Dial(network, address)
-}
-
 func (m *directMatcher) enabled() bool {
 	return len(m.suffixes) > 0 && m.iface != ""
 }
 
-// matchesDomain — суффиксное сопоставление: example.com в списке matchит
+// matchesDomain — суффиксное сопоставление: example.com в списке matchit
 // и example.com, и foo.example.com.
 func (m *directMatcher) matchesDomain(name string) bool {
 	name = strings.ToLower(strings.TrimSuffix(name, "."))
