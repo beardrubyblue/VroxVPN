@@ -30,9 +30,22 @@ cp "$SCRIPT_DIR/directmatch.go" "$SCRIPT_DIR/directmatch_linux.go" \
    "$SCRIPT_DIR/directmatch_darwin.go" "$SCRIPT_DIR/dnssniff_linux.go" \
    "$SCRIPT_DIR/dnssniff_darwin.go" app/internal/tun/
 
+# netunnel — байт-слайс адаптация app/internal/tun для NetworkExtension
+# (macOS/iOS): gVisor-стек без настоящего TUN-fd, биндится через
+# `gomobile bind` в .xcframework для Swift. НЕ собирается в сам бинарник
+# vroxcore (цикл сборки ниже её не трогает) — отдельный артефакт,
+# собирается отдельно (см. docs/ARCHITECTURE.md, раздел
+# macOS/NetworkExtension). ⚠ НЕ ПРОВЕРЕНО через реальный `gomobile bind`
+# (нет Xcode на машине, где это писалось) — только `go build`/`go vet`.
+mkdir -p app/internal/netunnel
+cp "$SCRIPT_DIR/netunnel/"*.go app/internal/netunnel/
+
 cd app
 go get github.com/miekg/dns@v1.1.59
 go mod tidy
+
+echo "→ проверяю netunnel (go vet, кросс-проверка типов под NE-путь)..."
+go vet ./internal/netunnel/...
 
 rm -f "$BUILD_DIR/hashes.txt"
 ASSETS=()

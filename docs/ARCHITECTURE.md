@@ -270,3 +270,61 @@ sidecar) на iOS не применимо вообще: там нет приви
 статическую библиотеку (`gomobile`/cgo → `.xcframework`), а не как
 внешний процесс. Это отдельная задача проектирования, не входит в этот
 macOS-чеклист — планировать отдельно, когда дойдёт очередь.
+
+## macOS → NetworkExtension — решение принято, переход начат
+
+Живое тестирование sidecar+osascript+pf-подхода (см. чеклист выше)
+показало: архитектурно работает, но упирается в TCC (`osascript ...
+with administrator privileges` не может выполнить файл из ~/Documents/
+~/Desktop/iCloud Drive — обойдено стейджингом в `/tmp`, см.
+`engine/macos.rs::stage_helper_outside_tcc`), нет "пароль один раз
+навсегда" как на Linux, и pf-killswitch остаётся неподтверждённым на
+живом трафике. Решение (принято в разговоре с пользователем): не
+чинить эти болевые точки точечно, а перейти на `NEPacketTunnelProvider`
+— тот же механизм, который и так обязателен для iOS (см. раздел выше),
+общая инвестиция для обеих платформ. Полный план (фазы 0-7, оценка
+трудоёмкости, открытые вопросы) — `hazy-jumping-owl.md`, живёт локально
+на машине, где его сделали (не часть репозитория, личный план-файл).
+
+Статус по фазам плана:
+
+- **Фаза 0 (спайк) — пройдена, на реальном Mac.** `gomobile bind
+  -target macos` собрал `.xcframework` из тестового пакета с
+  byte-slice сигнатурами (`[]byte` → `NSData*`, ошибки → `NSError**`)
+  поверх `core/client` форка — главный архитектурный риск (жизнеспособность
+  gomobile-границы) подтверждён. Замер памяти: ~24.4MB RSS для
+  client+QUIC+TLS стека без directDomains (он на NE-пути не нужен, см.
+  Фазу 3 ниже) — есть запас под лимиты NE-процесса.
+- **Фаза 1 (вынос Go-логики) — начата, на Linux.** Новый пакет
+  `packaging/hysteria2-patch/netunnel/` (копируется в `app/internal/
+  netunnel/` тем же `build.sh`, что и `directmatch`/`dnssniff`):
+  - `virtual_tun.go` — `virtualTun`, реализация интерфейса `tun.Tun` из
+    `apernet/sing-tun` (`io.ReadWriter` + `N.VectorisedWriter` + `Close`)
+    БЕЗ настоящего файлового дескриптора — пакеты ходят через каналы.
+    Подтверждено чтением исходников sing-tun: `tun.NewSystem` (gVisor-
+    стек) работает только через интерфейс `Tun`, не привязан к тому,
+    как тот получает байты — `tun.New()` (создание настоящего
+    устройства) можно не вызывать вообще.
+  - `handler.go` — `relayHandler`, релей-логика (`HyClient.TCP`/`UDP` +
+    `io.Copy`) скопирована из `app/internal/tun/server.go::tunHandler`
+    (не импортирована — тот тип unexported в своём пакете). directDomains
+    сюда НЕ перенесён осознанно.
+  - `netunnel.go` — `StartTunnel(configJSON)`/`WritePacket`/`ReadPacket`/
+    `Stop` — методы только на `[]byte`/строках (требование gomobile bind).
+    `Config` — минимальный JSON (server/auth/sni/insecure), БЕЗ obfs/
+    QUIC-тюнинга из `config_gen.rs` — полный паритет полей не сделан,
+    сначала проверялась сама архитектура.
+  - Проверено: `go build`/`go vet` чисто, причём весь `build.sh`
+    прогнан с нуля (свежий клон апстрима) — компилируется на реальных
+    типах `sing-tun`/`hysteria/core/client`, не на угаданных сигнатурах.
+  - ⚠ НЕ проверено: `gomobile bind` именно этого пакета (нужен Xcode),
+    реальный packet round-trip через `NEPacketTunnelFlow`, throughput/
+    GC-нагрузка при реальной скорости пакетов.
+- **Фаза 2+ (Xcode-таргет, Swift `PacketTunnelProvider`, codesign,
+  entitlement) — не начаты**, требуют реального Mac/Xcode/Apple Developer
+  аккаунта, ведутся отдельной сессией там же.
+
+Деление работы: Go/Rust-сторона (Фазы 1, 3 — `excludedRoutes` вместо
+DNS-сниффинга, 5 — JSON-конфиг вместо YAML, 7 — toggle `connection_backend`
+в `settings.rs`) — на любой машине с Go/Rust, без Xcode. Xcode/Swift/
+codesign/entitlement-сторона (Фазы 0 остаток, 2, 6) — только на Mac.
