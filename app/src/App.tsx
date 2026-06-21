@@ -202,6 +202,22 @@ function App() {
     })();
   }, []);
 
+  // движок может разорвать соединение сам, не по нашей команде
+  // disconnect (например, сервер уронил QUIC-сессию) — без этого
+  // слушателя UI продолжал бы показывать "подключено" при мёртвом
+  // тоннеле, пока пользователь не откроет приложение заново
+  useEffect(() => {
+    let unlisten: (() => void) | undefined;
+    (async () => {
+      unlisten = await listen("vpn-disconnected-unexpectedly", () => {
+        pushToast("Соединение разорвано", "error");
+        refreshStatus();
+      });
+    })();
+    return () => unlisten?.();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   // подписку на "выбрать сервер" из трея держим через ref на subscriptions
   // (она меняется часто — на каждый пинг/обновление), а на toggle и
   // ru_bypass переподписываемся, это происходит редко
