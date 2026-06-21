@@ -34,10 +34,18 @@ go mod tidy
 
 rm -f "$BUILD_DIR/hashes.txt"
 ASSETS=()
-for arch in amd64 arm64; do
-    asset_name="hysteria2-vroxory-linux-${arch}"
+# os:arch — добавлен darwin для Tauri-сборки под macOS (sidecar
+# vroxcore-{arch}-apple-darwin). ⚠ НЕ ПРОВЕРЕНО: darwin-сборка этим
+# скриптом ещё не запускалась ни разу, нужно проверить на самом Mac
+# (либо собрать через `GOOS=darwin go build` там же, кросс-сборка с
+# Linux для Go обычно работает без CGO, но TUN-код форка может на это
+# полагаться — проверить).
+for target in linux:amd64 linux:arm64 darwin:amd64 darwin:arm64; do
+    os="${target%%:*}"
+    arch="${target##*:}"
+    asset_name="hysteria2-vroxory-${os}-${arch}"
     echo "→ собираю ${asset_name}..."
-    GOOS=linux GOARCH="$arch" go build \
+    GOOS="$os" GOARCH="$arch" go build \
         -ldflags "-s -w -X github.com/apernet/hysteria/app/v2/cmd.appVersion=${VERSION}" \
         -o "$BUILD_DIR/$asset_name" .
     sha="$(sha256sum "$BUILD_DIR/$asset_name" | awk '{print $1}')"

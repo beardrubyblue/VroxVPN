@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  ⚠ НЕ ПРОВЕРЕНО НА РЕАЛЬНОМ MACOS — минимальный набор для hardened
+  runtime + WKWebView (allow-jit/allow-unsigned-executable-memory —
+  стандартные требования Tauri/WebKit под hardened runtime,
+  disable-library-validation — нужен, если sidecar-бинарник vroxcore
+  подписан не той же командой/сертификатом, что главное приложение).
+  Не сэндбоксим (App Sandbox entitlements не добавлены) — приложение
+  не распространяется через Mac App Store, а напрямую через .dmg
+  (Developer ID + notarization), как и старая Linux-модель через .deb.
+  Уточнить и при необходимости расширить после первой реальной сборки.
+-->
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>com.apple.security.cs.allow-jit</key>
+    <true/>
+    <key>com.apple.security.cs.allow-unsigned-executable-memory</key>
+    <true/>
+    <key>com.apple.security.cs.disable-library-validation</key>
+    <true/>
+</dict>
+</plist>

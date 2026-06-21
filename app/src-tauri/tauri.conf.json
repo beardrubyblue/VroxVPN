@@ -34,6 +34,7 @@
     "externalBin": ["binaries/vroxcore"],
     "resources": [
       "resources/privileged_helper.sh",
+      "resources/privileged_helper_macos.sh",
       "resources/geoip/*",
       "resources/geosite/*"
     ],
@@ -53,6 +54,12 @@
         "replaces": ["vroxory-vpn"],
         "provides": ["vroxory-vpn"]
       }
+    },
+    "macOS": {
+      "minimumSystemVersion": "12.0",
+      "hardenedRuntime": true,
+      "entitlements": "macos/entitlements.plist",
+      "signingIdentity": null
     }
   }
 }
