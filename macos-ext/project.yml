@@ -1,0 +1,52 @@
+name: VroxVPNNetworkExtension
+options:
+  bundleIdPrefix: com.vroxory.vpn
+  deploymentTarget:
+    macOS: "12.0"
+  createIntermediateGroups: true
+
+settings:
+  base:
+    DEVELOPMENT_TEAM: QRZT5R3Q28
+    CODE_SIGN_STYLE: Automatic
+    MACOSX_DEPLOYMENT_TARGET: "12.0"
+    SWIFT_VERSION: "5.0"
+
+targets:
+  VroxVPNHost:
+    type: application
+    platform: macOS
+    sources:
+      - VroxVPNHost
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.vroxory.vpn
+        INFOPLIST_FILE: VroxVPNHost/Info.plist
+        CODE_SIGN_ENTITLEMENTS: VroxVPNHost/VroxVPNHost.entitlements
+        ENABLE_HARDENED_RUNTIME: YES
+        # main.swift делает явный bootstrap (NSApplication.shared.delegate
+        # = ...) вместо @main/@NSApplicationMain — это не совмещается с
+        # Xcode "debug dylib" (быстрая инкрементальная сборка через
+        # __debug_main_executable_dylib_entry_point), линковщик не находит
+        # _main. Фича на ускорение разработки, не нужна для наших целей.
+        ENABLE_DEBUG_DYLIB: NO
+    dependencies:
+      - target: VroxTunnelExtension
+        embed: true
+        codeSign: true
+
+  VroxTunnelExtension:
+    type: app-extension
+    platform: macOS
+    sources:
+      - VroxTunnelExtension
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.vroxory.vpn.tunnel
+        INFOPLIST_FILE: VroxTunnelExtension/Info.plist
+        CODE_SIGN_ENTITLEMENTS: VroxTunnelExtension/VroxTunnelExtension.entitlements
+        ENABLE_HARDENED_RUNTIME: YES
+        SKIP_INSTALL: YES
+    dependencies:
+      - framework: Frameworks/GoNetunnel.xcframework
+        embed: false

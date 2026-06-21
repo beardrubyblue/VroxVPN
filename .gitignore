@@ -1,5 +1,8 @@
 *.deb
 packaging/hysteria2-patch/build/
 packaging/hysteria2-patch/build-artifacts/
+macos-ext/Frameworks/
+macos-ext/VroxVPNNetworkExtension.xcodeproj/
+macos-ext/*.xcodeproj/
 .vscode/
 VroxVPN.html

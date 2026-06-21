@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>com.apple.developer.networking.networkextension</key>
+    <array>
+        <string>packet-tunnel-provider</string>
+    </array>
+    <!--
+      App Sandbox обязателен для NE-расширений независимо от того,
+      сэндбоксен хост — это требование самого NetworkExtension.framework
+      (документировано Apple для NEPacketTunnelProvider-таргетов), не
+      наше решение. Главное приложение (VroxVPNHost.entitlements) этого
+      не имеет — открытый вопрос Фазы 0 плана ("обязателен ли sandbox
+      для хоста") про ХОСТ, не про само расширение, это разные вещи.
+    -->
+    <key>com.apple.security.app-sandbox</key>
+    <true/>
+    <!--
+      Без этого netunnel (см. packaging/hysteria2-patch/netunnel/netunnel.go
+      singleUseConnFactory.New → net.ListenUDP) не может открыть UDP-сокет
+      к серверу — App Sandbox требует явного entitlement на исходящие
+      сетевые соединения. Подтверждено вживую: без этой строки получили
+      "listen udp :0: bind: operation not permitted" в логе расширения.
+    -->
+    <key>com.apple.security.network.client</key>
+    <true/>
+    <!--
+      network.client одного покрывает только network-outbound (исходящие
+      connect). UDP-сокету нужен bind() на локальный эфемерный порт даже
+      для чисто клиентского использования (send/receive без реального
+      "сервера") — sandbox требует network.server именно для network-bind,
+      подтверждено вживую: kernel(Sandbox) deny(1) network-bind local:*:0
+      именно с одним network.client.
+    -->
+    <key>com.apple.security.network.server</key>
+    <true/>
+</dict>
+</plist>
