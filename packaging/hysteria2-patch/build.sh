@@ -35,17 +35,27 @@ cp "$SCRIPT_DIR/directmatch.go" "$SCRIPT_DIR/directmatch_linux.go" \
 # `gomobile bind` в .xcframework для Swift. НЕ собирается в сам бинарник
 # vroxcore (цикл сборки ниже её не трогает) — отдельный артефакт,
 # собирается отдельно (см. docs/ARCHITECTURE.md, раздел
-# macOS/NetworkExtension). ⚠ НЕ ПРОВЕРЕНО через реальный `gomobile bind`
-# (нет Xcode на машине, где это писалось) — только `go build`/`go vet`.
-mkdir -p app/internal/netunnel
-cp "$SCRIPT_DIR/netunnel/"*.go app/internal/netunnel/
+# macOS/NetworkExtension).
+#
+# ⚠ ВАЖНО: путь именно app/netunnel, НЕ app/internal/netunnel. Проверено
+# на реальном Mac: `gomobile bind` генерирует свою obj-c/swift wrapper-
+# package во ВРЕМЕННОМ отдельном Go-модуле — а Go запрещает импорт
+# internal-пакетов кодом снаружи дерева модуля, которому принадлежит
+# internal/ (см. https://go.dev/doc/go1.4#internalpackages). Раньше
+# netunnel лежал в app/internal/netunnel — `gomobile bind` падал с "use of
+# internal package ... not allowed". Сам netunnel при этом всё ещё может
+# импортировать app/internal/utils (ConvBandwidth) — он остаётся в дереве
+# модуля github.com/apernet/hysteria/app/v2, просто не помечен internal
+# сам по себе.
+mkdir -p app/netunnel
+cp "$SCRIPT_DIR/netunnel/"*.go app/netunnel/
 
 cd app
 go get github.com/miekg/dns@v1.1.59
 go mod tidy
 
 echo "→ проверяю netunnel (go vet, кросс-проверка типов под NE-путь)..."
-go vet ./internal/netunnel/...
+go vet ./netunnel/...
 
 rm -f "$BUILD_DIR/hashes.txt"
 ASSETS=()

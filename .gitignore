@@ -1,4 +1,5 @@
 *.deb
 packaging/hysteria2-patch/build/
+packaging/hysteria2-patch/build-artifacts/
 .vscode/
 VroxVPN.html
