@@ -59,9 +59,9 @@ pub async fn connect(
 
     let mut guard = state.0.lock().unwrap();
     match result {
-        Ok((child, config_path)) => {
+        Ok((handle, config_path)) => {
             *guard = Slot::Connected(ActiveConnection {
-                child,
+                handle,
                 config_path,
                 server_name: server.name,
             });
@@ -86,15 +86,15 @@ async fn connect_inner(
     app: &AppHandle,
     server: &Server,
     ru_bypass: bool,
-) -> Result<(tauri_plugin_shell::process::CommandChild, String), String> {
+) -> Result<(engine::ConnectionHandle, String), String> {
     let config_path = config_gen::generate_config(app, server, ru_bypass)?;
     let config_path = config_path.to_string_lossy().to_string();
 
     engine::ensure_polkit_rule(app)?;
     engine::loosen_rp_filter(app)?;
     engine::cleanup_interface(app);
-    let child = engine::spawn_client(app, &config_path).await?;
-    Ok((child, config_path))
+    let handle = engine::spawn_client(app, &config_path).await?;
+    Ok((handle, config_path))
 }
 
 #[tauri::command]
@@ -112,9 +112,9 @@ pub fn disconnect(app: AppHandle, state: State<EngineState>) -> Result<(), Strin
 
     match engine::kill_client(&app, &conn.config_path) {
         Ok(()) => {
-            // дочерний pkexec-процесс — это обёртка, не настоящий root-процесс
-            // hysteria2 (см. engine.rs); реальный процесс уже убит выше
-            drop(conn.child);
+            // на Linux это обёртка pkexec-процесса (реальный root-процесс
+            // hysteria2 уже убит выше); на macOS — `()`, no-op
+            drop(conn.handle);
             *state.0.lock().unwrap() = Slot::Idle;
             // best-effort: если kill switch не был включён, это безвредный
             // no-op (см. disable_killswitch)

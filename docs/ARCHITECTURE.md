@@ -158,128 +158,56 @@ Hiddify).
    (`cargo:rustc-env=TARGET=...`), либо завести отдельные константы
    по платформе.
 
-## macOS (ветка `macos-support`) — подготовлено на Linux, НЕ проверено
+## macOS (ветка `macos-support`) — sidecar-путь опробован и удалён
 
-Реальной macOS-машины на момент написания этого раздела не было — всё
-ниже собиралось и компилировалось только под Linux-таргет (cross-check
-под `x86_64-apple-darwin` невозможен без rustup: нет std для этого
-таргета в дистрибутивном `rustc`, и часть API чисто macOS-специфичная).
-**Перед тем как доверять этому в проде — пройти весь чеклист ниже на
-самом Mac.**
+Первая версия порта (sidecar-процесс + `osascript`-эскалация + pf
+killswitch, аналог Linux-модели) была написана, затем реально собрана и
+проверена на живом Mac — и сразу показала архитектурные болячки (TCC
+блокирует привилегированный скрипт из ~/Documents, нет "пароль один раз
+навсегда" как у polkit, pf-killswitch не подтверждён на живом трафике).
+Решение: не чинить это точечно, а перейти на NetworkExtension сразу
+(он и так обязателен для iOS) — см. раздел ниже. Sidecar-реализация
+(`engine/macos.rs` в старом виде, `resources/privileged_helper_macos.sh`,
+`pf-apply`/`pf-restore`, `osascript`-эскалация) удалена из кода целиком,
+не оставлена под флагом "на всякий случай" — два параллельных backend'а
+на одну платформу, из которых поедет только один, не имеет смысла
+поддерживать. Если детали той реализации нужны для справки — смотреть
+git-историю `engine/macos.rs` до коммита, убирающего sidecar.
 
-### Что сделано
-
-- `engine.rs` разбит на общий диспетчер (`Slot`/`EngineState`/
-  `ActiveConnection` — общие типы) + `engine/linux.rs` (весь прежний
-  Linux-код, поведение не менялось, проверено `cargo build` — Linux-
-  сборка не пострадала) + `engine/macos.rs` (новый, см. ниже). Публичный
-  API (`spawn_client`, `kill_client`, `enable_killswitch`,
-  `disable_killswitch`, `ensure_polkit_rule`, `loosen_rp_filter`,
-  `cleanup_interface`, `cleanup_orphans`) одинаковый на обеих платформах
-  — `commands.rs`/`lib.rs` не знают, на чём они работают.
-- `engine/macos.rs`: вместо pkexec/polkit — `osascript -e 'do shell
-  script "..." with administrator privileges'` (см. `elevated_shell_command`,
-  экранирование строится через `shell_quote`+`applescript_quote`, есть
-  unit-тесты на экранирование). **Важно**: в отличие от polkit-правила,
-  это НЕ даёт гарантии "пароль один раз навсегда" — macOS кеширует
-  авторизацию ненадолго (порядка нескольких минут), не бессрочно.
-- `resources/privileged_helper_macos.sh` — аналог `privileged_helper.sh`
-  с тем же контрактом подкоманд, где это применимо (`kill-hysteria`,
-  `is-running`, `kill-all-hysteria` — `pkill`/`pgrep` работают на macOS
-  так же, как на Linux), плюс `pf-apply`/`pf-restore` вместо
-  `nft-apply`/`nft-delete-table`.
-- Kill switch на macOS спроектирован **иначе**, чем на Linux: nftables-
-  вариант разрешает только TUN-интерфейс по имени (`tun-vroxory`,
-  фиксированное имя, которое мы сами задаём). На macOS имя
-  utun-интерфейса **назначает ядро** (utun0, utun1, ...) — мы не можем
-  знать его заранее так же, как на Linux. Поэтому pf-ruleset блокирует
-  исходящий трафик на физических интерфейсах (enumerated через
-  `ifconfig -l` в самом shell-скрипте) кроме как до самого VPN-сервера/
-  приватных диапазонов, оставляя TUN вообще не упомянутым (не нужно
-  знать его имя, если мы не блокируем его, а блокируем остальные).
+Из той попытки осталось то, что не привязано к sidecar-модели и нужно
+независимо от архитектуры VPN-слоя:
 - `tauri.conf.json` → `bundle.macOS`: `minimumSystemVersion: "12.0"`,
   `hardenedRuntime: true`, `entitlements: "macos/entitlements.plist"`,
-  `signingIdentity: null` (заполнить на Mac — Developer ID Application
-  идентификатор сертификата, либо передать через `APPLE_SIGNING_IDENTITY`
-  при сборке).
-- `macos/entitlements.plist` — минимальный набор под hardened runtime
-  + WKWebView (allow-jit, allow-unsigned-executable-memory,
-  disable-library-validation). Без App Sandbox — распространение
-  напрямую через `.dmg` (Developer ID + notarization), не через Mac
-  App Store.
-- `packaging/hysteria2-patch/build.sh` — добавлены таргеты
-  `darwin:amd64`/`darwin:arm64` (Go cross-compile с Linux обычно
-  работает без CGO, но TUN-код форка может на это полагаться — не
-  проверено, что darwin-бинарник из этого скрипта реально собирается и
-  работает).
+  `signingIdentity: null` (заполнить на Mac, либо через переменную
+  окружения `APPLE_SIGNING_IDENTITY` при сборке).
+- `macos/entitlements.plist` — `allow-jit`/`allow-unsigned-executable-
+  memory` (требования Tauri/WebKit под hardened runtime) +
+  `com.apple.developer.networking.networkextension` (нужен для NE,
+  выдаётся Apple по отдельному запросу — статус запроса см. в проекте
+  у того, кто ведёт Mac-сессию). `disable-library-validation` убран —
+  был нужен только sidecar-бинарнику.
+- Codesign + notarization (`xcrun notarytool submit ... --wait`, либо
+  через `pnpm tauri build` с `APPLE_ID`/`APPLE_PASSWORD`/`APPLE_TEAM_ID`)
+  — общий шаг, не зависящий от sidecar/NE.
 
-### Чеклист на самом Mac (по порядку)
+### iOS и macOS теперь делят одну архитектуру — не "ещё одна платформа"
 
-1. Установить Xcode + command line tools, Rust (`rustup`), Node/pnpm.
-2. Собрать `vroxcore` под darwin: либо `packaging/hysteria2-patch/
-   build.sh` (кросс с Linux, не проверено), либо напрямую на Mac
-   `GOOS=darwin GOARCH=arm64 go build ...` в каталоге форка. Результат
-   переименовать/положить в `app/src-tauri/binaries/` как
-   `vroxcore-x86_64-apple-darwin` / `vroxcore-aarch64-apple-darwin`
-   (именно так, с префиксом `vroxcore-`, а не `hysteria2-vroxory-...`,
-   как называет их сам build.sh для GitHub-релиза форка — см. константы
-   `SIDECAR_NAME_X86`/`SIDECAR_NAME_ARM` в `engine/macos.rs`).
-3. `pnpm tauri dev` — первая проверка, что приложение хотя бы
-   запускается на macOS (отдельно от VPN-функциональности).
-4. Проверить `osascript`-эскалацию вручную (`elevated_shell_command`
-   строит `do shell script ... with administrator privileges`) —
-   убедиться, что промпт появляется, путь к бинарнику/конфигу с
-   пробелами (например, внутри `.app`-бандла) корректно экранируется.
-5. **pf-ruleset — самое неопределённое место.** Проверить вживую:
-   - что `ifconfig -l` в `pf-apply` реально находит физический
-     интерфейс (Wi-Fi обычно `en0`, может отличаться);
-   - что `pfctl -f -` с нашим ruleset'ом реально применяется и блокирует
-     трафик мимо VPN (проверить вручную: выключить TUN, попытаться
-     достучаться куда-то кроме сервера/приватных сетей — должно
-     блокироваться);
-   - что `pf-restore` корректно восстанавливает сохранённый ruleset
-     (`pfctl -sr` до применения), а не просто гасит pf целиком, если у
-     пользователя был свой firewall до нас.
-6. Решить вопрос с повторными паролями (`osascript` спрашивает чаще,
-   чем хотелось бы) — рекомендуемый путь: privileged helper через
-   `SMAppService` (регистрируется один раз через System Settings,
-   дальше работает как daemon без повторных промптов) вместо
-   `osascript` на каждый вызов. Это отдельная, более крупная задача
-   (нужен XPC-протокол между приложением и helper, отдельный
-   подписанный бинарник в `Contents/Library/LaunchServices/`) — не
-   делалась, только спроектирован fallback на `osascript`.
-7. Codesign + notarization: `signingIdentity` в `tauri.conf.json`
-   (Developer ID Application), затем
-   `xcrun notarytool submit ... --apple-id ... --team-id ... --wait`
-   (Tauri CLI умеет это автоматизировать через переменные окружения
-   `APPLE_ID`/`APPLE_PASSWORD`/`APPLE_TEAM_ID` или API-ключ — см.
-   `pnpm tauri build` docs для macOS).
-8. После первой успешной сборки — обновить `version.json`/GitHub
-   Release по той же схеме, что и Linux-релиз (см. `README.md`).
-
-### iOS — отдельный проект, не просто "ещё одна платформа"
-
-Ничего из текущего privileged-слоя (`pkexec`/`osascript`/`pf`/процесс-
-sidecar) на iOS не применимо вообще: там нет привилегированных
-процессов и нет sidecar-бинарников для обычных приложений. VPN на iOS
-делается только через `NEPacketTunnelProvider` — отдельный Xcode-таргет
-(network extension), который запускается в своём процессе с урезанными
-правами и жёстким лимитом памяти, требует entitlement
-`com.apple.developer.networking.networkextension` (выдаётся Apple по
-запросу, не автоматически), и hysteria2 туда обычно встраивают как
-статическую библиотеку (`gomobile`/cgo → `.xcframework`), а не как
-внешний процесс. Это отдельная задача проектирования, не входит в этот
-macOS-чеклист — планировать отдельно, когда дойдёт очередь.
+На iOS привилегированных процессов и sidecar-бинарников для обычных
+приложений не бывает вообще — VPN там можно сделать только через
+`NEPacketTunnelProvider`. Раньше в этом документе iOS планировался как
+отдельная задача "на потом", после отдельного macOS-пути. С переходом
+macOS на NetworkExtension это уже не два проекта, а один — см. раздел
+ниже про конкретный статус по фазам.
 
 ## macOS → NetworkExtension — решение принято, переход начат
 
-Живое тестирование sidecar+osascript+pf-подхода (см. чеклист выше)
-показало: архитектурно работает, но упирается в TCC (`osascript ...
-with administrator privileges` не может выполнить файл из ~/Documents/
-~/Desktop/iCloud Drive — обойдено стейджингом в `/tmp`, см.
-`engine/macos.rs::stage_helper_outside_tcc`), нет "пароль один раз
-навсегда" как на Linux, и pf-killswitch остаётся неподтверждённым на
-живом трафике. Решение (принято в разговоре с пользователем): не
+Живое тестирование sidecar+osascript+pf-подхода (удалён из кода, см.
+раздел выше) показало: архитектурно работает, но упирается в TCC
+(`osascript ... with administrator privileges` не может выполнить файл
+из ~/Documents/~/Desktop/iCloud Drive — был обойдён стейджингом в /tmp),
+нет "пароль один раз навсегда" как на Linux, и pf-killswitch остаётся
+неподтверждённым на живом трафике. Решение (принято в разговоре с
+пользователем): не
 чинить эти болевые точки точечно, а перейти на `NEPacketTunnelProvider`
 — тот же механизм, который и так обязателен для iOS (см. раздел выше),
 общая инвестиция для обеих платформ. Полный план (фазы 0-7, оценка
@@ -325,6 +253,71 @@ with administrator privileges` не может выполнить файл из 
   аккаунта, ведутся отдельной сессией там же.
 
 Деление работы: Go/Rust-сторона (Фазы 1, 3 — `excludedRoutes` вместо
-DNS-сниффинга, 5 — JSON-конфиг вместо YAML, 7 — toggle `connection_backend`
-в `settings.rs`) — на любой машине с Go/Rust, без Xcode. Xcode/Swift/
-codesign/entitlement-сторона (Фазы 0 остаток, 2, 6) — только на Mac.
+DNS-сниффинга, 5 — JSON-конфиг вместо YAML) — на любой машине с Go/Rust,
+без Xcode. Xcode/Swift/codesign/entitlement-сторона (Фазы 0 остаток, 2, 6)
+— только на Mac. **Без `connection_backend`-тоггла** — см. ниже, почему.
+
+### Sidecar-модель удалена сразу, не оставлена под флагом
+
+Когда решили перейти на NE, первый порыв был оставить старый sidecar-
+путь живым под настройкой `connection_backend: legacy | network_extension`
+"на всякий случай" (вдруг entitlement от Apple не дадут или затянут).
+Отклонено: это ровно то бессмысленное наслоение, которого нужно
+избегать — два backend'а на одну платформу, поддерживать оба вечно,
+хотя ехать будет только один. Старый код удалён немедленно (см. раздел
+"sidecar-путь опробован и удалён" выше), без флага.
+
+### Абстракция `ActiveConnection`/`ConnectionHandle` (engine.rs)
+
+При удалении sidecar-кода на macOS нашлась реальная утечка абстракции:
+`ActiveConnection.child` был жёстко типизирован как `CommandChild`
+(хэндл процесса) — общий для Linux и (старого) macOS, потому что оба
+были sidecar-моделью. Под NE никакого процесса, который мы сами
+породили, не существует вообще (тоннель живёт в `.appex`, управляемом
+ОС) — поле `child: CommandChild` для этого случая физически не имеет
+смысла.
+
+Исправлено: `engine::ConnectionHandle` — platform-specific type alias
+(`CommandChild` на Linux, `()` на macOS), `ActiveConnection.handle:
+ConnectionHandle` вместо `.child: CommandChild`. `commands.rs` теперь
+просто `drop(conn.handle)` — работает одинаково для обоих типов, не
+зная, что конкретно держит. Проверено `cargo check` на реальном Linux-
+таргете (production-путь не тронут поведенчески, только типы/имена) и
+отдельно — синтаксис/типы нового `engine/macos.rs` (временно
+скомпилирован под `target_os = "linux"` через cfg-трюк, чтобы
+type-check прошёл без реального Mac; после проверки трюк убран).
+
+### Открытый вопрос, который НЕ решён сейчас (осознанно, не вслепую)
+
+`connect_inner` в `commands.rs` сейчас всегда сначала пишет YAML-конфиг
+на диск (`config_gen::generate_config`) и только потом зовёт
+`engine::spawn_client(app, &config_path)` — `config_path` передаётся
+дальше как путь к файлу. Под NE конфига на диске не будет вообще (Фаза
+5: JSON прямо в `NETunnelProviderProtocol.providerConfiguration`, в
+памяти) — то есть сама последовательность "сгенерировать файл → передать
+путь" в `connect_inner` специфична для sidecar-модели, а не общий
+контракт, как могло показаться по нынешней форме функции.
+
+Не переделано сейчас: пока нет реального NE-моста на Mac, переделывать
+`connect_inner`/`disconnect` под ещё не существующий контракт — гадать
+вслепую, а не проверенная архитектура. Когда на Mac появится рабочий
+вызов NEVPNManager/NETunnelProviderManager, эту функцию нужно будет
+обобщить (вероятно: `engine::start_connection(app, server, ru_bypass) ->
+Result<ActiveConnection, String>`, где КАЖДАЯ платформа сама решает,
+писать файл на диск или нет) — записано здесь как известный следующий
+шаг, а не молча оставлено как будто уже решено.
+
+### Control-bridge к NEVPNManager — вероятно Rust напрямую, без Swift-CLI
+
+Для самого `.appex` (NEPacketTunnelProvider, хост для `netunnel` через
+gomobile) Swift неизбежен — Apple требует расширение как отдельный
+подписанный таргет. Но для УПРАВЛЕНИЯ тоннелем (настроить профиль,
+старт/стоп, статус) отдельный Swift-CLI как мост — лишний слой: `NEVPN
+Manager`/`NETunnelProviderManager` — Objective-C API, и Rust может
+звать их напрямую через крейт `objc2` (+ ручные `extern_class!`/
+`msg_send!` биндинги под NetworkExtension.framework, готового крейта
+под весь фреймворк может не быть) — без отдельного процесса-посредника.
+Не реализовано и не проверено: требует реального macOS SDK
+(NetworkExtension.framework) для компиляции и линковки — недоступно с
+этой машины. Решать и проверять — на Mac, при реализации `engine/
+macos.rs`.

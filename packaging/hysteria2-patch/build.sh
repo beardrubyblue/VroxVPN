@@ -49,13 +49,18 @@ go vet ./internal/netunnel/...
 
 rm -f "$BUILD_DIR/hashes.txt"
 ASSETS=()
-# os:arch — добавлен darwin для Tauri-сборки под macOS (sidecar
-# vroxcore-{arch}-apple-darwin). Проверено на самом Mac: TUN-код форка
-# (directmatch.go/dnssniff.go) использовал Linux-специфичные syscall
-# (AF_PACKET, SO_BINDTODEVICE, /proc/net/route) и не собирался под darwin —
-# вынесено в directmatch_linux.go/directmatch_darwin.go и
+# os:arch — darwin-бинарники здесь УЖЕ НЕ часть продукта: macOS перешёл
+# на NetworkExtension (см. docs/ARCHITECTURE.md), где hysteria2-логика
+# встраивается в .appex через netunnel+gomobile, а не запускается
+# отдельным sidecar-процессом, как раньше планировалось. hysteria2-vroxory-
+# darwin-{amd64,arm64} оставлены только как диагностический CLI для
+# ручной проверки "коннектится ли hysteria2 до сервера с этого Mac"
+# отдельно от NE/gomobile-обвязки — реальный продукт их не использует.
+# TUN-код форка (directmatch.go/dnssniff.go) использовал Linux-специфичные
+# syscall (AF_PACKET, SO_BINDTODEVICE, /proc/net/route) и не собирался под
+# darwin — вынесено в directmatch_linux.go/directmatch_darwin.go и
 # dnssniff_linux.go/dnssniff_darwin.go через `//go:build`. На macOS фича
-# directDomains пока отключена (defaultInterfaceName возвращает ошибку),
+# directDomains в этом CLI отключена (defaultInterfaceName возвращает ошибку),
 # остальное собирается и работает одинаково на обеих платформах.
 for target in linux:amd64 linux:arm64 darwin:amd64 darwin:arm64; do
     os="${target%%:*}"

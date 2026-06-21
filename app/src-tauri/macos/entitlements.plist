@@ -1,14 +1,25 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!--
-  ⚠ НЕ ПРОВЕРЕНО НА РЕАЛЬНОМ MACOS — минимальный набор для hardened
-  runtime + WKWebView (allow-jit/allow-unsigned-executable-memory —
-  стандартные требования Tauri/WebKit под hardened runtime,
-  disable-library-validation — нужен, если sidecar-бинарник vroxcore
-  подписан не той же командой/сертификатом, что главное приложение).
+  ⚠ НЕ ПРОВЕРЕНО НА РЕАЛЬНОМ MACOS.
+
+  allow-jit/allow-unsigned-executable-memory — стандартные требования
+  Tauri/WebKit под hardened runtime, нужны независимо от модели VPN.
+
+  disable-library-validation убран: был нужен только для sidecar-
+  бинарника vroxcore (если подписан не той же командой) — sidecar-путь
+  на macOS удалён в пользу NetworkExtension (см. docs/ARCHITECTURE.md).
+
+  com.apple.developer.networking.networkextension — ОБЯЗАТЕЛЕН для
+  NEPacketTunnelProvider, но это entitlement, который Apple выдаёт по
+  отдельному запросу (не включается просто фактом наличия Developer
+  Program аккаунта) — пока не запрошен/не подтверждён. Добавлен здесь
+  заранее, потому что без него и пытаться собирать NE-таргет в Xcode
+  бессмысленно; если запрос Apple отклонят или затянется, лучше знать
+  об этом сразу, а не молчаливо упереться в ошибку подписи позже.
+
   Не сэндбоксим (App Sandbox entitlements не добавлены) — приложение
   не распространяется через Mac App Store, а напрямую через .dmg
   (Developer ID + notarization), как и старая Linux-модель через .deb.
-  Уточнить и при необходимости расширить после первой реальной сборки.
 -->
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
@@ -17,7 +28,9 @@
     <true/>
     <key>com.apple.security.cs.allow-unsigned-executable-memory</key>
     <true/>
-    <key>com.apple.security.cs.disable-library-validation</key>
-    <true/>
+    <key>com.apple.developer.networking.networkextension</key>
+    <array>
+        <string>packet-tunnel-provider</string>
+    </array>
 </dict>
 </plist>

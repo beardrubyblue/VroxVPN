@@ -9,10 +9,19 @@
 
 use std::sync::Mutex;
 
-use tauri_plugin_shell::process::CommandChild;
+/// Платформенно-специфичный "хвост" активного соединения, который нужно
+/// освободить при disconnect, но который commands.rs не интерпретирует
+/// сам (просто `drop`-ает) — на Linux это обёртка pkexec-процесса
+/// (`CommandChild`), на macOS под NetworkExtension отдельного процесса,
+/// который мы сами породили, не существует вообще (тоннель живёт в
+/// `.appex`-расширении, управляемом ОС), поэтому там это `()`.
+#[cfg(target_os = "linux")]
+pub type ConnectionHandle = tauri_plugin_shell::process::CommandChild;
+#[cfg(target_os = "macos")]
+pub type ConnectionHandle = ();
 
 pub struct ActiveConnection {
-    pub child: CommandChild,
+    pub handle: ConnectionHandle,
     pub config_path: String,
     pub server_name: String,
 }

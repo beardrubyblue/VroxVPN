@@ -11,10 +11,10 @@ use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 
 use tauri::{AppHandle, Emitter, Manager};
-use tauri_plugin_shell::process::{CommandChild, CommandEvent};
+use tauri_plugin_shell::process::CommandEvent;
 use tauri_plugin_shell::ShellExt;
 
-use crate::engine::{EngineState, Slot};
+use crate::engine::{ConnectionHandle, EngineState, Slot};
 use crate::resources;
 
 const TUN_IFACE: &str = "tun-vroxory";
@@ -182,7 +182,7 @@ pub fn cleanup_interface(app: &AppHandle) {
     let _ = run_helper(app, &["delete-tun", TUN_IFACE]);
 }
 
-pub async fn spawn_client(app: &AppHandle, config_path: &str) -> Result<CommandChild, String> {
+pub async fn spawn_client(app: &AppHandle, config_path: &str) -> Result<ConnectionHandle, String> {
     let binary = sidecar_binary_path()?;
     let binary = binary.to_string_lossy().to_string();
 

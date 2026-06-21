@@ -34,7 +34,6 @@
     "externalBin": ["binaries/vroxcore"],
     "resources": [
       "resources/privileged_helper.sh",
-      "resources/privileged_helper_macos.sh",
       "resources/geoip/*",
       "resources/geosite/*"
     ],
