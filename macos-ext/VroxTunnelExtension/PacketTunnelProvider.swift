@@ -110,8 +110,15 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
     }
 
     private func pumpInbound() {
+        // У pumpOutbound есть естественное условие выхода (`while let
+        // handle = tunnelHandle`, плюс readPacket() сам бросает после
+        // Stop()) — у этого цикла такого не было: он перевооружал себя
+        // безусловно, даже после stopTunnel()/tunnelHandle=nil. Если
+        // packetFlow продолжит вызывать callback (расширение ещё не
+        // деаллоцировано) — цикл крутился бы вечно вхолостую.
+        guard tunnelHandle != nil else { return }
         packetFlow.readPackets { [weak self] packets, _ in
-            guard let self else { return }
+            guard let self, self.tunnelHandle != nil else { return }
             for packet in packets {
                 do {
                     try self.tunnelHandle?.writePacket(packet)

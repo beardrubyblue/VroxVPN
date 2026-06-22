@@ -4,6 +4,7 @@ import (
 	"io"
 	"net"
 	"strconv"
+	"time"
 
 	"gvisor.dev/gvisor/pkg/tcpip/adapters/gonet"
 	"gvisor.dev/gvisor/pkg/tcpip/transport/tcp"
@@ -12,6 +13,17 @@ import (
 
 	"github.com/apernet/hysteria/core/v2/client"
 )
+
+// udpIdleTimeout — сколько ждать следующий пакет в UDP-"сессии" прежде
+// чем её закрыть. Раньше (sing-tun's System stack) это делал встроенный
+// udpnat.New(udpTimeout, ...) — после перехода на gVisor напрямую (см.
+// netunnel.go) эта логика пропала, и без неё каждый уникальный UDP-поток
+// (а DNS-запросы создают их пачками) держал две горутины + gVisor-
+// endpoint НАВСЕГДА, до полной остановки тоннеля — реальная утечка при
+// долгой сессии. 60с — то же значение, что используется как разумный
+// дефолт NAT-таймаута для UDP в большинстве реализаций (включая
+// исходный sidecar-путь).
+const udpIdleTimeout = 60 * time.Second
 
 // tcpForwarderHandler и udpForwarderHandler — обработчики для
 // tcp.Forwarder/udp.Forwarder gVisor-стека (см. netunnel.go::StartTunnel,
@@ -105,9 +117,15 @@ func relayUDP(local net.Conn, remote client.HyUDPConn, reqAddr string) {
 	// уходит на ОДИН адрес назначения (reqAddr) — gVisor UDP forwarder
 	// создаёт отдельный endpoint на каждый уникальный (src, dst), так что
 	// здесь нет смешивания разных направлений, как было бы в общем сокете.
+	//
+	// SetReadDeadline сбрасывается на каждый успешный пакет — без этого
+	// сессия (и обе горутины) висела бы до закрытия всего тоннеля, даже
+	// если по этому UDP-потоку больше никогда ничего не придёт (см.
+	// udpIdleTimeout выше).
 	go func() {
 		buf := make([]byte, 65535)
 		for {
+			_ = local.SetReadDeadline(time.Now().Add(udpIdleTimeout))
 			n, err := local.Read(buf)
 			if err != nil {
 				copyErrChan <- err
@@ -119,7 +137,12 @@ func relayUDP(local net.Conn, remote client.HyUDPConn, reqAddr string) {
 			}
 		}
 	}()
-	// remote -> local
+	// remote -> local. client.HyUDPConn (HyClient.UDP()) не поддерживает
+	// SetReadDeadline (это интерфейс к hysteria2-сессии, не net.Conn) —
+	// для этого направления идle-таймаут срабатывает косвенно: когда
+	// горутина выше получит таймаут на local.Read(), relayUDP вернётся
+	// из `<-copyErrChan` и выполнит defer'ы (local.Close()/remote.
+	// Close()) — это разблокирует remote.Receive() здесь с ошибкой.
 	go func() {
 		for {
 			bs, _, err := remote.Receive()

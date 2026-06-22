@@ -293,20 +293,37 @@ fn status_to_str(status: NEVPNStatus) -> &'static str {
     }
 }
 
-/// Долгоживущий наблюдатель за СОБСТВЕННЫМ разрывом соединения ПОСЛЕ
-/// удачного коннекта — аналог Linux-варианта, который слушает
-/// `CommandEvent::Terminated` осиротевшего pkexec-процесса и эмитит
+/// Наблюдатель за СОБСТВЕННЫМ разрывом соединения ПОСЛЕ удачного
+/// коннекта — аналог Linux-варианта, который слушает `CommandEvent::
+/// Terminated` осиротевшего pkexec-процесса и эмитит
 /// `vpn-disconnected-unexpectedly`, если к этому моменту состояние
 /// всё ещё `Connected` (не обычный disconnect, который сам переводит
 /// слот в `Disconnecting`/`Idle`). Здесь источник события другой (NE
 /// статус, не выход процесса), но контракт с фронтендом тот же.
-/// Намеренно не снимается (`removeObserver`) — соединение на macOS
-/// одно на всё приложение, обзёрвер живёт до конца процесса, лишний
-/// `Box::leak`/эквивалент не страшнее, чем держать его в каком-то
-/// глобальном состоянии specifically для одного снятия при выходе.
+///
+/// САМОУДАЛЯЕТСЯ при первом же реальном разрыве (через
+/// `removeObserver_name_object` на себя, токен хранится в `Arc<Mutex<>>`
+/// — НЕ `Rc<RefCell>`: эта ячейка пишется на потоке, где регистрируется
+/// обзёрвер (`spawn_blocking`-поток), а читается/обнуляется внутри
+/// блока, который вызывается на главном потоке/run loop'е — то есть
+/// двумя разными настоящими ОС-потоками. `RefCell`'овский флаг занятости
+/// — не атомарный, гонка по нему была бы настоящей, даже если сам
+/// objc2-объект внутри безопасен через ARC). Раньше токен/блок терялись
+/// через `mem::forget` навсегда на КАЖДЫЙ успешный connect — за время
+/// жизни приложения (много циклов connect/disconnect за одну сессию —
+/// подтверждено вживую) это неограниченно растущая утечка: каждый
+/// старый обзёрвер продолжает жить и реагировать на каждый последующий
+/// статус, даже от уже совсем других соединений.
 fn watch_for_unexpected_disconnect(app: AppHandle, connection: Retained<NEVPNConnection>) {
     let center = NSNotificationCenter::defaultCenter();
     let main_queue = NSOperationQueue::mainQueue();
+
+    let token_cell: std::sync::Arc<
+        std::sync::Mutex<
+            Option<Retained<objc2::runtime::ProtocolObject<dyn objc2_foundation::NSObjectProtocol>>>,
+        >,
+    > = std::sync::Arc::new(std::sync::Mutex::new(None));
+    let token_cell_for_block = token_cell.clone();
 
     let block = block2::RcBlock::new(move |_note: std::ptr::NonNull<NSNotification>| {
         let status = unsafe { connection.status() };
@@ -320,6 +337,18 @@ fn watch_for_unexpected_disconnect(app: AppHandle, connection: Retained<NEVPNCon
             drop(guard);
             let _ = app.emit("vpn-disconnected-unexpectedly", status_to_str(status));
         }
+        // снимаем себя — задача наблюдателя на это соединение выполнена,
+        // дальше его не зовут (на следующий connect зарегистрируется
+        // новый, для нового connection-объекта).
+        if let Some(tok) = token_cell_for_block.lock().unwrap().take() {
+            unsafe {
+                NSNotificationCenter::defaultCenter().removeObserver_name_object(
+                    tok.as_ref(),
+                    None,
+                    None,
+                )
+            };
+        }
     });
 
     let token = unsafe {
@@ -330,11 +359,14 @@ fn watch_for_unexpected_disconnect(app: AppHandle, connection: Retained<NEVPNCon
             &block,
         )
     };
-    // блок и токен должны жить вечно (или до следующего connect) —
-    // иначе ARC освободит блок, и NotificationCenter перестанет звать
-    // обзёрвер при следующем же статусе.
-    std::mem::forget(block);
-    std::mem::forget(token);
+    *token_cell.lock().unwrap() = Some(token);
+    // Сам блок (`RcBlock`) можно безопасно дать уронить здесь — Obj-C
+    // `addObserverForName:...usingBlock:` копирует блок внутрь себя
+    // (стандартная семантика Block-параметров), NSNotificationCenter
+    // держит СВОЙ retain независимо от нашей Rust-обёртки. Раньше тоже
+    // форсили `mem::forget(block)` на сам блок "на всякий случай" — не
+    // нужно: `block` просто выходит из скоупа в конце функции, как
+    // обычная Rust-переменная.
 }
 
 /// Вся синхронная objc2-логика старта тоннеля — выполняется целиком на
@@ -458,12 +490,16 @@ fn kill_client_blocking() -> Result<(), String> {
     Ok(())
 }
 
-/// Killswitch на NE-пути — не отдельная операция (см. doc-комментарий
-/// модуля): включается как часть `NETunnelProviderProtocol.
-/// includeAllNetworks` в `spawn_client` выше, до старта тоннеля. Здесь
-/// no-op, а не заглушка с ошибкой — engine::enable_killswitch вызывается
-/// best-effort уже ПОСЛЕ удачного connect (см. commands.rs), так что он
-/// не должен мешать или дублировать работу.
+/// Killswitch на NE-пути — не отдельная операция: обеспечивается
+/// `includedRoutes = [NEIPv4Route.default()]` в `NEPacketTunnelNetworkSettings`
+/// (`PacketTunnelProvider.swift::startTunnel`) — весь трафик и так идёт
+/// через тоннель, как только он реально поднят. `includeAllNetworks`
+/// СОЗНАТЕЛЬНО НЕ используется (убран, см. `spawn_client_blocking` выше
+/// и `docs/ARCHITECTURE.md`) — он блокирует и собственный трафик
+/// расширения до того, как тоннель поднялся. Здесь no-op, а не заглушка
+/// с ошибкой — `engine::enable_killswitch` вызывается best-effort уже
+/// ПОСЛЕ удачного connect (см. commands.rs), так что он не должен мешать
+/// или дублировать работу.
 pub fn enable_killswitch(_app: &AppHandle, _vpn_server_host: &str) -> Result<(), String> {
     Ok(())
 }
