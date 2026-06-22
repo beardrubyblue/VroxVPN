@@ -97,7 +97,7 @@ async fn connect_inner(
 }
 
 #[tauri::command]
-pub fn disconnect(app: AppHandle, state: State<EngineState>) -> Result<(), String> {
+pub async fn disconnect(app: AppHandle, state: State<'_, EngineState>) -> Result<(), String> {
     let conn = {
         let mut guard = state.0.lock().unwrap();
         match std::mem::replace(&mut *guard, Slot::Disconnecting) {
@@ -109,7 +109,7 @@ pub fn disconnect(app: AppHandle, state: State<EngineState>) -> Result<(), Strin
         }
     };
 
-    match engine::kill_client(&app, &conn.config_path) {
+    match engine::kill_client(&app, &conn.config_path).await {
         Ok(()) => {
             // на Linux это обёртка pkexec-процесса (реальный root-процесс
             // hysteria2 уже убит выше); на macOS — `()`, no-op (Copy-тип,

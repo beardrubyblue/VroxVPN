@@ -274,7 +274,24 @@ fn process_running(app: &AppHandle, config_path: &str) -> bool {
         .unwrap_or(false)
 }
 
-pub fn kill_client(app: &AppHandle, config_path: &str) -> Result<(), String> {
+/// `async` + `spawn_blocking` не потому, что здесь свой deadlock (нет
+/// completion-callback'ов, как в macOS-версии) — а потому, что
+/// `commands.rs::disconnect` стал общим `async fn` после фикса
+/// зависания на macOS (см. doc-комментарий `engine/macos.rs::
+/// kill_client`), и до 3 секунд блокирующего опроса (`thread::sleep` в
+/// цикле ниже) внутри синхронной команды держало бы поток диспетчера
+/// Tauri все эти 3с — на Linux это не дедлок, но всё равно лишнее
+/// удержание потока, раз уж сигнатура меняется единообразно для обеих
+/// платформ.
+pub async fn kill_client(app: &AppHandle, config_path: &str) -> Result<(), String> {
+    let app = app.clone();
+    let config_path = config_path.to_string();
+    tauri::async_runtime::spawn_blocking(move || kill_client_blocking(&app, &config_path))
+        .await
+        .map_err(|e| e.to_string())?
+}
+
+fn kill_client_blocking(app: &AppHandle, config_path: &str) -> Result<(), String> {
     run_helper(app, &["kill-hysteria", "TERM", config_path])?;
 
     // ждём фактического завершения процесса опросом, а не гадаем по
