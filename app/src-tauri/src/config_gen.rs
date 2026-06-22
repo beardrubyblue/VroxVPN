@@ -2,22 +2,29 @@
 //! core/config_gen.py (ветка main) на Rust.
 
 use std::net::{SocketAddr, ToSocketAddrs};
+#[cfg(target_os = "linux")]
 use std::os::unix::fs::{DirBuilderExt, PermissionsExt};
+#[cfg(target_os = "linux")]
 use std::path::PathBuf;
 
+#[cfg(target_os = "linux")]
 use serde_yaml::{Mapping, Value};
 use tauri::AppHandle;
 
 use crate::geoip;
+#[cfg(target_os = "linux")]
 use crate::geosite;
 use crate::subscription::Server;
 
+#[cfg(target_os = "linux")]
 const CONFIG_DIR: &str = "/tmp/vroxory-vpn";
 
+#[cfg(target_os = "linux")]
 fn s(v: impl Into<String>) -> Value {
     Value::String(v.into())
 }
 
+#[cfg(target_os = "linux")]
 fn safe_filename(name: &str) -> String {
     let mut result = String::new();
     let mut last_was_underscore = false;
@@ -50,6 +57,7 @@ fn safe_filename(name: &str) -> String {
 /// проверяет, что путь не подменили симлинком (классическая TOCTOU-
 /// атака на предсказуемое имя в общем `/tmp`): если по этому пути
 /// уже лежит симлинк — отказываемся следовать ему.
+#[cfg(target_os = "linux")]
 fn ensure_private_config_dir() -> Result<(), String> {
     if let Ok(meta) = std::fs::symlink_metadata(CONFIG_DIR) {
         if meta.file_type().is_symlink() {
@@ -91,6 +99,7 @@ fn resolve_server_addresses(host: &str) -> (Vec<String>, Vec<String>) {
     (ipv4, ipv6)
 }
 
+#[cfg(target_os = "linux")]
 fn str_seq(items: impl IntoIterator<Item = String>) -> Value {
     Value::Sequence(items.into_iter().map(Value::String).collect())
 }
@@ -100,6 +109,7 @@ fn str_seq(items: impl IntoIterator<Item = String>) -> Value {
 /// `ru_bypass`: добавляет geoip-исключения IP-диапазонов России в
 /// маршруты TUN и directDomains (geosite) для сайтов на зарубежном CDN,
 /// которые под geoip не попадают — см. docs/ARCHITECTURE.md.
+#[cfg(target_os = "linux")]
 pub fn generate_config(
     app: &AppHandle,
     server: &Server,
@@ -238,17 +248,17 @@ pub fn generate_config(
 /// — только статическая часть (сервер + приватные диапазоны + RU-geoip),
 /// которая не имеет этой проблемы.
 ///
-/// `#[allow(dead_code)]` — пока без вызывающего кода: потребитель это
-/// будущий NE control-bridge (engine/macos.rs), которого ещё нет (см.
-/// docs/ARCHITECTURE.md). Не мёртвый код в смысле "не нужен", просто
-/// ещё не подключён — следующий шаг записан там же.
-#[allow(dead_code)]
+/// Используется только `engine::macos::spawn_client` — на Linux этот код
+/// не компилируется (`#[cfg(target_os = "macos")]`, не `#[allow
+/// (dead_code)]`: это не временно неподключённый код, а архитектурно
+/// платформо-специфичная концепция, у Linux-пути своего эквивалента нет).
+#[cfg(target_os = "macos")]
 pub struct ExcludedRoutes {
     pub ipv4: Vec<String>,
     pub ipv6: Vec<String>,
 }
 
-#[allow(dead_code)]
+#[cfg(target_os = "macos")]
 pub fn generate_excluded_routes(
     app: &AppHandle,
     server: &Server,
@@ -286,12 +296,11 @@ pub fn generate_excluded_routes(
 /// просто из JSON, как из YAML через mapstructure).
 ///
 /// Не пишет на диск — под NE конфиг уходит в `NETunnelProviderProtocol.
-/// providerConfiguration` в памяти, не файлом (см. открытый вопрос в
-/// ARCHITECTURE.md про `connect_inner`).
+/// providerConfiguration` в памяти, не файлом.
 ///
-/// `#[allow(dead_code)]` — см. комментарий у `generate_excluded_routes`
-/// выше, та же причина.
-#[allow(dead_code)]
+/// `#[cfg(target_os = "macos")]` — см. комментарий у
+/// `generate_excluded_routes` выше, та же причина.
+#[cfg(target_os = "macos")]
 pub fn generate_provider_config_json(server: &Server) -> serde_json::Value {
     let sni = if server.sni.is_empty() {
         server.host.clone()
@@ -341,6 +350,7 @@ mod tests {
     /// `netunnel.Config` (packaging/hysteria2-patch/netunnel/netunnel.go)
     /// — несовпадение здесь не поймает ни одна из сторон по отдельности
     /// (Go и Rust компилируются и тестируются независимо).
+    #[cfg(target_os = "macos")]
     #[test]
     fn provider_config_json_matches_netunnel_config_shape() {
         let server = test_server();

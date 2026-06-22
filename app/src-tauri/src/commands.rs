@@ -4,7 +4,6 @@ use serde::Serialize;
 use tauri::{AppHandle, State};
 
 use crate::app_update;
-use crate::config_gen;
 use crate::engine::{self, ActiveConnection, EngineState, Slot};
 use crate::geoip;
 use crate::geosite;
@@ -87,14 +86,14 @@ async fn connect_inner(
     server: &Server,
     ru_bypass: bool,
 ) -> Result<(engine::ConnectionHandle, String), String> {
-    let config_path = config_gen::generate_config(app, server, ru_bypass)?;
-    let config_path = config_path.to_string_lossy().to_string();
-
+    // Генерация конфига (YAML-файл на Linux, JSON в памяти на macOS)
+    // теперь внутри engine::spawn_client — платформо-специфична, не
+    // общий контракт (см. docs/ARCHITECTURE.md, было открытым вопросом
+    // до появления control-bridge на macOS).
     engine::ensure_polkit_rule(app)?;
     engine::loosen_rp_filter(app)?;
     engine::cleanup_interface(app);
-    let handle = engine::spawn_client(app, &config_path).await?;
-    Ok((handle, config_path))
+    engine::spawn_client(app, server, ru_bypass).await
 }
 
 #[tauri::command]
@@ -113,8 +112,10 @@ pub fn disconnect(app: AppHandle, state: State<EngineState>) -> Result<(), Strin
     match engine::kill_client(&app, &conn.config_path) {
         Ok(()) => {
             // на Linux это обёртка pkexec-процесса (реальный root-процесс
-            // hysteria2 уже убит выше); на macOS — `()`, no-op
-            drop(conn.handle);
+            // hysteria2 уже убит выше); на macOS — `()`, no-op (Copy-тип,
+            // `drop()` на нём — no-op с warning'ом компилятора, поэтому
+            // `let _ =` вместо явного drop)
+            let _ = conn.handle;
             *state.0.lock().unwrap() = Slot::Idle;
             // best-effort: если kill switch не был включён, это безвредный
             // no-op (см. disable_killswitch)

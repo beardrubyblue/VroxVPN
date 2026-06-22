@@ -14,8 +14,10 @@ use tauri::{AppHandle, Emitter, Manager};
 use tauri_plugin_shell::process::CommandEvent;
 use tauri_plugin_shell::ShellExt;
 
+use crate::config_gen;
 use crate::engine::{ConnectionHandle, EngineState, Slot};
 use crate::resources;
+use crate::subscription::Server;
 
 const TUN_IFACE: &str = "tun-vroxory";
 const KILLSWITCH_TABLE: &str = "vroxory_killswitch";
@@ -182,14 +184,29 @@ pub fn cleanup_interface(app: &AppHandle) {
     let _ = run_helper(app, &["delete-tun", TUN_IFACE]);
 }
 
-pub async fn spawn_client(app: &AppHandle, config_path: &str) -> Result<ConnectionHandle, String> {
+/// `config_path`-параметр был здесь до того, как появился рабочий NE-путь
+/// на macOS (см. docs/ARCHITECTURE.md, раздел "Открытый вопрос... " —
+/// теперь закрыт): генерация YAML-конфига раньше жила в `commands.rs`,
+/// что было утечкой sidecar-специфичной абстракции в общий API
+/// (`engine::spawn_client`). Теперь генерация — здесь, внутри
+/// Linux-реализации; macOS вместо файла строит JSON в памяти (см.
+/// `engine/macos.rs::spawn_client`). Поведение для Linux не изменилось —
+/// просто та же генерация переехала на один уровень глубже.
+pub async fn spawn_client(
+    app: &AppHandle,
+    server: &Server,
+    ru_bypass: bool,
+) -> Result<(ConnectionHandle, String), String> {
+    let config_path = config_gen::generate_config(app, server, ru_bypass)?;
+    let config_path = config_path.to_string_lossy().to_string();
+
     let binary = sidecar_binary_path()?;
     let binary = binary.to_string_lossy().to_string();
 
     let (mut rx, child) = app
         .shell()
         .command("pkexec")
-        .args([binary.as_str(), "client", "--config", config_path])
+        .args([binary.as_str(), "client", "--config", config_path.as_str()])
         .spawn()
         .map_err(|e| e.to_string())?;
 
@@ -242,7 +259,7 @@ pub async fn spawn_client(app: &AppHandle, config_path: &str) -> Result<Connecti
         );
     }
 
-    Ok(child)
+    Ok((child, config_path))
 }
 
 fn process_running(app: &AppHandle, config_path: &str) -> bool {

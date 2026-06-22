@@ -4,11 +4,15 @@
 
 use std::collections::HashSet;
 use std::fs;
-use std::path::{Path, PathBuf};
+#[cfg(target_os = "linux")]
+use std::path::Path;
+use std::path::PathBuf;
 
 use serde::Serialize;
+#[cfg(target_os = "linux")]
 use tauri::AppHandle;
 
+#[cfg(target_os = "linux")]
 use crate::resources;
 
 const SOURCE_BASE: &str = "https://raw.githubusercontent.com/v2fly/domain-list-community/master/data/";
@@ -20,6 +24,13 @@ fn user_dir() -> PathBuf {
         .join(".config/vroxory-vpn/geosite")
 }
 
+// Используется только Linux-путём (config_gen::generate_config —
+// directDomains в YAML-конфиге hysteria2-клиента). На macOS-NE домены
+// сейчас не передаются вообще (см. config_gen::generate_excluded_routes
+// doc-комментарий, Фаза 3 плана NE-перехода ещё не реализована для
+// доменов, не IP) — geosite::update_ru_domains (обновление кеша файла)
+// при этом остаётся кросс-платформенным, тут гейтится только чтение.
+#[cfg(target_os = "linux")]
 fn parse_domain_file(path: &Path) -> Vec<String> {
     fs::read_to_string(path)
         .map(|content| {
@@ -33,6 +44,7 @@ fn parse_domain_file(path: &Path) -> Vec<String> {
         .unwrap_or_default()
 }
 
+#[cfg(target_os = "linux")]
 pub fn get_ru_domains(app: &AppHandle) -> Result<Vec<String>, String> {
     let user_file = user_dir().join("ru_domains.txt");
     let path = if user_file.exists() {
