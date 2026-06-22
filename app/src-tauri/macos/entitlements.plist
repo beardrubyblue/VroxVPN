@@ -1,33 +1,41 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!--
-  ⚠ НЕ ПРОВЕРЕНО НА РЕАЛЬНОМ MACOS.
+  ⚠ allow-jit/allow-unsigned-executable-memory УБРАНЫ — подтверждено
+  вживую: kernel/AMFI убивает процесс при запуске с сообщением
+  "Hardened Runtime relaxation entitlements disallowed on System
+  Extensions" (см. log show predicate 'eventMessage CONTAINS
+  "Hardened Runtime relaxation"'), если на бинарнике одновременно есть
+  com.apple.developer.networking.networkextension и любой
+  hardened-runtime relaxation entitlement (allow-jit,
+  allow-unsigned-executable-memory, disable-library-validation и т.п.)
+  — Apple явно запрещает это сочетание на уровне политики подписи.
+  WKWebView при этом продолжает нормально работать без allow-jit на
+  ХОСТЕ — JIT для JS выполняется в отдельном XPC-процессе WebKit
+  (com.apple.WebKit.WebContent), у которого свои entitlements,
+  подписанные Apple, не нашего бинарника это не касается. Проверено:
+  окно открывается, фронтенд рендерится и работает без этих двух
+  ключей.
 
-  allow-jit/allow-unsigned-executable-memory — стандартные требования
-  Tauri/WebKit под hardened runtime, нужны независимо от модели VPN.
-
-  disable-library-validation убран: был нужен только для sidecar-
-  бинарника vroxcore (если подписан не той же командой) — sidecar-путь
-  на macOS удалён в пользу NetworkExtension (см. docs/ARCHITECTURE.md).
+  disable-library-validation убран ранее: был нужен только для
+  sidecar-бинарника vroxcore (если подписан не той же командой) —
+  sidecar-путь на macOS удалён в пользу NetworkExtension (см.
+  docs/ARCHITECTURE.md). Сейчас отсутствие disable-library-validation
+  важно вдвойне — он тоже relaxation-entitlement и попал бы под тот же
+  запрет.
 
   com.apple.developer.networking.networkextension — ОБЯЗАТЕЛЕН для
-  NEPacketTunnelProvider, но это entitlement, который Apple выдаёт по
-  отдельному запросу (не включается просто фактом наличия Developer
-  Program аккаунта) — пока не запрошен/не подтверждён. Добавлен здесь
-  заранее, потому что без него и пытаться собирать NE-таргет в Xcode
-  бессмысленно; если запрос Apple отклонят или затянется, лучше знать
-  об этом сразу, а не молчаливо упереться в ошибку подписи позже.
+  NEPacketTunnelProvider, выдан Apple по отдельному запросу.
 
-  Не сэндбоксим (App Sandbox entitlements не добавлены) — приложение
-  не распространяется через Mac App Store, а напрямую через .dmg
-  (Developer ID + notarization), как и старая Linux-модель через .deb.
+  Не сэндбоксим (App Sandbox entitlements не добавлены у ГЛАВНОГО
+  приложения) — оно не распространяется через Mac App Store, а
+  напрямую через .dmg (Developer ID + notarization). Сэндбокс нужен
+  только самому .appex-расширению (отдельные entitlements в
+  macos-ext/VroxTunnelExtension/), это требование самого
+  NetworkExtension.framework, не главного приложения.
 -->
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
-    <key>com.apple.security.cs.allow-jit</key>
-    <true/>
-    <key>com.apple.security.cs.allow-unsigned-executable-memory</key>
-    <true/>
     <key>com.apple.developer.networking.networkextension</key>
     <array>
         <string>packet-tunnel-provider</string>

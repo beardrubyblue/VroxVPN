@@ -308,8 +308,21 @@ pub fn generate_provider_config_json(server: &Server) -> serde_json::Value {
         server.sni.clone()
     };
 
+    // Резолвим host в IP здесь, а не передаём hostname в netunnel —
+    // подтверждено вживую: DNS-резолвинг ВНУТРИ песочницы расширения
+    // (App Sandbox) виснет на ~30с и проваливается ("no such host"),
+    // судя по всему из-за includeAllNetworks — система начинает
+    // захватывать трафик расширения ещё до того, как сам тоннель
+    // поднялся, и его собственный DNS-запрос не проходит. SNI остаётся
+    // оригинальным hostname (нужен для TLS, не для самого socket-адреса).
+    let (server_ipv4, _server_ipv6) = resolve_server_addresses(&server.host);
+    let server_addr = server_ipv4
+        .into_iter()
+        .next()
+        .unwrap_or_else(|| server.host.clone());
+
     serde_json::json!({
-        "server": format!("{}:{}", server.host, server.port),
+        "server": format!("{}:{}", server_addr, server.port),
         "auth": server.password,
         "sni": sni,
         "insecure": server.insecure,

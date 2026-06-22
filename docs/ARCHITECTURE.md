@@ -480,3 +480,63 @@ no-op, как и раньше, просто теперь через реальн
 ⚠ Не проверено живым подключением к настоящему hysteria2-серверу через
 сам Tauri-UI (только через тест-харнесс `macos-ext/VroxVPNHost`, см.
 Фазу 2) — следующий логичный шаг проверки, не архитектурный риск.
+
+### Живой тест через настоящий Tauri-UI — найден и исправлен критический баг с includeAllNetworks
+
+Сделано: `.appex` встроен в реальный `vrox.vpn.app` (собран через `pnpm
+tauri build --debug`), подписан вручную через `macos-ext/embed-into-
+tauri-app.sh` (Tauri сам не подписывает с реальным entitlement —
+`signingIdentity: null` даёт ad-hoc подпись без entitlements вообще,
+скрипт переподписывает целиком тем же Developer-сертификатом и
+провижининг-профилем, которые уже получил Xcode при сборке
+`macos-ext`). По пути всплыли и решены:
+
+- **AMFI убивал процесс при запуске**: `kernel: ... Hardened Runtime
+  relaxation entitlements disallowed on System Extensions`. Apple
+  запрещает сочетать `com.apple.developer.networking.networkextension`
+  с любым hardened-runtime relaxation entitlement
+  (`allow-jit`/`allow-unsigned-executable-memory`/
+  `disable-library-validation`) на одном бинарнике. Убраны оба
+  relaxation-entitlement'а из `macos/entitlements.plist` главного
+  приложения — WKWebView продолжает работать нормально без них (JIT для
+  JS выполняется в отдельном XPC-процессе `com.apple.WebKit.WebContent`
+  со своими entitlements, не нашего бинарника это не касается;
+  проверено: окно открывается, фронтенд рендерится).
+- **Реальный коннект через настоящий UI — найден критический баг,
+  потребовавший ДВУХ перезагрузок Mac, прежде чем причина стала ясна.**
+  `includeAllNetworks = true` (killswitch, `engine/macos.rs::
+  spawn_client_blocking` и тест-харнесс `AppDelegate.swift`) блокирует
+  ВЕСЬ исходящий трафик системы сразу при переходе VPN-соединения в
+  "Connecting" — ДО того, как `setTunnelNetworkSettings` вызван внутри
+  расширения или `startTunnel` завершился успехом. `netunnel` сам
+  устанавливает UDP-соединение к hysteria2-серверу ВНУТРИ `StartTunnel`
+  (`singleUseConnFactory.New` → `net.ListenUDP`/`net.DialUDP`) — то есть
+  собственный исходящий трафик тоннеля тоже попадает под этот же
+  захват, и сам тоннель никогда не может подняться (chicken-and-egg).
+  Внешне это выглядело как: приложение "подключается", весь интернет на
+  Mac пропадает целиком (не только в приложении), обычное отключение
+  через `scutil --nc stop`/System Settings не восстанавливало сеть.
+  Подтверждено документацией/практикой Apple — известная, открыто
+  обсуждаемая проблема, не баг этого кода: [Apple Developer Forums
+  thread 677102](https://developer.apple.com/forums/thread/677102),
+  [wireguard-apple mailing list о том же](https://www.mail-archive.com/wireguard@lists.zx2c4.com/msg06703.html).
+  **Исправлено: `includeAllNetworks` убран целиком** — и из
+  `engine/macos.rs`, и из тест-харнесса. Killswitch без него слабее
+  (только `includedRoutes=[default]` в `NEPacketTunnelNetworkSettings`,
+  работает только ПОСЛЕ удачного подключения, не защищает на время
+  самого коннекта) — пересмотреть отдельно, когда remote relay
+  подтверждён рабочим без этого флага; не делать это вслепую повторно.
+- После фикса DNS-резолвинг хоста сервера также перенесён из `netunnel`
+  (внутри песочницы расширения) в `config_gen::
+  generate_provider_config_json` (Rust, обычный несэндбоксенный
+  процесс) — отдельно от проблемы `includeAllNetworks`, но обнаружено в
+  той же серии живых тестов: `net.ResolveUDPAddr` внутри App Sandbox
+  расширения зависал на ~30с и проваливался ("no such host"). `server`
+  в JSON-конфиге теперь резолвленный IP, не hostname; `sni` остаётся
+  оригинальным именем (нужен для TLS, не для адреса сокета).
+
+**Дальше пока не проверялось живым кликом** — после двух потерь
+интернета решено остановиться и не продолжать ручное тестирование
+методом проб с реальным риском перезагрузки, пока изменения выше не
+осмыслены и не зафиксированы здесь. Следующая попытка подключения —
+отдельный, осознанный шаг, не часть текущей сессии.

@@ -52,10 +52,25 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         proto.providerBundleIdentifier = "com.vroxory.vpn.tunnel"
         proto.serverAddress = "vrox.vpn"
         // killswitch под NE — см. PacketTunnelProvider.swift и
-        // docs/ARCHITECTURE.md, Фаза 4: includeAllNetworks свойство
-        // именно протокола конфигурации (хост), а не
-        // NEPacketTunnelNetworkSettings (расширение).
-        proto.includeAllNetworks = true
+        // docs/ARCHITECTURE.md, Фаза 4.
+        //
+        // ⚠ includeAllNetworks СОЗНАТЕЛЬНО НЕ включаем. Подтверждено
+        // вживую (потребовало двух перезагрузок Mac, чтобы понять):
+        // includeAllNetworks блокирует ВЕСЬ исходящий трафик системы,
+        // включая собственное исходящее соединение расширения к
+        // VPN-серверу, сразу при переходе в "Connecting" — ДО того, как
+        // setTunnelNetworkSettings вызван или startTunnel завершился
+        // успехом. Наш netunnel сам устанавливает UDP-соединение к
+        // hysteria2-серверу ВНУТРИ startTunnel (singleUseConnFactory.New)
+        // — то есть свой собственный трафик тоннеля тоже блокируется
+        // этим флагом, и тоннель никогда не может подняться. Это
+        // документированная проблема Apple (chicken-and-egg), не баг
+        // нашего кода — см. Apple Developer Forums thread 677102,
+        // wireguard-apple mailing list. Без includeAllNetworks killswitch
+        // обеспечивается слабее (только includedRoutes=[default] в
+        // NEPacketTunnelNetworkSettings ПОСЛЕ удачного коннекта, не на
+        // время самого коннекта) — пересмотреть отдельно, когда relay
+        // будет подтверждён рабочим без этого флага.
         proto.providerConfiguration = [
             "configJSON": testConfigJSON,
             "inet4Addr": "100.100.100.101",

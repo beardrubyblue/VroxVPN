@@ -205,10 +205,21 @@ fn spawn_client_blocking(
     unsafe {
         proto.setProviderBundleIdentifier(Some(&NSString::from_str(PROVIDER_BUNDLE_ID)));
         proto.setServerAddress(Some(&NSString::from_str(&server.host)));
-        // killswitch под NE — основной механизм защиты от утечки трафика
-        // при падении расширения (см. docs/ARCHITECTURE.md, Фаза 4),
-        // замена pf-ruleset из удалённого sidecar-пути.
-        proto.setIncludeAllNetworks(true);
+        // includeAllNetworks СОЗНАТЕЛЬНО НЕ включаем — подтверждено
+        // вживую (две полные потери интернета, требующие перезагрузки
+        // Mac, прежде чем поняли причину): этот флаг блокирует ВЕСЬ
+        // исходящий трафик системы, включая собственное соединение
+        // расширения к VPN-серверу, сразу при переходе в "Connecting" —
+        // до того, как setTunnelNetworkSettings вызван или startTunnel
+        // завершился успехом. netunnel сам устанавливает UDP-соединение
+        // к hysteria2-серверу ВНУТРИ startTunnel — то есть собственный
+        // трафик тоннеля тоже блокируется этим флагом, и тоннель никогда
+        // не поднимается. Документированная проблема Apple (chicken-
+        // and-egg), не баг этого кода — Apple Developer Forums thread
+        // 677102, wireguard-apple mailing list. Killswitch без него
+        // слабее (только includedRoutes=[default] в
+        // NEPacketTunnelNetworkSettings ПОСЛЕ удачного коннекта) —
+        // пересмотреть отдельно, когда relay подтверждён рабочим.
         let config_dict = build_provider_configuration(config_json, excluded, inet4_addr, mtu);
         proto.setProviderConfiguration(Some(&config_dict));
     }
