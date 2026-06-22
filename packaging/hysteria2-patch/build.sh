@@ -50,8 +50,22 @@ cp "$SCRIPT_DIR/directmatch.go" "$SCRIPT_DIR/directmatch_linux.go" \
 mkdir -p app/netunnel
 cp "$SCRIPT_DIR/netunnel/"*.go app/netunnel/
 
+# go.work корня апстрима фиксирует `go 1.24.0` — gvisor.dev/gvisor
+# требует >= 1.26.3 (проверено вживую). go.work — не наш файл (часть
+# upstream-репозитория hysteria, regenerируется при каждом git clone
+# заново), поэтому правим его тут же, а не один раз руками.
+go work edit -go=1.26.4 "$BUILD_DIR/hysteria/go.work"
+
 cd app
 go get github.com/miekg/dns@v1.1.59
+# gvisor.dev/gvisor@latest — НЕНАДЁЖНО: на момент проверки резолвился в
+# снэпшот с реальным конфликтом package-имён в pkg/tcpip/stack
+# (bridge_test.go объявлен как `package bridge_test`, не `stack_test` —
+# подобно тому, как это организовано у них во внутреннем Bazel-сборщике,
+# но ломает обычный `go build`/`go vet`). Версия ниже — конкретный
+# коммит, который реально использует в проде tailscale.com (см. их
+# go.mod на pkg.go.dev) — не угадывание, а заведомо собирающийся пин.
+go get gvisor.dev/gvisor@v0.0.0-20260224225140-573d5e7127a8
 go mod tidy
 
 echo "→ проверяю netunnel (go vet, кросс-проверка типов под NE-путь)..."

@@ -590,3 +590,61 @@ activity`) — ICMP-пинг и UDP/443 reachability проходят норма
 живого теста находил по новому реальному багу. Следующая попытка —
 с этими тремя фиксами одновременно (includeAllNetworks убран, disconnect
 не виснет, статус коннекта подтверждается реально).
+
+### `tun.NewSystem` оказался не gVisor — найдено и переписано на настоящий gVisor
+
+Со статусом "тоннель не поднялся" (после фиксов выше — честный провал,
+не молчаливая ложь в UI) вскрылась причина: `netunnel.StartTunnel`
+падал на `listen tcp4 100.100.100.101:0: bind: can't assign requested
+address` — буквально на старте стека, не на хендшейке. Это вскрыло
+фундаментальную, а не временную проблему: `tun.NewSystem` из форка
+`apernet/sing-tun`, который весь Фазой 1 в коде и комментариях называли
+"gVisor netstack" — на деле это **"System stack"**: он открывает
+настоящий TCP-listener ОС, забинденный на IP виртуальной подсети, и
+работает только если у настоящего TUN-устройства этот IP реально
+назначен ядром (как на Linux/Windows sidecar-пути). У нашего
+виртуального TUN под NE (просто Go-каналы, без файлового дескриптора)
+такого IP в системе нет — бинд падает гарантированно, не из-за сети.
+Настоящий gVisor (`tun.NewGVisor`) в этом форке `sing-tun` **вырезан
+целиком** — там голая заглушка с ошибкой "gVisor is not supported in
+this fork" (подтверждено чтением исходников и git-историей: в
+оригинальном `sagernet/sing-tun` gVisor есть, в `apernet`-форке,
+который тащит hysteria2, — нет, и версии разошлись слишком далеко
+(v0.2.6 vs v0.8.x), чтобы просто подменить зависимость).
+
+**Исправлено: подключили `gvisor.dev/gvisor` напрямую, без обёртки
+sing-tun.** Тот же подход, что использует wireguard-go в своём
+netstack-режиме:
+- `virtual_tun.go` — `channel.Endpoint` (`gvisor.dev/gvisor/pkg/tcpip/
+  link/channel`) вместо `tun.Tun`: пакеты ходят через `InjectInbound`/
+  `ReadContext`, версия IP (4/6) определяется по старшему ниблу первого
+  байта.
+- `netunnel.go::StartTunnel` — вручную собирает `stack.Stack`
+  (ipv4/ipv6 + tcp/udp протоколы), один NIC с `PromiscuousMode`/
+  `Spoofing` (нужно для точки-точки "тоннель в одно лицо" — через
+  единственный NIC идёt трафик к любым адресам назначения, не только к
+  собственному IP), регистрирует `tcp.Forwarder`/`udp.Forwarder` вместо
+  `tun.Handler`.
+- `handler.go` — те же `tcp.ForwarderRequest`/`udp.ForwarderRequest` →
+  `gonet.NewTCPConn`/`NewUDPConn` → `io.Copy`-relay в `HyClient.TCP`/
+  `UDP()`, логика relay не изменилась, изменилась только точка входа
+  (раньше sing-tun's `tun.Handler`, теперь gVisor forwarder).
+
+**gvisor.dev/gvisor через `go get @latest` — ненадёжно, нужен
+конкретный пин.** `@latest` зарезолвился в снэпшот с конфликтом
+package-имён в `pkg/tcpip/stack` (`bridge_test.go` объявлен как
+`package bridge_test`, а не `stack_test` — судя по всему, у них так
+организовано во внутреннем Bazel-сборщике, который этого не замечает,
+но `go build`/`go vet` ломает железно). Зафиксировано на коммите
+`v0.0.0-20260224225140-573d5e7127a8` — это не угаданная версия, а
+ровно то, что использует в проде `tailscale.com` (проверено через их
+публичный `go.mod` на pkg.go.dev/proxy.golang.org). Также пришлось
+поднять `go.work` апстрима hysteria2 с `go 1.24.0` до `1.26.4` —
+gvisor этой версии требует более новый Go; `build.sh` теперь делает это
+автоматически после клона (`go work edit -go=1.26.4`), сам файл не
+наш и перегенерируется при каждой сборке заново.
+
+Проверено: `go build`/`go vet ./netunnel/...` чисто, `gomobile bind
+-target macos` собирает `.xcframework` без ошибок, `.appex` собирается
+и подписывается в Xcode. ⚠ Ещё не проверено живым подключением — это
+следующий шаг.

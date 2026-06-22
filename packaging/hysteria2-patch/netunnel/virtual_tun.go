@@ -1,98 +1,96 @@
 package netunnel
 
 import (
+	"context"
 	"errors"
 	"io"
 
-	"github.com/sagernet/sing/common/buf"
+	"gvisor.dev/gvisor/pkg/buffer"
+	"gvisor.dev/gvisor/pkg/tcpip"
+	"gvisor.dev/gvisor/pkg/tcpip/header"
+	"gvisor.dev/gvisor/pkg/tcpip/link/channel"
+	"gvisor.dev/gvisor/pkg/tcpip/stack"
 )
 
-// virtualTun реализует tun.Tun (io.ReadWriter + N.VectorisedWriter +
-// Close) без настоящего файлового дескриптора — в отличие от
-// app/internal/tun/server.go (который вызывает tun.New() и получает
-// реальное системное TUN-устройство), здесь пакеты ходят через каналы,
-// которые наполняет/вычитывает TunnelHandle — а его методы вызываются
-// из Swift через gomobile-границу (NEPacketTunnelFlow.readPackets даёт
-// пакеты В тоннель, writePackets забирает пакеты ИЗ тоннеля).
+// virtualTun — точка-точка LinkEndpoint для gVisor netstack (через
+// gvisor.dev/gvisor/pkg/tcpip/link/channel), без настоящего файлового
+// дескриптора. Пакеты ходят через каналы channel.Endpoint, которые
+// наполняет/вычитывает TunnelHandle — а его методы вызываются из Swift
+// через gomobile-границу (NEPacketTunnelFlow.readPackets даёт пакеты В
+// тоннель, writePackets забирает пакеты ИЗ тоннеля).
 //
-// gVisor-стек (tun.NewSystem) не делает разницы между "настоящим" Tun
-// и этим — он работает только через интерфейс Read/Write, понятия не
-// имея, откуда берутся байты.
+// ⚠ ИСТОРИЯ: до этого здесь была обёртка над `tun.NewSystem` из
+// apernet/sing-tun, в комментариях ошибочно названная "gVisor netstack".
+// Проверка на реальном Mac показала: tun.NewSystem — это "System
+// stack", который требует НАСТОЯЩЕГО TUN-устройства (открывает обычный
+// TCP-listener ОС, забинденный на IP виртуальной подсети — без
+// настоящего TUN-интерфейса с этим IP в системе бинд падает с "can't
+// assign requested address", железно, не временная ошибка). Сам gVisor
+// в форке apernet/sing-tun вырезан целиком (см. stack_gvisor_stub.go в
+// этом форке — заглушка с ошибкой "gVisor is not supported in this
+// fork"), поэтому переключиться на `tun.NewGVisor` было нельзя.
+// Решение: подключить `gvisor.dev/gvisor` напрямую, без обёртки
+// sing-tun — `channel.Endpoint` именно для этого и существует (инъекция
+// пакетов программно, без реального устройства), это тот же подход,
+// что использует wireguard-go в своём netstack-режиме.
 type virtualTun struct {
-	inbound  chan []byte // от Swift → читает gVisor stack через Read()
-	outbound chan []byte // от gVisor stack (Write()) → отдаём в Swift через ReadPacket()
-	closed   chan struct{}
+	ep     *channel.Endpoint
+	ctx    context.Context
+	cancel context.CancelFunc
 }
 
-func newVirtualTun() *virtualTun {
+func newVirtualTun(mtu uint32) *virtualTun {
+	ctx, cancel := context.WithCancel(context.Background())
 	return &virtualTun{
-		inbound:  make(chan []byte, 256),
-		outbound: make(chan []byte, 256),
-		closed:   make(chan struct{}),
+		ep:     channel.New(256, mtu, ""),
+		ctx:    ctx,
+		cancel: cancel,
 	}
-}
-
-func (t *virtualTun) Read(p []byte) (int, error) {
-	select {
-	case pkt := <-t.inbound:
-		n := copy(p, pkt)
-		return n, nil
-	case <-t.closed:
-		return 0, io.EOF
-	}
-}
-
-func (t *virtualTun) Write(p []byte) (int, error) {
-	cp := append([]byte(nil), p...)
-	select {
-	case t.outbound <- cp:
-		return len(p), nil
-	case <-t.closed:
-		return 0, errors.New("netunnel: tun closed")
-	}
-}
-
-func (t *virtualTun) WriteVectorised(buffers []*buf.Buffer) error {
-	for _, b := range buffers {
-		if _, err := t.Write(b.Bytes()); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
-func (t *virtualTun) Close() error {
-	select {
-	case <-t.closed:
-		// уже закрыт — Close() может быть вызван и явно через
-		// TunnelHandle.Stop(), и стеком при его собственном завершении
-	default:
-		close(t.closed)
-	}
-	return nil
 }
 
 // deliverInbound вызывается из TunnelHandle.WritePacket (т.е. из Swift):
 // пакет от NEPacketTunnelFlow попадает в gVisor stack как будто пришёл
-// из настоящего TUN-устройства.
+// из настоящего TUN-устройства. Версия IP (4 или 6) определяется по
+// старшему ниблу первого байта — так же, как и на стороне Swift при
+// определении protocol number для packetFlow.writePackets.
 func (t *virtualTun) deliverInbound(pkt []byte) error {
-	cp := append([]byte(nil), pkt...)
-	select {
-	case t.inbound <- cp:
-		return nil
-	case <-t.closed:
-		return errors.New("netunnel: tun closed")
+	if len(pkt) == 0 {
+		return errors.New("netunnel: empty packet")
 	}
+	var proto tcpip.NetworkProtocolNumber
+	switch pkt[0] >> 4 {
+	case 4:
+		proto = header.IPv4ProtocolNumber
+	case 6:
+		proto = header.IPv6ProtocolNumber
+	default:
+		return errors.New("netunnel: unknown IP version in packet")
+	}
+
+	cp := append([]byte(nil), pkt...)
+	pb := stack.NewPacketBuffer(stack.PacketBufferOptions{
+		Payload: buffer.MakeWithData(cp),
+	})
+	defer pb.DecRef()
+	t.ep.InjectInbound(proto, pb)
+	return nil
 }
 
 // takeOutbound вызывается из TunnelHandle.ReadPacket (т.е. из Swift, в
 // цикле packetFlow.writePackets) — блокируется до следующего пакета,
-// который gVisor stack хочет отправить наружу, либо до Stop().
+// который gVisor stack хочет отправить наружу, либо до Close().
 func (t *virtualTun) takeOutbound() ([]byte, error) {
-	select {
-	case pkt := <-t.outbound:
-		return pkt, nil
-	case <-t.closed:
+	pb := t.ep.ReadContext(t.ctx)
+	if pb == nil {
 		return nil, io.EOF
 	}
+	defer pb.DecRef()
+	buf := pb.ToBuffer()
+	return buf.Flatten(), nil
+}
+
+func (t *virtualTun) Close() error {
+	t.cancel()
+	t.ep.Close()
+	return nil
 }

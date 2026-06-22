@@ -1,9 +1,12 @@
 // Package netunnel — байт-слайс адаптация app/internal/tun для
 // встраивания в среду без настоящего TUN-устройства: NEPacketTunnelProvider
 // (macOS/iOS) отдаёт и принимает пакеты через NEPacketTunnelFlow.readPackets/
-// writePackets, а не через файловый дескриптор. virtualTun (virtual_tun.go)
-// подсовывает gVisor-стеку (tun.NewSystem) канал вместо fd — сам стек и
-// relay-логика (handler.go) от этого не меняются.
+// writePackets, а не через файловый дескриптор. Собственный gVisor-стек
+// (gvisor.dev/gvisor напрямую, см. virtual_tun.go/netunnel.go/handler.go) —
+// НЕ через sing-tun: проверено вживую, `tun.NewSystem` форка
+// apernet/sing-tun — это "System stack" (требует настоящего TUN-
+// устройства с реально назначенным IP в ОС, у нас его нет), а
+// `tun.NewGVisor` в этом форке вырезан целиком (заглушка с ошибкой).
 //
 // Методы TunnelHandle оперируют только []byte/строками/примитивами —
 // gomobile bind не умеет маршалить произвольные Go-типы через границу
@@ -28,7 +31,6 @@
 package netunnel
 
 import (
-	"context"
 	"crypto/sha256"
 	"crypto/x509"
 	"encoding/hex"
@@ -40,21 +42,31 @@ import (
 	"strings"
 	"sync"
 
-	tun "github.com/apernet/sing-tun"
-	"github.com/sagernet/sing/common/logger"
+	"gvisor.dev/gvisor/pkg/tcpip"
+	"gvisor.dev/gvisor/pkg/tcpip/header"
+	"gvisor.dev/gvisor/pkg/tcpip/network/ipv4"
+	"gvisor.dev/gvisor/pkg/tcpip/network/ipv6"
+	"gvisor.dev/gvisor/pkg/tcpip/stack"
+	"gvisor.dev/gvisor/pkg/tcpip/transport/tcp"
+	"gvisor.dev/gvisor/pkg/tcpip/transport/udp"
 
 	"github.com/apernet/hysteria/app/v2/internal/utils"
 	"github.com/apernet/hysteria/core/v2/client"
 	"github.com/apernet/hysteria/extras/v2/obfs"
 )
 
+// nicID — единственный NIC в нашем gVisor-стеке (точка-точка, один
+// virtualTun на одно соединение).
+const nicID tcpip.NICID = 1
+
 // Config — JSON-конфиг для StartTunnel, по полям зеркалит то, что
 // config_gen.rs строит для sidecar-пути (см. doc-комментарий пакета про
-// то, что осознанно не перенесено). inet4Addr/inet6Addr — тот же формат,
-// что уже строит config_gen.rs (CIDR с серверным адресом первым) —
-// gVisor-стеку нужен один свободный адрес после сетевого для самого
-// клиента (см. проверку "need one more IPv4 address" в sing-tun/
-// stack_system.go).
+// то, что осознанно не перенесено). inet4Addr/inet6Addr — CIDR, из
+// которого берётся только сам адрес (Addr()) — собственному gVisor-NIC
+// нужен ровно один адрес, второй "свободный" (как требовал sing-tun's
+// System stack) здесь не нужен — нет настоящего TUN-устройства и
+// настоящего соседа по подсети, NIC сам является единственной точкой
+// входа для всего трафика (promiscuous + spoofing, см. StartTunnel).
 type Config struct {
 	Server     string           `json:"server"`
 	Auth       string           `json:"auth"`
@@ -89,7 +101,7 @@ type CongestionConfig struct {
 // TunnelHandle — gomobile-совместимый хендл одного активного соединения.
 type TunnelHandle struct {
 	vtun   *virtualTun
-	stack  tun.Stack
+	stack  *stack.Stack
 	client client.Client
 }
 
@@ -232,38 +244,72 @@ func StartTunnel(configJSON string) (*TunnelHandle, error) {
 		_ = hyClient.Close()
 		return nil, fmt.Errorf("netunnel: bad inet4Addr: %w", err)
 	}
-	var inet6Prefixes []netip.Prefix
+	var inet6 netip.Prefix
+	hasInet6 := false
 	if cfg.Inet6Addr != "" {
-		inet6, parseErr := netip.ParsePrefix(cfg.Inet6Addr)
-		if parseErr != nil {
+		inet6, err = netip.ParsePrefix(cfg.Inet6Addr)
+		if err != nil {
 			_ = hyClient.Close()
-			return nil, fmt.Errorf("netunnel: bad inet6Addr: %w", parseErr)
+			return nil, fmt.Errorf("netunnel: bad inet6Addr: %w", err)
 		}
-		inet6Prefixes = []netip.Prefix{inet6}
+		hasInet6 = true
 	}
 
-	vtun := newVirtualTun()
-	stack, err := tun.NewSystem(tun.StackOptions{
-		Context: context.Background(),
-		Tun:     vtun,
-		TunOptions: tun.Options{
-			Inet4Address: []netip.Prefix{inet4},
-			Inet6Address: inet6Prefixes,
-			MTU:          cfg.MTU,
-		},
-		Handler: &relayHandler{hyClient: hyClient},
-		Logger:  logger.NOP(),
+	mtu := cfg.MTU
+	if mtu == 0 {
+		mtu = 1500
+	}
+	vtun := newVirtualTun(mtu)
+
+	netStack := stack.New(stack.Options{
+		NetworkProtocols:   []stack.NetworkProtocolFactory{ipv4.NewProtocol, ipv6.NewProtocol},
+		TransportProtocols: []stack.TransportProtocolFactory{tcp.NewProtocol, udp.NewProtocol},
 	})
-	if err != nil {
+	if err := netStack.CreateNIC(nicID, vtun.ep); err != nil {
 		_ = hyClient.Close()
-		return nil, fmt.Errorf("netunnel: stack: %w", err)
+		return nil, fmt.Errorf("netunnel: create NIC: %s", err)
 	}
-	if err := stack.Start(); err != nil {
+	// promiscuous + spoofing: NIC должен принимать и отправлять пакеты с
+	// адресами, которые не совпадают с его собственным — у нас точка-
+	// точка "тоннель в одно лицо", через этот единственный NIC идёт
+	// трафик к ЛЮБЫМ адресам назначения в интернете, не только к
+	// собственному IP интерфейса (как было бы у обычной NIC с реальным
+	// соседом по L2).
+	if err := netStack.SetPromiscuousMode(nicID, true); err != nil {
 		_ = hyClient.Close()
-		return nil, fmt.Errorf("netunnel: stack start: %w", err)
+		return nil, fmt.Errorf("netunnel: set promiscuous mode: %s", err)
+	}
+	if err := netStack.SetSpoofing(nicID, true); err != nil {
+		_ = hyClient.Close()
+		return nil, fmt.Errorf("netunnel: set spoofing: %s", err)
 	}
 
-	return &TunnelHandle{vtun: vtun, stack: stack, client: hyClient}, nil
+	if err := netStack.AddProtocolAddress(nicID, tcpip.ProtocolAddress{
+		Protocol:          ipv4.ProtocolNumber,
+		AddressWithPrefix: tcpip.AddrFromSlice(inet4.Addr().AsSlice()).WithPrefix(),
+	}, stack.AddressProperties{}); err != nil {
+		_ = hyClient.Close()
+		return nil, fmt.Errorf("netunnel: add IPv4 address: %s", err)
+	}
+	routes := []tcpip.Route{{Destination: header.IPv4EmptySubnet, NIC: nicID}}
+	if hasInet6 {
+		if err := netStack.AddProtocolAddress(nicID, tcpip.ProtocolAddress{
+			Protocol:          ipv6.ProtocolNumber,
+			AddressWithPrefix: tcpip.AddrFromSlice(inet6.Addr().AsSlice()).WithPrefix(),
+		}, stack.AddressProperties{}); err != nil {
+			_ = hyClient.Close()
+			return nil, fmt.Errorf("netunnel: add IPv6 address: %s", err)
+		}
+		routes = append(routes, tcpip.Route{Destination: header.IPv6EmptySubnet, NIC: nicID})
+	}
+	netStack.SetRouteTable(routes)
+
+	tcpForwarder := tcp.NewForwarder(netStack, 0, 1024, tcpForwarderHandler(hyClient))
+	netStack.SetTransportProtocolHandler(tcp.ProtocolNumber, tcpForwarder.HandlePacket)
+	udpForwarder := udp.NewForwarder(netStack, udpForwarderHandler(hyClient))
+	netStack.SetTransportProtocolHandler(udp.ProtocolNumber, udpForwarder.HandlePacket)
+
+	return &TunnelHandle{vtun: vtun, stack: netStack, client: hyClient}, nil
 }
 
 // WritePacket — пакет ОТ Swift (NEPacketTunnelFlow.readPackets), отдаём
@@ -279,7 +325,7 @@ func (h *TunnelHandle) ReadPacket() ([]byte, error) {
 }
 
 func (h *TunnelHandle) Stop() error {
-	_ = h.stack.Close()
+	h.stack.Close()
 	_ = h.vtun.Close()
 	return h.client.Close()
 }
