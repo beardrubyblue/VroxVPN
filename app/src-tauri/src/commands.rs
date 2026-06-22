@@ -131,6 +131,28 @@ pub async fn disconnect(app: AppHandle, state: State<'_, EngineState>) -> Result
     }
 }
 
+/// Суммарный трафик с начала тоннеля (не дельта/скорость — это считает
+/// фронтенд между двумя опросами, см. App.tsx). На Linux читается прямо
+/// с `tun-vroxory` через `/proc/net/dev`, на macOS — через
+/// `sendProviderMessage` к `.appex` (см. doc-комментарии
+/// `engine::linux::get_traffic_totals`/`engine::macos::get_traffic_totals`).
+/// Возвращает ошибку, если тоннель не активен — фронтенд должен сам не
+/// опрашивать в это время (см. App.tsx, опрос только пока connected).
+#[derive(Serialize, Clone)]
+pub struct TrafficTotals {
+    pub upload_bytes: u64,
+    pub download_bytes: u64,
+}
+
+#[tauri::command]
+pub async fn get_traffic_totals() -> Result<TrafficTotals, String> {
+    let (upload_bytes, download_bytes) = engine::get_traffic_totals().await?;
+    Ok(TrafficTotals {
+        upload_bytes,
+        download_bytes,
+    })
+}
+
 #[tauri::command]
 pub fn get_settings() -> serde_json::Value {
     serde_json::Value::Object(settings::load())

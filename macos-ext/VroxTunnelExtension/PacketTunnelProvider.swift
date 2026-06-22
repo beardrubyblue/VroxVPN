@@ -162,7 +162,18 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
         completionHandler()
     }
 
+    /// Единственная поддерживаемая команда — "getStats" (см. engine/macos.rs::
+    /// get_traffic_totals_blocking, который шлёт её через sendProviderMessage
+    /// по запросу фронтенда). Ответ — JSON от NetunnelTunnelHandle.getStats()
+    /// (см. netunnel.go), как есть, без перекодирования здесь.
     override func handleAppMessage(_ messageData: Data, completionHandler: ((Data?) -> Void)?) {
-        completionHandler?(nil)
+        guard let command = String(data: messageData, encoding: .utf8), command == "getStats",
+              let handle = tunnelHandle
+        else {
+            completionHandler?(nil)
+            return
+        }
+        let stats = handle.getStats()
+        completionHandler?(stats.data(using: .utf8))
     }
 }

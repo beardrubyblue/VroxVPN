@@ -9,6 +9,31 @@ interface ConnectionStatus {
   server_name: string | null;
 }
 
+interface TrafficTotals {
+  upload_bytes: number;
+  download_bytes: number;
+}
+
+interface TrafficDisplay {
+  upSpeed: number;
+  downSpeed: number;
+  totalUp: number;
+  totalDown: number;
+}
+
+function formatSpeed(bytesPerSec: number): string {
+  if (bytesPerSec < 1024) return `${Math.round(bytesPerSec)} Б/с`;
+  if (bytesPerSec < 1024 * 1024) return `${Math.round(bytesPerSec / 1024)} КБ/с`;
+  return `${(bytesPerSec / (1024 * 1024)).toFixed(1)} МБ/с`;
+}
+
+function formatBytes(bytes: number): string {
+  if (bytes < 1024) return `${bytes} Б`;
+  if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} КБ`;
+  if (bytes < 1024 * 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)} МБ`;
+  return `${(bytes / (1024 * 1024 * 1024)).toFixed(2)} ГБ`;
+}
+
 interface Server {
   name: string;
   host: string;
@@ -132,6 +157,7 @@ function App() {
     server_name: null,
   });
   const [toast, setToast] = useState<Toast | null>(null);
+  const [traffic, setTraffic] = useState<TrafficDisplay | null>(null);
 
   const [subscriptions, setSubscriptions] = useState<Subscription[]>([]);
   const subscriptionsRef = useRef<Subscription[]>([]);
@@ -217,6 +243,51 @@ function App() {
     return () => unlisten?.();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // опрос трафика раз в секунду, как core/stats.py в питон-версии — там
+  // дельта считалась в фоновом потоке Python, здесь её считает сам
+  // фронтенд между двумя последовательными опросами get_traffic_totals
+  // (бэкенд отдаёт только суммарные байты с начала тоннеля, см.
+  // commands.rs/engine::get_traffic_totals). Останавливается и
+  // сбрасывается при disconnect — иначе показывал бы устаревшие/чужие
+  // цифры на следующем connect.
+  useEffect(() => {
+    if (!status.connected) {
+      setTraffic(null);
+      return;
+    }
+    let prev: { up: number; down: number; time: number } | null = null;
+    let cancelled = false;
+    const tick = async () => {
+      try {
+        const totals = await invoke<TrafficTotals>("get_traffic_totals");
+        if (cancelled) return;
+        const now = Date.now();
+        if (prev) {
+          const dt = (now - prev.time) / 1000;
+          setTraffic({
+            upSpeed: dt > 0 ? Math.max(0, (totals.upload_bytes - prev.up) / dt) : 0,
+            downSpeed: dt > 0 ? Math.max(0, (totals.download_bytes - prev.down) / dt) : 0,
+            totalUp: totals.upload_bytes,
+            totalDown: totals.download_bytes,
+          });
+        } else {
+          setTraffic({ upSpeed: 0, downSpeed: 0, totalUp: totals.upload_bytes, totalDown: totals.download_bytes });
+        }
+        prev = { up: totals.upload_bytes, down: totals.download_bytes, time: now };
+      } catch {
+        // тоннель мог отключиться между опросами — следующий
+        // refreshStatus() (из toggleConnection/vpn-disconnected-unexpectedly)
+        // поправит status.connected и остановит этот эффект сам
+      }
+    };
+    tick();
+    const interval = setInterval(tick, 1000);
+    return () => {
+      cancelled = true;
+      clearInterval(interval);
+    };
+  }, [status.connected]);
 
   // подписку на "выбрать сервер" из трея держим через ref на subscriptions
   // (она меняется часто — на каждый пинг/обновление), а на toggle и
@@ -416,6 +487,21 @@ function App() {
 
       {page === "home" ? (
         <main className="page">
+          {status.connected && traffic && (
+            <div className="card traffic-card">
+              <div className="traffic-row">
+                <span className="traffic-label">↑ Отдано</span>
+                <span className="traffic-speed">{formatSpeed(traffic.upSpeed)}</span>
+                <span className="traffic-total">{formatBytes(traffic.totalUp)}</span>
+              </div>
+              <div className="traffic-row">
+                <span className="traffic-label">↓ Получено</span>
+                <span className="traffic-speed">{formatSpeed(traffic.downSpeed)}</span>
+                <span className="traffic-total">{formatBytes(traffic.totalDown)}</span>
+              </div>
+            </div>
+          )}
+
           {subscriptions.length === 0 && (
             <div className="empty-placeholder">
               Нет подписок — добавь через кнопку «Добавить» снизу

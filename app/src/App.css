@@ -166,6 +166,40 @@ body {
   color: var(--dim-fg);
 }
 
+/* ---- статистика трафика (см. App.tsx::traffic) ---- */
+.traffic-card {
+  padding: 10px 16px;
+  margin-bottom: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.traffic-row {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  font-size: 13px;
+}
+
+.traffic-label {
+  flex: 1;
+  color: var(--dim-fg);
+}
+
+.traffic-speed {
+  font-weight: 600;
+  min-width: 70px;
+  text-align: right;
+}
+
+.traffic-total {
+  color: var(--dim-fg);
+  font-size: 12px;
+  min-width: 60px;
+  text-align: right;
+}
+
 .empty-placeholder {
   padding: 24px 16px;
   text-align: center;

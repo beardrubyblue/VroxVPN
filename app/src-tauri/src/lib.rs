@@ -31,6 +31,7 @@ pub fn run() {
             commands::get_status,
             commands::connect,
             commands::disconnect,
+            commands::get_traffic_totals,
             commands::fetch_servers,
             commands::update_geoip,
             commands::update_geosite,

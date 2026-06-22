@@ -41,6 +41,7 @@ import (
 	"net/netip"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"gvisor.dev/gvisor/pkg/tcpip"
@@ -100,10 +101,21 @@ type CongestionConfig struct {
 }
 
 // TunnelHandle — gomobile-совместимый хендл одного активного соединения.
+//
+// txBytes/rxBytes — счётчики трафика для UI (см. docs/ARCHITECTURE.md,
+// раздел про traffic stats). Считаются на границе WritePacket/ReadPacket
+// (Swift↔Go), а не внутри relayTCP/relayUDP (handler.go) — это
+// единственная точка, через которую проходит вообще весь трафик тоннеля
+// в обе стороны, независимо от протокола, ровно как раньше на Linux
+// считались rx/tx на самом tun-интерфейсе (core/stats.py::
+// _read_interface_bytes), а не на отдельных соединениях.
 type TunnelHandle struct {
 	vtun   *virtualTun
 	stack  *stack.Stack
 	client client.Client
+
+	txBytes uint64 // WritePacket: пакеты ОТ ОС, "наружу" через тоннель — upload
+	rxBytes uint64 // ReadPacket: пакеты К ОС, "из" тоннеля — download
 }
 
 // normalizeCertHash — копия app/cmd/client.go::normalizeCertHash (не
@@ -344,13 +356,30 @@ func StartTunnel(configJSON string) (*TunnelHandle, error) {
 // WritePacket — пакет ОТ Swift (NEPacketTunnelFlow.readPackets), отдаём
 // в gVisor stack как будто он пришёл из настоящего TUN.
 func (h *TunnelHandle) WritePacket(pkt []byte) error {
+	atomic.AddUint64(&h.txBytes, uint64(len(pkt)))
 	return h.vtun.deliverInbound(pkt)
 }
 
 // ReadPacket — блокируется до следующего пакета, который gVisor stack
 // хочет отправить К Swift (NEPacketTunnelFlow.writePackets), либо до Stop().
 func (h *TunnelHandle) ReadPacket() ([]byte, error) {
-	return h.vtun.takeOutbound()
+	pkt, err := h.vtun.takeOutbound()
+	if err == nil {
+		atomic.AddUint64(&h.rxBytes, uint64(len(pkt)))
+	}
+	return pkt, err
+}
+
+// GetStats — снимок суммарного трафика с начала жизни хендла, в виде
+// JSON-строки (gomobile bind не маршалит произвольные Go-структуры через
+// границу с Swift — см. doc-комментарий пакета). Опрашивается из Swift
+// по запросу через handleAppMessage, не пушится самостоятельно: PacketTunnelProvider
+// не имеет собственного таймера, инициатива опроса — на стороне Rust
+// (см. engine/macos.rs::get_traffic_totals_blocking).
+func (h *TunnelHandle) GetStats() string {
+	tx := atomic.LoadUint64(&h.txBytes)
+	rx := atomic.LoadUint64(&h.rxBytes)
+	return fmt.Sprintf(`{"txBytes":%d,"rxBytes":%d}`, tx, rx)
 }
 
 func (h *TunnelHandle) Stop() error {
