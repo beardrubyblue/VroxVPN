@@ -234,15 +234,36 @@ fn wait_for_connect_result_blocking(connection: &Retained<NEVPNConnection>) -> R
         )
     };
 
-    // статус мог уже измениться между startVPNTunnelAndReturnError и
-    // регистрацией обзёрвера — проверяем текущий сразу, не только то,
-    // что придёт через уведомление.
+    // ⚠ РЕАЛЬНЫЙ БАГ, подтверждён вживую (тоннель отключался сам через
+    // ~2.5с на КАЖДОЙ попытке, "Stop command received" в логе
+    // расширения почти сразу после "Calling startTunnelWithOptions"):
+    // если читать connection.status() сразу после
+    // startVPNTunnelAndReturnError(), система может ещё не успеть
+    // обновить статус с прошлого .Disconnected на .Connecting — гонка
+    // между синхронным возвратом из start-вызова и асинхронным
+    // обновлением статуса через XPC. Старая версия этого кода доверяла
+    // ПЕРВОМУ прочитанному статусу так же, как и статусам из
+    // уведомлений, и мгновенно проваливала попытку на устаревшем
+    // "Disconnected" от прошлой сессии, не дав тоннелю ни единого шанса
+    // подняться. Исправлено: начальное значение не считается провалом —
+    // только реальный статус, пришедший ЧЕРЕЗ уведомление (т.е.
+    // подтверждённый переход, не устаревший снимок).
     let initial = unsafe { connection.status() };
 
     let result = (|| {
-        let mut current = initial;
+        if initial == NEVPNStatus::Connected {
+            return Ok(());
+        }
         let deadline = std::time::Instant::now() + std::time::Duration::from_secs(25);
         loop {
+            let remaining = deadline.saturating_duration_since(std::time::Instant::now());
+            if remaining.is_zero() {
+                return Err("тоннель не поднялся за 25с (таймаут)".to_string());
+            }
+            let current = match rx.recv_timeout(remaining) {
+                Ok(status) => status,
+                Err(_) => return Err("тоннель не поднялся за 25с (таймаут)".to_string()),
+            };
             match current {
                 NEVPNStatus::Connected => return Ok(()),
                 NEVPNStatus::Disconnected | NEVPNStatus::Invalid => {
@@ -252,14 +273,6 @@ fn wait_for_connect_result_blocking(connection: &Retained<NEVPNConnection>) -> R
                     ));
                 }
                 _ => {}
-            }
-            let remaining = deadline.saturating_duration_since(std::time::Instant::now());
-            if remaining.is_zero() {
-                return Err("тоннель не поднялся за 25с (таймаут)".to_string());
-            }
-            match rx.recv_timeout(remaining) {
-                Ok(status) => current = status,
-                Err(_) => return Err("тоннель не поднялся за 25с (таймаут)".to_string()),
             }
         }
     })();
