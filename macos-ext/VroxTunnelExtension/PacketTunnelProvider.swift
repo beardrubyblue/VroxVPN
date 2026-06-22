@@ -61,8 +61,20 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
         // excludedRoutes (сервер + приватные диапазоны + RU-geoip) придут
         // в providerConfig отдельным полем — TODO при первой интеграции
         // с config_gen::generate_excluded_routes (см. control-bridge).
-        let inet4 = (providerConfig["inet4Addr"] as? String) ?? "100.100.100.101"
-        let settings = NEPacketTunnelNetworkSettings(tunnelRemoteAddress: inet4)
+        // inet4Addr приходит как CIDR ("100.100.100.101/30", формат
+        // config_gen.rs::generate_provider_config_json) — NEIPv4Settings/
+        // tunnelRemoteAddress ждут чистый адрес без префикса, без этого
+        // падает с "Invalid IPv4 address"/"Invalid NETunnelNetworkSettings
+        // tunnelRemoteAddress" (проверено вживую).
+        let inet4CIDR = (providerConfig["inet4Addr"] as? String) ?? "100.100.100.101/30"
+        let inet4 = inet4CIDR.split(separator: "/").first.map(String.init) ?? inet4CIDR
+        // tunnelRemoteAddress — адрес самого VPN-сервера (для идентификации
+        // тоннеля системой), не наш виртуальный локальный IP; берём host
+        // из providerConfig["server"] ("host:port"), с фоллбеком на inet4,
+        // если поля нет.
+        let remoteAddress = (providerConfig["server"] as? String)
+            .flatMap { $0.split(separator: ":").first.map(String.init) } ?? inet4
+        let settings = NEPacketTunnelNetworkSettings(tunnelRemoteAddress: remoteAddress)
         settings.ipv4Settings = NEIPv4Settings(addresses: [inet4], subnetMasks: ["255.255.255.252"])
         settings.ipv4Settings?.includedRoutes = [NEIPv4Route.default()]
         settings.mtu = (providerConfig["mtu"] as? NSNumber) ?? 1500
