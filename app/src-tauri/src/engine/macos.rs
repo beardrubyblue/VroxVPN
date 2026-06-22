@@ -37,9 +37,17 @@ use std::sync::mpsc;
 use block2::RcBlock;
 use objc2::rc::Retained;
 use objc2::runtime::AnyObject;
-use objc2_foundation::{NSArray, NSDictionary, NSError, NSString};
-use objc2_network_extension::{NETunnelProviderManager, NETunnelProviderProtocol};
-use tauri::AppHandle;
+use objc2_foundation::{
+    NSArray, NSDictionary, NSError, NSNotification, NSNotificationCenter, NSOperationQueue,
+    NSString,
+};
+use objc2_network_extension::{
+    NETunnelProviderManager, NETunnelProviderProtocol, NEVPNConnection, NEVPNStatus,
+    NEVPNStatusDidChangeNotification,
+};
+use tauri::{AppHandle, Emitter, Manager};
+
+use crate::engine::{EngineState, Slot};
 
 use crate::config_gen::{self, ExcludedRoutes};
 use crate::engine::ConnectionHandle;
@@ -186,13 +194,144 @@ fn build_provider_configuration(
     NSDictionary::from_slices(&key_refs, &values)
 }
 
+/// `startVPNTunnelAndReturnError` сам по себе НЕ подтверждает, что
+/// тоннель реально поднялся — он успешен, если ОС приняла запрос на
+/// старт (`status` переходит в `.Connecting`); реальный исход (успех
+/// или провал `startTunnel` внутри расширения) приходит позже
+/// асинхронно через `NEVPNStatusDidChangeNotification`. Подтверждено
+/// вживую: без этого UI показывал "подключено" даже когда расширение
+/// падало с ошибкой хендшейка — `spawn_client` считал успехом сам факт
+/// вызова, не дожидаясь реального статуса (тот же класс бага, что уже
+/// был исправлен для Linux через проверку "процесс не умер в первые
+/// 1.5с" — здесь аналог через статус соединения, а не процесс, потому
+/// что процесса, который мы сами породили, не существует).
+///
+/// Ждём терминального статуса (`.Connected` — успех, `.Disconnected`/
+/// `.Invalid` — провал) с таймаутом. 25с — с запасом под QUIC-хендшейк
+/// с retransmit'ами (наблюдалось до ~5с на провал в логах расширения),
+/// не точная наука, можно скорректировать по реальным данным позже.
+fn wait_for_connect_result_blocking(connection: &Retained<NEVPNConnection>) -> Result<(), String> {
+    let (tx, rx) = mpsc::channel::<NEVPNStatus>();
+    let center = NSNotificationCenter::defaultCenter();
+    let main_queue = NSOperationQueue::mainQueue();
+
+    // `addObserverForName_object_queue_usingBlock` принимает только
+    // `'static`-блок (DynBlock без явного лайфтайма) — заимствование
+    // `&NEVPNConnection` сюда не подходит, нужен честный `Retained`
+    // (`.clone()` — просто ARC `retain`, не глубокое копирование).
+    let connection_for_block = connection.clone();
+    let observer_block = block2::RcBlock::new(move |_note: std::ptr::NonNull<NSNotification>| {
+        let status = unsafe { connection_for_block.status() };
+        let _ = tx.send(status);
+    });
+
+    let token = unsafe {
+        center.addObserverForName_object_queue_usingBlock(
+            Some(NEVPNStatusDidChangeNotification),
+            None,
+            Some(&main_queue),
+            &observer_block,
+        )
+    };
+
+    // статус мог уже измениться между startVPNTunnelAndReturnError и
+    // регистрацией обзёрвера — проверяем текущий сразу, не только то,
+    // что придёт через уведомление.
+    let initial = unsafe { connection.status() };
+
+    let result = (|| {
+        let mut current = initial;
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(25);
+        loop {
+            match current {
+                NEVPNStatus::Connected => return Ok(()),
+                NEVPNStatus::Disconnected | NEVPNStatus::Invalid => {
+                    return Err(format!(
+                        "тоннель не поднялся (статус {})",
+                        status_to_str(current)
+                    ));
+                }
+                _ => {}
+            }
+            let remaining = deadline.saturating_duration_since(std::time::Instant::now());
+            if remaining.is_zero() {
+                return Err("тоннель не поднялся за 25с (таймаут)".to_string());
+            }
+            match rx.recv_timeout(remaining) {
+                Ok(status) => current = status,
+                Err(_) => return Err("тоннель не поднялся за 25с (таймаут)".to_string()),
+            }
+        }
+    })();
+
+    unsafe { center.removeObserver_name_object(token.as_ref(), None, None) };
+    result
+}
+
+fn status_to_str(status: NEVPNStatus) -> &'static str {
+    match status {
+        NEVPNStatus::Invalid => "Invalid",
+        NEVPNStatus::Disconnected => "Disconnected",
+        NEVPNStatus::Connecting => "Connecting",
+        NEVPNStatus::Connected => "Connected",
+        NEVPNStatus::Reasserting => "Reasserting",
+        NEVPNStatus::Disconnecting => "Disconnecting",
+        _ => "Unknown",
+    }
+}
+
+/// Долгоживущий наблюдатель за СОБСТВЕННЫМ разрывом соединения ПОСЛЕ
+/// удачного коннекта — аналог Linux-варианта, который слушает
+/// `CommandEvent::Terminated` осиротевшего pkexec-процесса и эмитит
+/// `vpn-disconnected-unexpectedly`, если к этому моменту состояние
+/// всё ещё `Connected` (не обычный disconnect, который сам переводит
+/// слот в `Disconnecting`/`Idle`). Здесь источник события другой (NE
+/// статус, не выход процесса), но контракт с фронтендом тот же.
+/// Намеренно не снимается (`removeObserver`) — соединение на macOS
+/// одно на всё приложение, обзёрвер живёт до конца процесса, лишний
+/// `Box::leak`/эквивалент не страшнее, чем держать его в каком-то
+/// глобальном состоянии specifically для одного снятия при выходе.
+fn watch_for_unexpected_disconnect(app: AppHandle, connection: Retained<NEVPNConnection>) {
+    let center = NSNotificationCenter::defaultCenter();
+    let main_queue = NSOperationQueue::mainQueue();
+
+    let block = block2::RcBlock::new(move |_note: std::ptr::NonNull<NSNotification>| {
+        let status = unsafe { connection.status() };
+        if !matches!(status, NEVPNStatus::Disconnected | NEVPNStatus::Invalid) {
+            return;
+        }
+        let state = app.state::<EngineState>();
+        let mut guard = state.0.lock().unwrap();
+        if matches!(&*guard, Slot::Connected(_)) {
+            *guard = Slot::Idle;
+            drop(guard);
+            let _ = app.emit("vpn-disconnected-unexpectedly", status_to_str(status));
+        }
+    });
+
+    let token = unsafe {
+        center.addObserverForName_object_queue_usingBlock(
+            Some(NEVPNStatusDidChangeNotification),
+            None,
+            Some(&main_queue),
+            &block,
+        )
+    };
+    // блок и токен должны жить вечно (или до следующего connect) —
+    // иначе ARC освободит блок, и NotificationCenter перестанет звать
+    // обзёрвер при следующем же статусе.
+    std::mem::forget(block);
+    std::mem::forget(token);
+}
+
 /// Вся синхронная objc2-логика старта тоннеля — выполняется целиком на
-/// одном blocking-потоке (см. doc-комментарий модуля). `app` здесь не
-/// нужен (excluded routes/provider config уже посчитаны заранее, до
-/// перехода на blocking-поток — `config_gen`-функциям нужен `&AppHandle`
-/// для geoip/geosite, а `AppHandle` не `Send`-безопасен для произвольного
-/// потока так же просто, поэтому считаем это на вызывающей стороне).
+/// одном blocking-потоке (см. doc-комментарий модуля). `app` нужен
+/// здесь только для `watch_for_unexpected_disconnect` (excluded
+/// routes/provider config уже посчитаны заранее, до перехода на
+/// blocking-поток — `config_gen`-функциям нужен `&AppHandle` для
+/// geoip/geosite, а сам `AppHandle` передаём по значению, он `Send`).
 fn spawn_client_blocking(
+    app: AppHandle,
     server: &Server,
     config_json: &str,
     excluded: &ExcludedRoutes,
@@ -237,7 +376,11 @@ fn spawn_client_blocking(
     load_from_preferences_blocking(&manager)?;
 
     let connection = unsafe { manager.connection() };
-    unsafe { connection.startVPNTunnelAndReturnError() }.map_err(|e| nserror_to_string(&e))
+    unsafe { connection.startVPNTunnelAndReturnError() }.map_err(|e| nserror_to_string(&e))?;
+
+    wait_for_connect_result_blocking(&connection)?;
+    watch_for_unexpected_disconnect(app, connection);
+    Ok(())
 }
 
 pub async fn spawn_client(
@@ -256,9 +399,10 @@ pub async fn spawn_client(
         .to_string();
     let mtu = provider_config["mtu"].as_u64().unwrap_or(1500) as u32;
     let server = server.clone();
+    let app_for_blocking = app.clone();
 
     tauri::async_runtime::spawn_blocking(move || {
-        spawn_client_blocking(&server, &config_json, &excluded, &inet4_addr, mtu)
+        spawn_client_blocking(app_for_blocking, &server, &config_json, &excluded, &inet4_addr, mtu)
     })
     .await
     .map_err(|e| e.to_string())??;
