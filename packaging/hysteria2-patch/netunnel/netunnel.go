@@ -41,6 +41,7 @@ import (
 	"net/netip"
 	"strings"
 	"sync"
+	"time"
 
 	"gvisor.dev/gvisor/pkg/tcpip"
 	"gvisor.dev/gvisor/pkg/tcpip/header"
@@ -234,9 +235,37 @@ func StartTunnel(configJSON string) (*TunnelHandle, error) {
 	if err != nil {
 		return nil, err
 	}
-	hyClient, _, err := client.NewClient(hyConfig)
-	if err != nil {
-		return nil, fmt.Errorf("netunnel: hysteria client: %w", err)
+	// client.NewClient не принимает context — это синхронный вызов
+	// (внутри сразу делает реальный QUIC-дозвон, не лениво), без
+	// внешнего таймаута своего собственного. Живым тестом подтверждено,
+	// что сам коннект через netunnel реально работает (curl по IP через
+	// тоннель — успех), но иногда хендшейк зависал намного дольше, чем
+	// MaxIdleTimeout=30с по умолчанию (core/client/config.go::
+	// verifyAndFill) — внешний таймаут здесь просто страховка на этот
+	// случай, чтобы UI получал внятную ошибку, а не тишину навсегда.
+	type clientResult struct {
+		client client.Client
+		err    error
+	}
+	resultCh := make(chan clientResult, 1)
+	go func() {
+		hyClient, _, clientErr := client.NewClient(hyConfig)
+		resultCh <- clientResult{client: hyClient, err: clientErr}
+	}()
+
+	var hyClient client.Client
+	select {
+	case res := <-resultCh:
+		if res.err != nil {
+			return nil, fmt.Errorf("netunnel: hysteria client: %w", res.err)
+		}
+		hyClient = res.client
+	case <-time.After(20 * time.Second):
+		// горутина выше продолжит висеть в фоне (NewClient не отменяем,
+		// у него нет context) — известная утечка на этот случай, не
+		// страшно: TunnelHandle всё равно не создаётся, повторный
+		// StartTunnel запустит новую попытку независимо от этой.
+		return nil, errors.New("netunnel: hysteria client: таймаут 20с — зависание ДО QUIC-хендшейка (ConnFactory/net.ListenUDP?), не сетевая проблема на уровне QUIC")
 	}
 
 	inet4, err := netip.ParsePrefix(cfg.Inet4Addr)

@@ -51,13 +51,13 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
         }
         self.tunnelHandle = handle
 
-        // Сетевые настройки тоннеля. killswitch-механизм под NE (см.
-        // docs/ARCHITECTURE.md, Фаза 4) — includeAllNetworks=true,
-        // выставляется на NETunnelProviderProtocol в хост-приложении
-        // (см. AppDelegate.swift), не здесь: это свойство протокола
-        // конфигурации, а не NEPacketTunnelNetworkSettings. Весь трафик
-        // идёт через тоннель по умолчанию, без отдельного pf-ruleset,
-        // который был нужен в удалённом sidecar-пути.
+        // Сетевые настройки тоннеля. killswitch под NE (см.
+        // docs/ARCHITECTURE.md, Фаза 4) — это includedRoutes=[default]
+        // ниже, не includeAllNetworks (тот специально убран — подтверждено
+        // вживую, что он блокирует и собственный трафик тоннеля до того,
+        // как тоннель поднялся, см. ARCHITECTURE.md). Весь трафик идёт
+        // через тоннель по умолчанию, без отдельного pf-ruleset, который
+        // был нужен в удалённом sidecar-пути.
         // excludedRoutes (сервер + приватные диапазоны + RU-geoip) придут
         // в providerConfig отдельным полем — TODO при первой интеграции
         // с config_gen::generate_excluded_routes (см. control-bridge).
@@ -78,6 +78,15 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
         settings.ipv4Settings = NEIPv4Settings(addresses: [inet4], subnetMasks: ["255.255.255.252"])
         settings.ipv4Settings?.includedRoutes = [NEIPv4Route.default()]
         settings.mtu = (providerConfig["mtu"] as? NSNumber) ?? 1500
+        // Без dnsSettings DNS-запросы продолжают идти на оригинальный
+        // (обычно приватный, типа 192.168.x.x) резолвер системы — он
+        // недостижим через тоннель, и резолвинг по имени просто не
+        // работает (проверено вживую: curl по IP — успех, curl по имени
+        // — "Could not resolve host", при реально поднятом и рабочем
+        // тоннеле). Публичные DNS реально резолвятся через тот же
+        // udpForwarderHandler (netunnel/handler.go) — для стека порт 53
+        // ничем не отличается от любого другого UDP-трафика.
+        settings.dnsSettings = NEDNSSettings(servers: ["1.1.1.1", "8.8.8.8"])
 
         self.setTunnelNetworkSettings(settings) { [weak self] error in
             guard let self else { return }
