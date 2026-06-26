@@ -34,12 +34,21 @@ APP_DISTRIBUTION_IDENTITY="${APP_DISTRIBUTION_IDENTITY:-Apple Distribution: Alek
 INSTALLER_IDENTITY="${INSTALLER_IDENTITY:-3rd Party Mac Developer Installer: Aleksandr Sysoev (QRZT5R3Q28)}"
 HOST_PROFILE_NAME="${HOST_PROFILE_NAME:-vrox.vpn App Store}"
 
+# App Store Connect требует УНИКАЛЬНЫЙ CFBundleVersion на каждую
+# загрузку одной и той же CFBundleShortVersionString — без этого вторая
+# загрузка той же версии 4.0.0 либо отклоняется, либо путается с
+# первой. git rev-list --count даёт монотонно растущее число без
+# отдельного счётчика на ведение руками — растёт само с каждым коммитом.
+BUILD_NUMBER="$(git -C "$REPO_ROOT" rev-list --count HEAD)"
+echo "→ build-номер (CFBundleVersion): $BUILD_NUMBER"
+
 echo "==> [1/5] Go-фреймворк (GoNetunnel.xcframework)"
 "$SCRIPT_DIR/build-go-framework.sh" macos
 
 echo "==> [2/5] Xcode .appex (Release — теперь Apple Distribution + App Store профиль)"
 xcodebuild -project "$SCRIPT_DIR/VroxVPNNetworkExtension.xcodeproj" \
-    -scheme VroxVPNHost -configuration Release -allowProvisioningUpdates build \
+    -scheme VroxVPNHost -configuration Release -allowProvisioningUpdates \
+    CURRENT_PROJECT_VERSION="$BUILD_NUMBER" build \
     | tail -5
 
 echo "==> [3/5] Tauri .app (release)"
@@ -67,6 +76,12 @@ rm -rf "$APP_PATH/Contents/PlugIns/VroxTunnelExtension.appex"
 mkdir -p "$APP_PATH/Contents/PlugIns"
 ditto "$RELEASE_APPEX" "$APP_PATH/Contents/PlugIns/VroxTunnelExtension.appex"
 cp "$HOST_PROFILE" "$APP_PATH/Contents/embedded.provisionprofile"
+
+# Tauri сам не прокидывает отдельный build-номер (CFBundleVersion у
+# собранного .app совпадает с CFBundleShortVersionString) — выставляем
+# тот же BUILD_NUMBER, что и у расширения выше, чтобы оба бандла внутри
+# .pkg росли синхронно и не путали App Store Connect.
+/usr/libexec/PlistBuddy -c "Set :CFBundleVersion $BUILD_NUMBER" "$APP_PATH/Contents/Info.plist"
 
 # .appex НЕ трогаем (уже подписан Distribution-сертификатом и своим
 # App Store профилем на шаге [2/5], тем же кодом, что и

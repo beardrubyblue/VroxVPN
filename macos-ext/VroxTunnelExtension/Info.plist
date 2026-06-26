@@ -19,7 +19,15 @@
     <key>CFBundleShortVersionString</key>
     <string>4.0.0</string>
     <key>CFBundleVersion</key>
-    <string>1</string>
+    <!-- Раньше было захардкожено "1" — App Store Connect требует
+         УНИКАЛЬНЫЙ build-номер на каждую загрузку в TestFlight, без
+         ручного инкремента вторая загрузка той же версии 4.0.0 либо
+         отклонялась бы, либо тихо путалась с первой. $(CURRENT_PROJECT_
+         VERSION) подставляется из CURRENT_PROJECT_VERSION build setting,
+         который build-testflight.sh передаёт через `git rev-list --count
+         HEAD` — монотонно растёт с каждым коммитом, без отдельного
+         счётчика для ручного ведения. -->
+    <string>$(CURRENT_PROJECT_VERSION)</string>
     <key>LSMinimumSystemVersion</key>
     <string>$(MACOSX_DEPLOYMENT_TARGET)</string>
     <key>NSExtension</key>
