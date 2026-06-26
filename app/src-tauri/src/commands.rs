@@ -112,9 +112,13 @@ pub async fn disconnect(app: AppHandle, state: State<'_, EngineState>) -> Result
     match engine::kill_client(&app, &conn.config_path).await {
         Ok(()) => {
             // на Linux это обёртка pkexec-процесса (реальный root-процесс
-            // hysteria2 уже убит выше); на macOS — `()`, no-op (Copy-тип,
-            // `drop()` на нём — no-op с warning'ом компилятора, поэтому
-            // `let _ =` вместо явного drop)
+            // hysteria2 уже убит выше); на macOS — `()`, no-op. Тип
+            // платформозависимый (ConnectionHandle, см. engine.rs) —
+            // `let _ =` тут единственный вариант, который не ловит
+            // clippy-предупреждение на ОДНОЙ из двух платформ
+            // (`conn.handle;` ловит no_effect на macOS, `drop(...)` ловит
+            // dropping_copy_types там же — на Linux всё было бы чисто).
+            #[allow(clippy::let_unit_value)]
             let _ = conn.handle;
             *state.0.lock().unwrap() = Slot::Idle;
             // best-effort: если kill switch не был включён, это безвредный

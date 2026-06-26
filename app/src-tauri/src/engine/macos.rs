@@ -314,15 +314,24 @@ fn status_to_str(status: NEVPNStatus) -> &'static str {
 /// подтверждено вживую) это неограниченно растущая утечка: каждый
 /// старый обзёрвер продолжает жить и реагировать на каждый последующий
 /// статус, даже от уже совсем других соединений.
+type ObserverToken = Retained<objc2::runtime::ProtocolObject<dyn objc2_foundation::NSObjectProtocol>>;
+
+// `ObserverToken` (objc2 `Retained<...>`) сам по себе не `Send`/`Sync` —
+// clippy справедливо предупреждает, что `Arc` тут не даёт автоматической
+// межпотоковой безопасности для содержимого. Это и не нужно: реальную
+// безопасность даёт сам `Mutex` (эксклюзивный доступ ровно одного потока
+// в момент времени — записывающего на spawn_blocking-потоке при
+// регистрации, читающего на главном run loop'е при самоудалении), а не
+// то, что `Retained` сам по себе можно безопасно расшарить без
+// синхронизации. `Rc<RefCell<>>` не подходит именно потому, что доступ
+// идёт с ДВУХ настоящих ОС-потоков (см. doc-комментарий функции выше).
+#[allow(clippy::arc_with_non_send_sync)]
 fn watch_for_unexpected_disconnect(app: AppHandle, connection: Retained<NEVPNConnection>) {
     let center = NSNotificationCenter::defaultCenter();
     let main_queue = NSOperationQueue::mainQueue();
 
-    let token_cell: std::sync::Arc<
-        std::sync::Mutex<
-            Option<Retained<objc2::runtime::ProtocolObject<dyn objc2_foundation::NSObjectProtocol>>>,
-        >,
-    > = std::sync::Arc::new(std::sync::Mutex::new(None));
+    let token_cell: std::sync::Arc<std::sync::Mutex<Option<ObserverToken>>> =
+        std::sync::Arc::new(std::sync::Mutex::new(None));
     let token_cell_for_block = token_cell.clone();
 
     let block = block2::RcBlock::new(move |_note: std::ptr::NonNull<NSNotification>| {

@@ -123,7 +123,7 @@ fn parse_quic_params(fm_raw: &str) -> HashMap<String, JsonValue> {
 
 fn try_base64_decode(text: &str) -> String {
     let mut padded = text.to_string();
-    while padded.len() % 4 != 0 {
+    while !padded.len().is_multiple_of(4) {
         padded.push('=');
     }
     match STANDARD.decode(&padded) {
