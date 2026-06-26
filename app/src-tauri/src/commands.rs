@@ -204,6 +204,29 @@ pub async fn check_app_update() -> Result<app_update::UpdateCheck, String> {
     app_update::check_update(5).await
 }
 
+/// Установка обновления на Linux — скачивание .deb + privileged dpkg -i
+/// (см. `engine::linux::install_update`). На macOS реальная установка
+/// идёт через штатный `tauri-plugin-updater` напрямую с фронтенда
+/// (`check()`/`downloadAndInstall()` из `@tauri-apps/plugin-updater`,
+/// см. App.tsx) — там этой команде нечего делать, она тут просто не
+/// вызывается (UI сам решает, какой путь использовать, по платформе).
+#[tauri::command]
+pub async fn install_update_linux(
+    app: AppHandle,
+    download_url: String,
+    sha256: String,
+) -> Result<(), String> {
+    #[cfg(target_os = "linux")]
+    {
+        engine::install_update(&app, &download_url, &sha256).await
+    }
+    #[cfg(not(target_os = "linux"))]
+    {
+        let _ = (app, download_url, sha256);
+        Err("install_update_linux вызывается только на Linux — на macOS используется tauri-plugin-updater".to_string())
+    }
+}
+
 #[tauri::command]
 pub fn quit_app(app: AppHandle) {
     app.exit(0);

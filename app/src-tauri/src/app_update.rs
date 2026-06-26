@@ -28,6 +28,12 @@ pub struct UpdateCheck {
     pub download_url: String,
     pub changelog: String,
     pub sha256: String,
+    /// На Linux фронтенд может сам установить найденное обновление
+    /// (см. commands::install_update_linux — download .deb + privileged
+    /// dpkg -i). На macOS обновления приходят через TestFlight — этой
+    /// странице/кнопке там нечего делать, информируем и не предлагаем
+    /// "установить" то, что некому ставить с нашей стороны.
+    pub auto_installable: bool,
 }
 
 fn version_tuple(v: &str) -> Vec<u32> {
@@ -64,5 +70,6 @@ pub async fn check_update(timeout_secs: u64) -> Result<UpdateCheck, String> {
         download_url: data.download_url,
         changelog: data.changelog,
         sha256: data.sha256,
+        auto_installable: cfg!(target_os = "linux"),
     })
 }

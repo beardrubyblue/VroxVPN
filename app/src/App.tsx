@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { readText } from "@tauri-apps/plugin-clipboard-manager";
+import { relaunch } from "@tauri-apps/plugin-process";
 import "./App.css";
 
 interface ConnectionStatus {
@@ -88,6 +89,7 @@ interface UpdateCheck {
   download_url: string;
   changelog: string;
   sha256: string;
+  auto_installable: boolean;
 }
 
 interface Toast {
@@ -183,6 +185,18 @@ function App() {
   const [geoipLoading, setGeoipLoading] = useState(false);
   const [geositeLoading, setGeositeLoading] = useState(false);
   const [updateChecking, setUpdateChecking] = useState(false);
+  const [updateInstalling, setUpdateInstalling] = useState(false);
+  // autoInstallable — Linux: можем сами скачать .deb и поставить через
+  // install_update_linux. На macOS обновления приходят через TestFlight
+  // — здесь просто сообщаем, что доступна версия, ставить нечем (и не
+  // нужно — TestFlight сам предложит обновление).
+  const [updateInfo, setUpdateInfo] = useState<{
+    version: string;
+    notes: string;
+    downloadUrl: string;
+    sha256: string;
+    autoInstallable: boolean;
+  } | null>(null);
 
   const [sheetOpen, setSheetOpen] = useState(false);
   const [sheetVisible, setSheetVisible] = useState(false);
@@ -471,19 +485,48 @@ function App() {
     await refreshStatus();
   }
 
+  // На macOS обновления приходят через TestFlight (App Store Connect
+  // сам доставляет и ставит) — здесь только информируем о версии, без
+  // кнопки "Установить". На Linux .deb качаем и ставим сами (см.
+  // install_update_linux / auto_installable в app_update.rs).
   async function checkAppUpdate() {
     setUpdateChecking(true);
+    setUpdateInfo(null);
     try {
       const r = await invoke<UpdateCheck>("check_app_update");
-      pushToast(
-        r.update_available
-          ? `Доступна версия ${r.latest} — ${r.changelog}`
-          : `У вас последняя версия (${r.current})`,
-      );
+      if (r.update_available) {
+        setUpdateInfo({
+          version: r.latest,
+          notes: r.changelog,
+          downloadUrl: r.download_url,
+          sha256: r.sha256,
+          autoInstallable: r.auto_installable,
+        });
+        pushToast(`Доступна версия ${r.latest} — ${r.changelog}`);
+      } else {
+        pushToast(`У вас последняя версия (${r.current})`);
+      }
     } catch (err) {
       pushToast(String(err), "error");
     }
     setUpdateChecking(false);
+  }
+
+  async function installUpdate() {
+    if (!updateInfo || !updateInfo.autoInstallable) return;
+    setUpdateInstalling(true);
+    try {
+      await invoke("install_update_linux", {
+        downloadUrl: updateInfo.downloadUrl,
+        sha256: updateInfo.sha256,
+      });
+      // dpkg уже заменил бинарник на диске — перезапуск подхватывает
+      // новую версию без ручных действий пользователя
+      await relaunch();
+    } catch (err) {
+      pushToast(String(err), "error");
+      setUpdateInstalling(false);
+    }
   }
 
   async function onRuBypassChange(checked: boolean) {
@@ -701,6 +744,26 @@ function App() {
                   {updateChecking ? <span className="spinner" /> : "Проверить обновления"}
                 </button>
               </div>
+              {updateInfo && (
+                <div className="list-row">
+                  <span className="row-title">
+                    Версия {updateInfo.version}
+                    {updateInfo.notes && (
+                      <>
+                        <br />
+                        <span className="row-subtitle">{updateInfo.notes}</span>
+                      </>
+                    )}
+                  </span>
+                  {updateInfo.autoInstallable ? (
+                    <button className="plain-button" disabled={updateInstalling} onClick={installUpdate}>
+                      {updateInstalling ? <span className="spinner" /> : "Установить"}
+                    </button>
+                  ) : (
+                    <span className="muted-note">через TestFlight</span>
+                  )}
+                </div>
+              )}
             </div>
           </div>
 

@@ -65,6 +65,20 @@ case "$cmd" in
         pgrep -f "vroxcore .*--config $config" > /dev/null
         ;;
 
+    install-deb)
+        # Свой механизм автообновления (см. engine/linux.rs::
+        # install_update) — штатный tauri-plugin-updater не умеет .deb.
+        # sha256 уже проверен на стороне Rust до вызова сюда — здесь
+        # только ограничение по пути (та же защита от произвольного
+        # пути, что и у остальных команд этого скрипта).
+        deb_path="${1:?missing deb path}"
+        case "$deb_path" in
+            /tmp/vroxory-vpn/*.deb) ;;
+            *) echo "недопустимый путь .deb: $deb_path" >&2; exit 1 ;;
+        esac
+        dpkg -i "$deb_path"
+        ;;
+
     mem-usage)
         # RSS root-процесса vroxcore в байтах, через /proc — наш
         # непривилегированный Rust-процесс не может прочитать

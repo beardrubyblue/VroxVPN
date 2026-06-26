@@ -759,3 +759,100 @@ Python-версия читала rx/tx байты прямо с TUN-интерф
 двумя последовательными опросами `get_traffic_totals`, как и в
 Python-версии (там дельту считал поток `TrafficStats._run`, здесь —
 React-эффект с `setInterval`).
+
+### Индикатор памяти тоннеля (бюджет ~50МБ, ориентир Apple для NE на iOS)
+
+Та же IPC-цепочка, что у статистики трафика выше (`PacketTunnelProvider.
+swift::handleAppMessage` → `sendProviderMessage`), просто дополнительное
+поле `rssBytes` в том же JSON-ответе. Считается на стороне Swift через
+`mach_task_basic_info`/`task_info(MACH_TASK_BASIC_INFO)` — RSS ВСЕГО
+процесса `.appex` (Swift runtime + NetworkExtension.framework + весь Go
+внутри, не только Go-куча — именно так Apple считает лимит на iOS, и
+именно так нужно сравнивать с бюджетом). На Linux аналог — RSS
+root-процесса `vroxcore` через `/proc/<pid>/status` (новая команда
+`mem-usage` в `privileged_helper.sh`, тот же паттерн, что у остальных
+привилегированных операций — непривилегированный Rust-процесс не может
+прочитать чужой `/proc` напрямую). Карточка в UI видна всегда, не
+только при подключении (явный запрос — следить за бюджетом независимо
+от состояния VPN).
+
+### Пинг серверов на macOS — `-W` означает разное на Linux и BSD ping
+
+`ping.rs` был портирован с Linux: `-W <секунды>` — таймаут ожидания
+ответа. На macOS (BSD `ping`) `-W` — то же самое, но в **миллисекундах**
+(см. `man ping`). `-W 3` на macOS означало «жди ответ 3мс» — гарантированный
+провал для любого реального хоста, отсюда прочерки в UI у всех
+пользователей macOS. Исправлено через `#[cfg(target_os = "macos")]` на
+флаг `-t` (таймаут в секундах, тот же смысл, что у Linux `-W`). Заодно
+добавлена прозрачная диагностика: `PingResult` теперь несёт текст
+реальной причины провала (раньше любая ошибка — DNS, permission denied,
+настоящий таймаут — выглядела одинаково голым прочерком); по тапу на
+прочерк в UI текст показывается тостом.
+
+### macOS: переход с прямого .dmg на TestFlight
+
+Прямое распространение (Developer ID + notarization + .dmg,
+описанное в разделах выше) было первым рабочим путём и оставалось
+основным до этого момента. Решено перейти на **TestFlight** (внутреннее
+тестирование через App Store Connect, не публичный App Store) — даёт
+полноценный канал обновлений силами самого Apple вместо
+самодельного: пробовали поднять `tauri-plugin-updater` для прямого
+.dmg-пути (signing keypair, `latest.json`-манифест, .tar.gz-артефакт),
+довели до рабочего прототипа, но решили не поддерживать собственную
+PKI/хостинг обновлений параллельно с TestFlight — избыточно. Код этого
+прототипа убран целиком (как и sidecar-путь раньше — два параллельных
+механизма доставки одной платформе не имеет смысла поддерживать).
+
+**Что реально меняется при переходе на App Store-подобную дистрибуцию:**
+
+1. **App Sandbox обязателен** на главном приложении (`com.apple.security.
+   app-sandbox` + `com.apple.security.network.client` в
+   `macos/entitlements.plist`) — при прямом .dmg-распространении
+   (Developer ID) сандбокс был не нужен вообще.
+2. **`vroxcore` (Linux-sidecar бинарник) убран из macOS-бандла** —
+   `tauri.macos.conf.json` (платформенный оверрайд, который Tauri сам
+   подхватывает по суффиксу имени файла) переопределяет
+   `bundle.externalBin` на пустой список только для macOS. Он давно не
+   используется на macOS (NetworkExtension), но раньше продолжал
+   попадать в бандл и проваливал sandbox-валидацию App Store Connect
+   (`vroxcore` не подписан с `app-sandbox` entitlement — не нужен ему,
+   это Linux-бинарник, но Apple проверяет ВСЕ исполняемые файлы внутри
+   `.app`).
+3. **Подпись — Apple Distribution, не Apple Development.** Нужны: новый
+   сертификат `Apple Distribution` (Xcode → Settings → Accounts →
+   Manage Certificates), отдельный `3rd Party Mac Developer Installer`
+   (для подписи `.pkg` — создаётся только через ручной CSR-flow:
+   Keychain Access → Certificate Assistant → Request a Certificate From
+   a Certificate Authority → загрузить `.certSigningRequest` на
+   developer.apple.com → Certificates → "+" → Mac Installer
+   Distribution), и два provisioning-профиля типа **"Mac App Store
+   Connect"** (не "Development"!) — по одному на `com.vroxory.vpn` и
+   `com.vroxory.vpn.tunnel`. `macos-ext/VroxVPNNetworkExtension.xcodeproj`
+   — Release-конфигурация обоих таргетов переведена на `CODE_SIGN_STYLE
+   = Manual` с явным `PROVISIONING_PROFILE_SPECIFIER` (раньше
+   `Automatic` — для обычного `build` action это означало "Development",
+   не "Distribution", несмотря на имя конфигурации Release; Xcode
+   переключается на Distribution автоматически только для `archive`
+   action, который мы не используем — собираем через `xcodebuild ...
+   build`, не `archive`).
+4. **Недостающие метаданные**, на которые жалуется валидатор App Store
+   Connect и которых не было нужно для .dmg: `CFBundleDisplayName` в
+   Info.plist расширения, `LSApplicationCategoryType` у главного
+   приложения (`bundle.category` в `tauri.conf.json`, Tauri сам
+   проставляет нужный UTI).
+5. **Загрузка `.pkg` в App Store Connect без `xcrun altool`/app-specific
+   password** — рабочий трюк: вручную собрать валидный `.xcarchive`
+   (`Info.plist` с `ApplicationProperties`/`SigningIdentity`/`Team` +
+   `Products/Applications/<app>.app`) и положить в
+   `~/Library/Developer/Xcode/Archives/<дата>/`. Xcode Organizer
+   сканирует эту папку по структуре, не по тому, кто архив создал —
+   подходит для любого внешнего тулчейна (тот же приём используют
+   Flutter/React Native CI). Дальше обычный GUI-флоу: Organizer →
+   Distribute App → **TestFlight Internal Only** (не "App Store
+   Connect" — этот вариант ведёт к полному review, нам нужен только
+   внутренний тест) → авторизация через уже залогиненный в Xcode Apple
+   ID, без app-specific password.
+
+`macos-ext/build-release.sh` (DMG) остался для быстрого локального
+теста без полного TestFlight-цикла — `macos-ext/build-testflight.sh`
+делает то же самое плюс Distribution-подпись и `.pkg`-упаковку.

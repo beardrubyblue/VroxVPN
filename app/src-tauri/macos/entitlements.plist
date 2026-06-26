@@ -26,12 +26,14 @@
   com.apple.developer.networking.networkextension — ОБЯЗАТЕЛЕН для
   NEPacketTunnelProvider, выдан Apple по отдельному запросу.
 
-  Не сэндбоксим (App Sandbox entitlements не добавлены у ГЛАВНОГО
-  приложения) — оно не распространяется через Mac App Store, а
-  напрямую через .dmg (Developer ID + notarization). Сэндбокс нужен
-  только самому .appex-расширению (отдельные entitlements в
-  macos-ext/VroxTunnelExtension/), это требование самого
-  NetworkExtension.framework, не главного приложения.
+  App Sandbox ВКЛЮЧЁН — переход на распространение через TestFlight/Mac
+  App Store (см. docs/ARCHITECTURE.md) требует сандбокса на главном
+  приложении, в отличие от прежнего прямого .dmg-пути (Developer ID),
+  где сандбокс был не нужен. network.client — исходящие HTTPS-запросы
+  (fetch_servers, geoip/geosite, check_app_update). Спавн
+  `/sbin/ping` (ping.rs) под сандбоксом проверен отдельно — сам
+  ping не требует доп. entitlement у НАС: его права определяются его
+  собственной подписью (системный бинарник), не подписью родителя.
 -->
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
@@ -40,5 +42,9 @@
     <array>
         <string>packet-tunnel-provider</string>
     </array>
+    <key>com.apple.security.app-sandbox</key>
+    <true/>
+    <key>com.apple.security.network.client</key>
+    <true/>
 </dict>
 </plist>

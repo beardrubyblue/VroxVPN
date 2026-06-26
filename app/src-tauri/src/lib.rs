@@ -26,6 +26,10 @@ pub fn run() {
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_clipboard_manager::init())
+        // process — только для relaunch() после install_update_linux
+        // (см. App.tsx::installUpdate). На macOS обновления идут через
+        // TestFlight, этот плагин там не задействован.
+        .plugin(tauri_plugin_process::init())
         .manage(engine::EngineState::default())
         .invoke_handler(tauri::generate_handler![
             commands::get_status,
@@ -39,6 +43,7 @@ pub fn run() {
             commands::set_setting,
             commands::ping_servers,
             commands::check_app_update,
+            commands::install_update_linux,
             commands::quit_app,
             tray::sync_tray,
         ])
