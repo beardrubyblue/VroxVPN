@@ -3,6 +3,7 @@ options:
   bundleIdPrefix: com.vroxory.vpn
   deploymentTarget:
     macOS: "12.0"
+    iOS: "16.0"
   createIntermediateGroups: true
 
 settings:
@@ -30,6 +31,20 @@ targets:
         # __debug_main_executable_dylib_entry_point), линковщик не находит
         # _main. Фича на ускорение разработки, не нужна для наших целей.
         ENABLE_DEBUG_DYLIB: NO
+      # Release-конфиг для build-testflight.sh: подпись Apple Distribution
+      # под отдельно созданным на developer.apple.com профилем "Mac App
+      # Store Connect" — Automatic-подпись (base) переключается на
+      # Distribution-сертификат только во время реального archive-action
+      # в Xcode, а build-testflight.sh гонит plain `xcodebuild ... build`,
+      # без archive. Раньше это правилось вручную прямо в
+      # project.pbxproj (он gitignored, регенерируется), из-за чего
+      # правка слетала при каждом `xcodegen generate` — переносим в
+      # project.yml, чтобы она переживала регенерацию.
+      configs:
+        Release:
+          CODE_SIGN_STYLE: Manual
+          CODE_SIGN_IDENTITY: "Apple Distribution"
+          PROVISIONING_PROFILE_SPECIFIER: "vrox.vpn App Store"
     dependencies:
       - target: VroxTunnelExtension
         embed: true
@@ -46,6 +61,59 @@ targets:
         INFOPLIST_FILE: VroxTunnelExtension/Info.plist
         CODE_SIGN_ENTITLEMENTS: VroxTunnelExtension/VroxTunnelExtension.entitlements
         ENABLE_HARDENED_RUNTIME: YES
+        SKIP_INSTALL: YES
+      configs:
+        Release:
+          CODE_SIGN_STYLE: Manual
+          CODE_SIGN_IDENTITY: "Apple Distribution"
+          PROVISIONING_PROFILE_SPECIFIER: "vrox.vpn tunnel App Store"
+    dependencies:
+      - framework: Frameworks/GoNetunnel.xcframework
+        embed: false
+
+  # iOS/iPadOS-вариант — для разработки/прогона прямо из Xcode на
+  # симуляторе/устройстве. Никакого Tauri/WebView здесь нет и не может
+  # быть (это десктопный Rust-стек) — это самостоятельный SwiftUI-хост,
+  # параллельный VroxVPNHost, не замена ему. AppKit-исходники
+  # VroxVPNHost/* не переиспользуются (не компилируются под iOS),
+  # PacketTunnelProvider.swift переиспользуется как есть — он уже не
+  # завязан на AppKit/UIKit (Darwin/NetworkExtension/os.log только).
+  #
+  # ⚠ NEPacketTunnelProvider исторически не работает в iOS Simulator —
+  # реальный тоннель проверяется только на физическом устройстве; на
+  # симуляторе можно прогнать только сам SwiftUI-хост.
+  VroxVPNHost-iOS:
+    type: application
+    platform: iOS
+    sources:
+      - VroxVPNHost-iOS
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.vroxory.vpn
+        PRODUCT_NAME: VroxVPNHost
+        GENERATE_INFOPLIST_FILE: YES
+        CODE_SIGN_ENTITLEMENTS: VroxVPNHost-iOS/VroxVPNHost-iOS.entitlements
+        TARGETED_DEVICE_FAMILY: "1,2" # iPhone + iPad — универсальный таргет
+        INFOPLIST_KEY_UILaunchScreen_Generation: YES
+    dependencies:
+      - target: VroxTunnelExtension-iOS
+        embed: true
+        codeSign: true
+
+  VroxTunnelExtension-iOS:
+    type: app-extension
+    platform: iOS
+    sources:
+      - path: VroxTunnelExtension/PacketTunnelProvider.swift
+        group: VroxTunnelExtension-iOS
+      - VroxTunnelExtension-iOS
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.vroxory.vpn.tunnel
+        PRODUCT_NAME: VroxTunnelExtension
+        INFOPLIST_FILE: VroxTunnelExtension-iOS/Info.plist
+        CODE_SIGN_ENTITLEMENTS: VroxTunnelExtension-iOS/VroxTunnelExtension-iOS.entitlements
+        TARGETED_DEVICE_FAMILY: "1,2"
         SKIP_INSTALL: YES
     dependencies:
       - framework: Frameworks/GoNetunnel.xcframework

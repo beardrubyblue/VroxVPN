@@ -8,7 +8,7 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 OUT_DIR="$SCRIPT_DIR/Frameworks"
-TARGETS="${1:-macos}" # передать "macos,ios" для обеих платформ сразу
+TARGETS="${1:-macos,ios}" # передать "macos" или "ios", чтобы собрать только одну платформу
 
 mkdir -p "$OUT_DIR"
 

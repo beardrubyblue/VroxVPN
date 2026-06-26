@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>com.apple.developer.networking.networkextension</key>
+    <array>
+        <string>packet-tunnel-provider</string>
+    </array>
+    <!--
+      В отличие от macOS-варианта (VroxTunnelExtension/VroxTunnelExtension.
+      entitlements) здесь нет app-sandbox/network.client/network.server —
+      это macOS App Sandbox entitlement-ключи, на iOS их нет: песочница
+      на iOS включена безусловно самой ОС, без отдельного opt-in ключа,
+      а исходящие/bind UDP-сокеты не требуют отдельного entitlement.
+    -->
+</dict>
+</plist>
