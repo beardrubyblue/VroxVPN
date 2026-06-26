@@ -25,12 +25,13 @@ app/src-tauri/binaries/
 
 # --- macOS (macos-ext/) ---
 # .xcodeproj регенерируется из project.yml через `xcodegen generate` —
-# не коммитим сам сгенерированный проект (но см. doc-комментарий в
-# macos-ext/build-testflight.sh: после регенерации manual-signing
-# настройки в Release-конфигурации нужно проставить заново).
+# не коммитим сам сгенерированный проект (Release manual-signing теперь
+# в project.yml, см. там — переживает регенерацию).
 macos-ext/*.xcodeproj/
 # GoNetunnel.xcframework — build-артефакт build-go-framework.sh
 macos-ext/Frameworks/
+# .xcarchive/.ipa/ExportOptions.plist — build-testflight-ios.sh
+macos-ext/build-ios/
 
 # --- packaging/hysteria2-patch/ ---
 # Клон apernet/hysteria + сборочные артефакты — пересобирается build.sh

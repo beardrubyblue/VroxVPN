@@ -92,9 +92,19 @@ targets:
         PRODUCT_BUNDLE_IDENTIFIER: com.vroxory.vpn
         PRODUCT_NAME: VroxVPNHost
         GENERATE_INFOPLIST_FILE: YES
+        MARKETING_VERSION: "4.0.0"
         CODE_SIGN_ENTITLEMENTS: VroxVPNHost-iOS/VroxVPNHost-iOS.entitlements
         TARGETED_DEVICE_FAMILY: "1,2" # iPhone + iPad — универсальный таргет
         INFOPLIST_KEY_UILaunchScreen_Generation: YES
+      # Тот же приём, что и для macOS-таргетов выше — Release-подпись
+      # под отдельно выпущенными "iOS App Store"-профилями (другой тип
+      # профиля и другой App ID-scope, чем "Mac App Store Connect" у
+      # macOS-таргетов, хотя сертификат Apple Distribution общий).
+      configs:
+        Release:
+          CODE_SIGN_STYLE: Manual
+          CODE_SIGN_IDENTITY: "Apple Distribution"
+          PROVISIONING_PROFILE_SPECIFIER: "vrox.vpn iOS App Store"
     dependencies:
       - target: VroxTunnelExtension-iOS
         embed: true
@@ -115,6 +125,11 @@ targets:
         CODE_SIGN_ENTITLEMENTS: VroxTunnelExtension-iOS/VroxTunnelExtension-iOS.entitlements
         TARGETED_DEVICE_FAMILY: "1,2"
         SKIP_INSTALL: YES
+      configs:
+        Release:
+          CODE_SIGN_STYLE: Manual
+          CODE_SIGN_IDENTITY: "Apple Distribution"
+          PROVISIONING_PROFILE_SPECIFIER: "vrox.vpn tunnel iOS App Store"
     dependencies:
       - framework: Frameworks/GoNetunnel.xcframework
         embed: false
