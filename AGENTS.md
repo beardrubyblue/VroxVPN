@@ -338,3 +338,53 @@ export function cn(...inputs: ClassValue[]) {
 - [ ] **No external state mutated on my behalf** — SQL handed over, permissions
       scoped, dev server not launched.
 - [ ] **Lint and build pass.**
+
+---
+
+## Project-specific: vrox.vpn
+
+Desktop VPN client on **Tauri v2** (Rust backend + React 19 frontend,
+no Next.js/React Native — most of the React-Native-flavored rules above
+don't apply literally here: no Zustand/TanStack Query, no Tailwind
+tokens/4-pt grid, no FlashList. Keep the *philosophy* — simple,
+readable, no needless abstraction — drop the React-Native-specific
+tooling rules).
+
+**Stack:**
+- `app/` — Tauri app. Rust backend (`app/src-tauri/src/`), plain React +
+  CSS frontend (`app/src/App.tsx` — intentionally a single file, not yet
+  split; CSS in `App.css`, no CSS framework).
+- `macos-ext/` — Swift `NEPacketTunnelProvider` extension (Xcode
+  project, generated via `xcodegen` from `project.yml` — the
+  `.xcodeproj` itself is gitignored, regenerate with `xcodegen generate`
+  if missing, then re-apply manual signing overrides in
+  `project.pbxproj` documented in `macos-ext/build-testflight.sh`).
+- `packaging/hysteria2-patch/` — Go: forked `apernet/hysteria` +
+  `netunnel` package (gomobile-bound for the macOS extension).
+
+**Platform split is real, not cosmetic:** `engine/linux.rs` and
+`engine/macos.rs` implement the same public API
+(`spawn_client`/`kill_client`/`enable_killswitch`/...) with completely
+different mechanisms (pkexec+nftables vs NetworkExtension) — `engine.rs`
+re-exports whichever matches `target_os` via `#[cfg]`. Don't unify them
+into shared abstractions just for symmetry; the platforms are genuinely
+different here.
+
+**Doc-comments carry history, not just behavior.** This codebase has
+repeatedly hit subtle platform bugs (entitlement conflicts, signature
+quirks, race conditions) that took real debugging to find. When you fix
+one, write the *why* (what failed, how it was diagnosed) in a comment
+at the fix site, in Russian, matching the existing style — not just
+*what* the code does. Future debugging sessions rely on this.
+
+**Commands:**
+- Linux build: `cd app && pnpm tauri build`
+- macOS local build (DMG, not for distribution): `./macos-ext/build-release.sh`
+- macOS TestFlight build: `./macos-ext/build-testflight.sh`
+- Typecheck frontend: `cd app && npx tsc --noEmit -p .`
+- Rust compile check: `cd app/src-tauri && cargo build --no-default-features`
+
+**Distribution/updates:** Linux ships `.deb`, self-updates via
+`version.json` in this repo + a privileged helper script. macOS ships
+via **TestFlight only** (no App Store, no custom updater) — see
+`docs/ARCHITECTURE.md`.
