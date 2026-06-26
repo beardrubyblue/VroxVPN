@@ -58,6 +58,7 @@ interface Server {
 interface PingResult {
   name: string;
   latency_ms: number | null;
+  error: string | null;
 }
 
 interface SubscriptionMeta {
@@ -67,7 +68,7 @@ interface SubscriptionMeta {
 
 interface Subscription extends SubscriptionMeta {
   servers: Server[];
-  pings: Record<string, number | null>;
+  pings: Record<string, PingResult>;
   pinging: boolean;
   refreshing: boolean;
   error: string;
@@ -444,8 +445,8 @@ function App() {
     const sub = subscriptions.find((s) => s.url === url);
     if (!sub) return;
     const results = await invoke<PingResult[]>("ping_servers", { servers: sub.servers });
-    const pings: Record<string, number | null> = {};
-    for (const r of results) pings[r.name] = r.latency_ms;
+    const pings: Record<string, PingResult> = {};
+    for (const r of results) pings[r.name] = r;
     setSubscriptions((prev) => prev.map((s) => (s.url === url ? { ...s, pings, pinging: false } : s)));
   }
 
@@ -587,8 +588,23 @@ function App() {
                   >
                     <span className="row-title">{srv.name}</span>
                     {sub.pings[srv.name] !== undefined && (
-                      <span className="muted-note">
-                        {sub.pings[srv.name] === null ? "—" : `${sub.pings[srv.name]} мс`}
+                      <span
+                        className="muted-note"
+                        title={sub.pings[srv.name].error ?? undefined}
+                        onClick={(e) => {
+                          const err = sub.pings[srv.name].error;
+                          if (!err) return;
+                          // прочерк сам по себе ничего не объясняет — раньше
+                          // "сервер недоступен" и "у нас сломан вызов ping"
+                          // выглядели одинаково, тапом показываем реальную
+                          // причину текстом (см. ping.rs::ping_host)
+                          e.stopPropagation();
+                          pushToast(err, "error");
+                        }}
+                      >
+                        {sub.pings[srv.name].latency_ms === null
+                          ? "—"
+                          : `${sub.pings[srv.name].latency_ms} мс`}
                       </span>
                     )}
                   </div>
