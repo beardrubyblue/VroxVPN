@@ -7,8 +7,20 @@ use tokio::process::Command;
 
 async fn ping_host(host: &str, timeout_secs: u64) -> Option<u32> {
     let wait = timeout_secs.max(1).to_string();
+    // `-W` означает разное на Linux и macOS: на Linux (iputils) — секунды
+    // ожидания ответа, на macOS (BSD ping) — МИЛЛИСЕКУНДЫ (см. man ping).
+    // Раньше код был портирован с Linux без учёта этого — на macOS
+    // `-W 3` означало "ждать ответ всего 3мс", что гарантированно
+    // проваливало пинг почти любого реального хоста (RTT обычно
+    // десятки-сотни мс), отсюда прочерки в UI у всех пользователей
+    // macOS. На macOS используем `-t` — общий таймаут в секундах, тот
+    // же смысл, что у Linux-варианта `-W`.
+    #[cfg(target_os = "macos")]
+    let timeout_flag = "-t";
+    #[cfg(not(target_os = "macos"))]
+    let timeout_flag = "-W";
     let output = Command::new("ping")
-        .args(["-c", "1", "-W", &wait, host])
+        .args(["-c", "1", timeout_flag, &wait, host])
         .output()
         .await
         .ok()?;
