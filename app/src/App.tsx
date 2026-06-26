@@ -266,7 +266,6 @@ function App() {
       });
     })();
     return () => unlisten?.();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // опрос трафика раз в секунду, как core/stats.py в питон-версии — там
@@ -277,12 +276,15 @@ function App() {
   // сбрасывается при disconnect — иначе показывал бы устаревшие/чужие
   // цифры на следующем connect.
   useEffect(() => {
+    // Сброс отображаемых значений при disconnect — НЕ через setState
+    // здесь (react-hooks/set-state-in-effect: синхронный setState в
+    // теле эффекта может вызвать каскадные ререндеры). traffic и так
+    // скрыт условием `status.connected && traffic` в разметке (см.
+    // ниже) — устаревшее значение в state просто не показывается.
+    // memoryBytes показывается ВСЕГДА (карточка видна и без
+    // подключения) — для него видимое значение вычисляется прямо в
+    // разметке (`displayedMemoryBytes`), не через сброс состояния тут.
     if (!status.connected) {
-      setTraffic(null);
-      // карточка памяти видна и без подключения (см. ниже) — 0, не
-      // прошлое значение, тоннельного процесса больше нет, опрашивать
-      // нечего, пока не подключимся снова
-      setMemoryBytes(0);
       return;
     }
     let prev: { up: number; down: number; time: number } | null = null;
@@ -549,18 +551,20 @@ function App() {
         <main className="page">
           {/* Карточка видна всегда, не только при подключении (явный
               запрос — следить за бюджетом памяти независимо от
-              состояния VPN). При отключённом тоннеле memoryBytes === 0
-              (см. эффект опроса выше) — честные "0 Б", не пустое место. */}
+              состояния VPN). При отключённом тоннеле — честные "0 Б", не
+              пустое место и не устаревшее значение с прошлого сеанса. */}
           <div className="card memory-card">
             {(() => {
-              const pct = Math.min(100, (memoryBytes / MEMORY_BUDGET_BYTES) * 100);
-              const level = memoryBytes > MEMORY_BUDGET_BYTES ? "danger" : pct > 70 ? "warn" : "ok";
+              const displayedMemoryBytes = status.connected ? memoryBytes : 0;
+              const pct = Math.min(100, (displayedMemoryBytes / MEMORY_BUDGET_BYTES) * 100);
+              const level =
+                displayedMemoryBytes > MEMORY_BUDGET_BYTES ? "danger" : pct > 70 ? "warn" : "ok";
               return (
                 <>
                   <div className="memory-row">
                     <span className="memory-label">Память тоннеля</span>
                     <span className={`memory-value memory-${level}`}>
-                      {formatBytes(memoryBytes)} / {formatBytes(MEMORY_BUDGET_BYTES)}
+                      {formatBytes(displayedMemoryBytes)} / {formatBytes(MEMORY_BUDGET_BYTES)}
                     </span>
                   </div>
                   <div className="memory-bar-track">
