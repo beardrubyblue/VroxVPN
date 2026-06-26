@@ -12,6 +12,12 @@ settings:
     CODE_SIGN_STYLE: Automatic
     MACOSX_DEPLOYMENT_TARGET: "12.0"
     SWIFT_VERSION: "5.0"
+    # Дефолт, чтобы $(CURRENT_PROJECT_VERSION) в Info.plist никогда не
+    # подставлялся пустым ("null" в логе сборки) — реальный build-номер
+    # для архива передаётся снаружи (build-testflight.sh / Xcode archive
+    # action через -allowProvisioningUpdates всё равно использует то,
+    # что задано тут, если явно не переопределили).
+    CURRENT_PROJECT_VERSION: "1"
 
 targets:
   VroxVPNHost:
@@ -96,6 +102,12 @@ targets:
         CODE_SIGN_ENTITLEMENTS: VroxVPNHost-iOS/VroxVPNHost-iOS.entitlements
         TARGETED_DEVICE_FAMILY: "1,2" # iPhone + iPad — универсальный таргет
         INFOPLIST_KEY_UILaunchScreen_Generation: YES
+        # App Store Connect отклоняет архив без этого (Validate App
+        # выдаёт "All interface orientations must be supported unless
+        # the app requires full screen") — тест-харнесс, ориентация не
+        # важна по сути, но без полного списка не пройти валидацию.
+        INFOPLIST_KEY_UISupportedInterfaceOrientations: "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight"
+        INFOPLIST_KEY_UISupportedInterfaceOrientations~ipad: "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight"
       # Тот же приём, что и для macOS-таргетов выше — Release-подпись
       # под отдельно выпущенными "iOS App Store"-профилями (другой тип
       # профиля и другой App ID-scope, чем "Mac App Store Connect" у
