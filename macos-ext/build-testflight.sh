@@ -92,19 +92,69 @@ codesign --force --options runtime --sign "$APP_DISTRIBUTION_IDENTITY" \
     "$APP_PATH"
 codesign --verify --deep --strict --verbose=2 "$APP_PATH"
 
-echo "==> [5/5] Упаковка в .pkg (Mac Installer Distribution)"
+echo "==> [5/6] Упаковка в .pkg (Mac Installer Distribution) — запасной путь через altool"
 mkdir -p "$PKG_DIR"
 rm -f "$PKG_PATH"
 productbuild --component "$APP_PATH" /Applications --sign "$INSTALLER_IDENTITY" "$PKG_PATH"
 
+echo "==> [6/6] Сборка .xcarchive вручную — чтобы Xcode Organizer увидел"
+echo "    настоящий Tauri-app и весь дальнейший путь (Validate/Distribute"
+echo "    App → App Store Connect) можно пройти кликами в Xcode, без"
+echo "    терминала и без altool. Сам .app никем кроме нас не собирается"
+echo "    (Tauri — не Xcode-проект), поэтому архив строим руками: Xcode"
+echo "    не отличает архив, сделанный через Product → Archive, от такого"
+echo "    же по структуре — это известный приём, которым пользуются и"
+echo "    другие не-Xcode тулчейны (Flutter, React Native)."
+ARCHIVE_NAME="vrox.vpn $(date '+%d.%m.%Y, %H.%M')"
+ARCHIVE_DATE_DIR="$HOME/Library/Developer/Xcode/Archives/$(date +%Y-%m-%d)"
+ARCHIVE_PATH="$ARCHIVE_DATE_DIR/$ARCHIVE_NAME.xcarchive"
+mkdir -p "$ARCHIVE_DATE_DIR" "$ARCHIVE_PATH/Products/Applications" "$ARCHIVE_PATH/dSYMs"
+ditto "$APP_PATH" "$ARCHIVE_PATH/Products/Applications/$(basename "$APP_PATH")"
+
+cat > "$ARCHIVE_PATH/Info.plist" <<PLIST
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>ApplicationProperties</key>
+    <dict>
+        <key>ApplicationPath</key>
+        <string>Applications/$(basename "$APP_PATH")</string>
+        <key>CFBundleIdentifier</key>
+        <string>com.vroxory.vpn</string>
+        <key>CFBundleShortVersionString</key>
+        <string>$VERSION</string>
+        <key>CFBundleVersion</key>
+        <string>$BUILD_NUMBER</string>
+        <key>SigningIdentity</key>
+        <string>$APP_DISTRIBUTION_IDENTITY</string>
+        <key>Team</key>
+        <string>QRZT5R3Q28</string>
+    </dict>
+    <key>ArchiveVersion</key>
+    <integer>2</integer>
+    <key>CreationDate</key>
+    <date>$(date -u '+%Y-%m-%dT%H:%M:%SZ')</date>
+    <key>Name</key>
+    <string>vrox.vpn</string>
+    <key>SchemeName</key>
+    <string>VroxVPNHost</string>
+</dict>
+</plist>
+PLIST
+
 echo ""
-echo "✓ Готово: $PKG_PATH"
+echo "✓ Готово:"
+echo "  .pkg:       $PKG_PATH"
+echo "  .xcarchive: $ARCHIVE_PATH"
 echo ""
-echo "Для загрузки в App Store Connect (нужен app-specific password —"
-echo "appleid.apple.com → Sign-In and Security → App-Specific Passwords):"
+echo "Дальше — всё в Xcode: Window → Organizer → Archives → выбрать"
+echo "архив \"vrox.vpn\" с сегодняшней датой → Distribute App →"
+echo "App Store Connect → Upload. Xcode сам подхватит сертификат и"
+echo "профиль (они уже встроены в подписанный .app)."
+echo ""
+echo "Запасной путь через терминал (если Organizer не подхватил архив —"
+echo "нужен app-specific password, appleid.apple.com → Sign-In and"
+echo "Security → App-Specific Passwords):"
 echo "  xcrun altool --upload-app -f \"$PKG_PATH\" -t macos \\"
 echo "    -u <твой Apple ID email> -p <app-specific-password>"
-echo ""
-echo "После загрузки билд появится в App Store Connect → TestFlight"
-echo "обычно через несколько минут (может потребоваться обработка/Beta"
-echo "App Review для внешних тестеров, для внутренних — сразу доступен)."
