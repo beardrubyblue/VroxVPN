@@ -115,7 +115,7 @@ body {
 }
 
 .group-title {
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 700;
   color: var(--dim-fg);
   text-transform: uppercase;
@@ -162,7 +162,7 @@ body {
 }
 
 .list-row .row-subtitle {
-  font-size: 12px;
+  font-size: 13px;
   color: var(--dim-fg);
 }
 
@@ -256,7 +256,7 @@ body {
 
 .traffic-total {
   color: var(--dim-fg);
-  font-size: 12px;
+  font-size: 13px;
   min-width: 60px;
   text-align: right;
 }
@@ -397,7 +397,7 @@ body {
 }
 
 .muted-note {
-  font-size: 11px;
+  font-size: 13px;
   color: var(--dim-fg);
 }
 
@@ -414,7 +414,7 @@ body {
   border: none;
   background: transparent;
   padding: 8px 0 9px;
-  font-size: 11px;
+  font-size: 13px;
   color: var(--dim-fg);
   cursor: pointer;
 }
