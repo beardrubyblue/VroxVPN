@@ -102,6 +102,11 @@ targets:
         CODE_SIGN_ENTITLEMENTS: VroxVPNHost-iOS/VroxVPNHost-iOS.entitlements
         TARGETED_DEVICE_FAMILY: "1,2" # iPhone + iPad — универсальный таргет
         INFOPLIST_KEY_UILaunchScreen_Generation: YES
+        # Без иконки в Organizer/TestFlight архив показывает заглушку —
+        # временно взял существующую иконку Tauri-приложения (app/src-
+        # tauri/icons/icon.png, upscale 512→1024 + убрана alpha-прозрачность,
+        # App Store Connect её не принимает) как плейсхолдер.
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         # App Store Connect отклоняет архив без этого (Validate App
         # выдаёт "All interface orientations must be supported unless
         # the app requires full screen") — тест-харнесс, ориентация не
