@@ -22,14 +22,21 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-APP_PATH="${1:?usage: embed-into-tauri-app.sh /path/to/vrox.vpn.app}"
+APP_PATH="${1:?usage: embed-into-tauri-app.sh /path/to/vrox.vpn.app [Debug|Release]}"
+CONFIGURATION="${2:-Release}"
 IDENTITY="${SIGNING_IDENTITY:-Apple Development: Aleksandr Sysoev (9HJL3Q2UJ6)}"
 MAIN_BUNDLE_ID="com.vroxory.vpn"
 ENTITLEMENTS="$SCRIPT_DIR/../app/src-tauri/macos/entitlements.plist"
 
-DERIVED_DATA_APPEX="$(find ~/Library/Developer/Xcode/DerivedData -path '*/VroxVPNNetworkExtension-*/Build/Products/Debug/VroxVPNHost.app/Contents/PlugIns/VroxTunnelExtension.appex' -maxdepth 8 2>/dev/null | head -1)"
+# Раньше путь был жёстко зашит на Debug — из-за этого ручные "финальные"
+# сборки для пользователя незаметно подсовывали неоптимизированный
+# .appex (см. живой замер в этой сессии: Release под той же нагрузкой
+# держит ~втрое меньше памяти). Конфигурация теперь параметр, по
+# умолчанию Release — именно то, что должно попадать в DMG для тестов
+# не-разработчиком.
+DERIVED_DATA_APPEX="$(find ~/Library/Developer/Xcode/DerivedData -path "*/VroxVPNNetworkExtension-*/Build/Products/${CONFIGURATION}/VroxVPNHost.app/Contents/PlugIns/VroxTunnelExtension.appex" -maxdepth 8 2>/dev/null | head -1)"
 if [[ -z "$DERIVED_DATA_APPEX" ]]; then
-    echo "✗ VroxTunnelExtension.appex не найден в DerivedData — сначала собери macos-ext (xcodebuild -scheme VroxVPNHost)" >&2
+    echo "✗ VroxTunnelExtension.appex (${CONFIGURATION}) не найден в DerivedData — сначала собери macos-ext (xcodebuild -scheme VroxVPNHost -configuration ${CONFIGURATION})" >&2
     exit 1
 fi
 
@@ -52,7 +59,7 @@ echo "→ профиль главного приложения: $MAIN_PROFILE"
 
 mkdir -p "$APP_PATH/Contents/PlugIns"
 rm -rf "$APP_PATH/Contents/PlugIns/VroxTunnelExtension.appex"
-cp -R "$DERIVED_DATA_APPEX" "$APP_PATH/Contents/PlugIns/"
+ditto "$DERIVED_DATA_APPEX" "$APP_PATH/Contents/PlugIns/VroxTunnelExtension.appex"
 cp "$MAIN_PROFILE" "$APP_PATH/Contents/embedded.provisionprofile"
 
 # .appex НЕ трогаем --deep (он уже подписан правильно, со своими
