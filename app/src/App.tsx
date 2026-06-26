@@ -12,6 +12,7 @@ interface ConnectionStatus {
 interface TrafficTotals {
   upload_bytes: number;
   download_bytes: number;
+  memory_bytes: number;
 }
 
 interface TrafficDisplay {
@@ -20,6 +21,12 @@ interface TrafficDisplay {
   totalUp: number;
   totalDown: number;
 }
+
+// Бюджет Apple для NE-расширений на iOS (~50МБ) — на macOS жёсткого
+// задокументированного лимита нет, но держим тот же ориентир в UI как
+// цель оптимизации (см. docs/ARCHITECTURE.md, раздел про статистику
+// трафика/память).
+const MEMORY_BUDGET_BYTES = 50 * 1024 * 1024;
 
 function formatSpeed(bytesPerSec: number): string {
   if (bytesPerSec < 1024) return `${Math.round(bytesPerSec)} Б/с`;
@@ -158,6 +165,9 @@ function App() {
   });
   const [toast, setToast] = useState<Toast | null>(null);
   const [traffic, setTraffic] = useState<TrafficDisplay | null>(null);
+  // 0, не null — карточка памяти видна постоянно (см. ниже), 0 — честное
+  // отображение "тоннель не запущен, процесса нет", не "загрузка"
+  const [memoryBytes, setMemoryBytes] = useState(0);
 
   const [subscriptions, setSubscriptions] = useState<Subscription[]>([]);
   const subscriptionsRef = useRef<Subscription[]>([]);
@@ -254,6 +264,10 @@ function App() {
   useEffect(() => {
     if (!status.connected) {
       setTraffic(null);
+      // карточка памяти видна и без подключения (см. ниже) — 0, не
+      // прошлое значение, тоннельного процесса больше нет, опрашивать
+      // нечего, пока не подключимся снова
+      setMemoryBytes(0);
       return;
     }
     let prev: { up: number; down: number; time: number } | null = null;
@@ -275,10 +289,12 @@ function App() {
           setTraffic({ upSpeed: 0, downSpeed: 0, totalUp: totals.upload_bytes, totalDown: totals.download_bytes });
         }
         prev = { up: totals.upload_bytes, down: totals.download_bytes, time: now };
-      } catch {
-        // тоннель мог отключиться между опросами — следующий
-        // refreshStatus() (из toggleConnection/vpn-disconnected-unexpectedly)
-        // поправит status.connected и остановит этот эффект сам
+        setMemoryBytes(totals.memory_bytes);
+      } catch (err) {
+        // временная диагностика: раньше ошибка тут проглатывалась молча
+        // (предполагалось, что это просто "тоннель отключился между
+        // опросами") — оказалось полезно увидеть текст реальной ошибки
+        pushToast(`get_traffic_totals: ${String(err)}`, "error");
       }
     };
     tick();
@@ -487,6 +503,30 @@ function App() {
 
       {page === "home" ? (
         <main className="page">
+          {/* Карточка видна всегда, не только при подключении (явный
+              запрос — следить за бюджетом памяти независимо от
+              состояния VPN). При отключённом тоннеле memoryBytes === 0
+              (см. эффект опроса выше) — честные "0 Б", не пустое место. */}
+          <div className="card memory-card">
+            {(() => {
+              const pct = Math.min(100, (memoryBytes / MEMORY_BUDGET_BYTES) * 100);
+              const level = memoryBytes > MEMORY_BUDGET_BYTES ? "danger" : pct > 70 ? "warn" : "ok";
+              return (
+                <>
+                  <div className="memory-row">
+                    <span className="memory-label">Память тоннеля</span>
+                    <span className={`memory-value memory-${level}`}>
+                      {formatBytes(memoryBytes)} / {formatBytes(MEMORY_BUDGET_BYTES)}
+                    </span>
+                  </div>
+                  <div className="memory-bar-track">
+                    <div className={`memory-bar-fill memory-${level}`} style={{ width: `${pct}%` }} />
+                  </div>
+                </>
+              );
+            })()}
+          </div>
+
           {status.connected && traffic && (
             <div className="card traffic-card">
               <div className="traffic-row">

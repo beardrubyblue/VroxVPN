@@ -65,6 +65,27 @@ case "$cmd" in
         pgrep -f "vroxcore .*--config $config" > /dev/null
         ;;
 
+    mem-usage)
+        # RSS root-процесса vroxcore в байтах, через /proc — наш
+        # непривилегированный Rust-процесс не может прочитать
+        # /proc/<pid>/status root-владельца напрямую (отсюда и весь этот
+        # helper). Используется для индикатора памяти в UI (см.
+        # docs/ARCHITECTURE.md) — на Linux нет жёсткого лимита Apple на
+        # NE-расширения (это чисто macOS/iOS-ограничение), но цифра всё
+        # равно полезна для сравнения с .appex-веткой.
+        config="${1:?missing config path}"
+        case "$config" in
+            /tmp/vroxory-vpn/*.yaml) ;;
+            *) echo "недопустимый путь конфига: $config" >&2; exit 1 ;;
+        esac
+        pid="$(pgrep -f "vroxcore .*--config $config" | head -1)"
+        if [[ -z "$pid" ]]; then
+            echo "процесс не найден" >&2
+            exit 1
+        fi
+        awk '/^VmRSS:/ { print $2 * 1024; exit }' "/proc/$pid/status"
+        ;;
+
     delete-tun)
         iface="${1:?missing interface}"
         if [[ "$iface" != "$TUN_IFACE" ]]; then

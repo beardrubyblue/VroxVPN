@@ -71,6 +71,27 @@ fn run_helper(app: &AppHandle, args: &[&str]) -> Result<(), String> {
     }
 }
 
+/// Как `run_helper`, но возвращает stdout — нужен только для `mem-usage`
+/// (остальные команды helper'а возвращают результат через exit code).
+fn run_helper_capture(app: &AppHandle, args: &[&str]) -> Result<String, String> {
+    let helper = resources::resolve(app, "resources/privileged_helper.sh")?;
+    let output = Command::new("pkexec")
+        .arg(helper)
+        .args(args)
+        .output()
+        .map_err(|e| e.to_string())?;
+    if output.status.success() {
+        Ok(String::from_utf8_lossy(&output.stdout).trim().to_string())
+    } else {
+        Err(format!(
+            "privileged_helper.sh {:?} завершился с кодом {:?}: {}",
+            args,
+            output.status.code(),
+            String::from_utf8_lossy(&output.stderr)
+        ))
+    }
+}
+
 fn run_helper_with_stdin(app: &AppHandle, args: &[&str], input: &str) -> Result<(), String> {
     let helper = resources::resolve(app, "resources/privileged_helper.sh")?;
     let mut child = Command::new("pkexec")
@@ -269,8 +290,29 @@ pub async fn spawn_client(
 /// ветки main (см. docs/ARCHITECTURE.md): `/proc/net/dev`, поле 0 — rx
 /// bytes (входящее = download), поле 8 — tx bytes (исходящее = upload).
 /// Дельту/скорость считает фронтенд между двумя опросами, не здесь.
-pub async fn get_traffic_totals() -> Result<(u64, u64), String> {
-    read_interface_bytes(TUN_IFACE)
+pub async fn get_traffic_totals(
+    app: &AppHandle,
+    config_path: Option<&str>,
+) -> Result<(u64, u64, u64), String> {
+    let (upload_bytes, download_bytes) = read_interface_bytes(TUN_IFACE)?;
+    let memory_bytes = match config_path {
+        Some(path) => {
+            let app = app.clone();
+            let path = path.to_string();
+            tauri::async_runtime::spawn_blocking(move || mem_usage_blocking(&app, &path))
+                .await
+                .map_err(|e| e.to_string())??
+        }
+        // не подключено — нет процесса, который можно было бы спросить
+        None => 0,
+    };
+    Ok((upload_bytes, download_bytes, memory_bytes))
+}
+
+fn mem_usage_blocking(app: &AppHandle, config_path: &str) -> Result<u64, String> {
+    run_helper_capture(app, &["mem-usage", config_path])?
+        .parse::<u64>()
+        .map_err(|e| format!("mem-usage: bad output: {e}"))
 }
 
 fn read_interface_bytes(interface: &str) -> Result<(u64, u64), String> {

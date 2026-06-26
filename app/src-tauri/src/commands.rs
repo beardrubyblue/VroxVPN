@@ -131,25 +131,45 @@ pub async fn disconnect(app: AppHandle, state: State<'_, EngineState>) -> Result
     }
 }
 
-/// Суммарный трафик с начала тоннеля (не дельта/скорость — это считает
-/// фронтенд между двумя опросами, см. App.tsx). На Linux читается прямо
-/// с `tun-vroxory` через `/proc/net/dev`, на macOS — через
-/// `sendProviderMessage` к `.appex` (см. doc-комментарии
-/// `engine::linux::get_traffic_totals`/`engine::macos::get_traffic_totals`).
-/// Возвращает ошибку, если тоннель не активен — фронтенд должен сам не
-/// опрашивать в это время (см. App.tsx, опрос только пока connected).
+/// Суммарный трафик + текущая память тоннельного процесса с начала
+/// тоннеля (не дельта/скорость — это считает фронтенд между двумя
+/// опросами, см. App.tsx). На Linux читается прямо с `tun-vroxory` через
+/// `/proc/net/dev` + `/proc/<pid>/status` root-процесса `vroxcore` через
+/// privileged helper, на macOS — через `sendProviderMessage` к `.appex`
+/// (см. doc-комментарии `engine::linux::get_traffic_totals`/
+/// `engine::macos::get_traffic_totals`). Возвращает ошибку, если тоннель
+/// не активен — фронтенд должен сам не опрашивать в это время (см.
+/// App.tsx, опрос только пока connected).
+///
+/// `memory_bytes` — для индикатора в UI относительно ~50МБ (известный
+/// бюджет Apple для NE-расширений на iOS; на macOS жёсткого
+/// задокументированного лимита нет, но держим тот же ориентир — см.
+/// docs/ARCHITECTURE.md).
 #[derive(Serialize, Clone)]
 pub struct TrafficTotals {
     pub upload_bytes: u64,
     pub download_bytes: u64,
+    pub memory_bytes: u64,
 }
 
 #[tauri::command]
-pub async fn get_traffic_totals() -> Result<TrafficTotals, String> {
-    let (upload_bytes, download_bytes) = engine::get_traffic_totals().await?;
+pub async fn get_traffic_totals(
+    app: AppHandle,
+    state: State<'_, EngineState>,
+) -> Result<TrafficTotals, String> {
+    let config_path = {
+        let guard = state.0.lock().unwrap();
+        match &*guard {
+            Slot::Connected(conn) => Some(conn.config_path.clone()),
+            _ => None,
+        }
+    };
+    let (upload_bytes, download_bytes, memory_bytes) =
+        engine::get_traffic_totals(&app, config_path.as_deref()).await?;
     Ok(TrafficTotals {
         upload_bytes,
         download_bytes,
+        memory_bytes,
     })
 }
 

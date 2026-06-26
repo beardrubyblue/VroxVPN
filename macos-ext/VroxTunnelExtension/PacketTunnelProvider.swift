@@ -1,6 +1,26 @@
+import Darwin
 import GoNetunnel
 import NetworkExtension
 import os.log
+
+/// RSS (resident set size) ЭТОГО процесса (.appex) в байтах — через
+/// mach_task_basic_info, тот же API, которым пользуется Activity Monitor.
+/// Безопасно дёргать на себе (mach_task_self_) без особых entitlement —
+/// ограничения task_for_pid на чужие процессы здесь не применимы, это
+/// "self" frame. Используется для индикатора памяти в UI (см.
+/// docs/ARCHITECTURE.md, Apple ограничивает NE-расширения на iOS ~50МБ —
+/// на macOS лимит не задокументирован так чётко, но держим тот же бюджет
+/// как цель, на случай будущего iOS-порта).
+func currentRSSBytes() -> UInt64 {
+    var info = mach_task_basic_info()
+    var count = mach_msg_type_number_t(MemoryLayout<mach_task_basic_info>.size / MemoryLayout<integer_t>.size)
+    let kerr: kern_return_t = withUnsafeMutablePointer(to: &info) { ptr -> kern_return_t in
+        ptr.withMemoryRebound(to: integer_t.self, capacity: Int(count)) {
+            task_info(mach_task_self_, task_flavor_t(MACH_TASK_BASIC_INFO), $0, &count)
+        }
+    }
+    return kerr == KERN_SUCCESS ? UInt64(info.resident_size) : 0
+}
 
 /// Хост для netunnel (см. packaging/hysteria2-patch/netunnel/) —
 /// gVisor-стек + hysteria2-клиент без настоящего TUN-устройства, собран
@@ -165,15 +185,30 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
     /// Единственная поддерживаемая команда — "getStats" (см. engine/macos.rs::
     /// get_traffic_totals_blocking, который шлёт её через sendProviderMessage
     /// по запросу фронтенда). Ответ — JSON от NetunnelTunnelHandle.getStats()
-    /// (см. netunnel.go), как есть, без перекодирования здесь.
+    /// (txBytes/rxBytes, см. netunnel.go) + rssBytes — память ВСЕГО этого
+    /// процесса (.appex), не только Go-кучи: NE-лимит Apple считает по
+    /// процессу целиком (Swift runtime, NetworkExtension.framework,
+    /// gVisor/QUIC внутри Go — всё вместе), поэтому считать нужно тоже
+    /// здесь, а не в Go (там видна только своя куча, не сторонние
+    /// фреймворки). Дописываем поле строковой склейкой, а не повторным
+    /// JSON-энкодингом — формат от Go::GetStats фиксированный и
+    /// контролируется нами же (см. netunnel.go), править через encoder
+    /// было бы избыточно для одной строки.
     override func handleAppMessage(_ messageData: Data, completionHandler: ((Data?) -> Void)?) {
-        guard let command = String(data: messageData, encoding: .utf8), command == "getStats",
-              let handle = tunnelHandle
+        let command = String(data: messageData, encoding: .utf8)
+        os_log(
+            "handleAppMessage: command=%{public}@ tunnelHandle=%{public}@",
+            log: log, type: .default,
+            command ?? "<not utf8>", tunnelHandle == nil ? "nil" : "set"
+        )
+        guard let command, command == "getStats", let handle = tunnelHandle
         else {
             completionHandler?(nil)
             return
         }
-        let stats = handle.getStats()
-        completionHandler?(stats.data(using: .utf8))
+        let trafficJSON = handle.getStats()
+        let rss = currentRSSBytes()
+        let merged = trafficJSON.trimmingCharacters(in: .whitespacesAndNewlines).dropLast() + ",\"rssBytes\":\(rss)}"
+        completionHandler?(String(merged).data(using: .utf8))
     }
 }

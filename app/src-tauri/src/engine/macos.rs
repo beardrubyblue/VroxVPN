@@ -502,10 +502,13 @@ fn kill_client_blocking() -> Result<(), String> {
 /// окажется не так (например, до первого реального connect, когда
 /// `connection()` может быть базовым `NEVPNConnection`).
 ///
-/// Возвращает (tx_bytes, rx_bytes) — суммарно с момента старта тоннеля,
-/// не дельту: дельту/скорость считает фронтенд между двумя опросами (см.
-/// `commands.rs::get_traffic_totals`), как и для Linux-варианта.
-fn get_traffic_totals_blocking() -> Result<(u64, u64), String> {
+/// Возвращает (tx_bytes, rx_bytes, rss_bytes) — tx/rx суммарно с момента
+/// старта тоннеля (не дельту: дельту/скорость считает фронтенд между
+/// двумя опросами, см. `commands.rs::get_traffic_totals`, как и для
+/// Linux-варианта), rss_bytes — текущая резидентная память ВСЕГО
+/// процесса `.appex` (см. `PacketTunnelProvider.swift::currentRSSBytes`),
+/// не только Go-кучи.
+fn get_traffic_totals_blocking() -> Result<(u64, u64, u64), String> {
     let manager = load_or_create_manager_blocking()?;
     let connection = unsafe { manager.connection() };
     let session = Retained::downcast::<NETunnelProviderSession>(connection)
@@ -549,15 +552,23 @@ fn get_traffic_totals_blocking() -> Result<(u64, u64), String> {
         serde_json::from_str(&json_str).map_err(|e| format!("getStats: bad json: {e}"))?;
     let tx_bytes = parsed["txBytes"].as_u64().unwrap_or(0);
     let rx_bytes = parsed["rxBytes"].as_u64().unwrap_or(0);
-    Ok((tx_bytes, rx_bytes))
+    let rss_bytes = parsed["rssBytes"].as_u64().unwrap_or(0);
+    Ok((tx_bytes, rx_bytes, rss_bytes))
 }
 
-/// (upload_bytes, download_bytes) — суммарно с начала тоннеля. `spawn_blocking`
-/// по той же причине, что и остальные NE-вызовы в этом файле (см.
-/// doc-комментарий модуля): completion-блок `sendProviderMessage` зовётся
-/// на главном run loop'е, синхронное ожидание ответа должно идти с
-/// отдельного потока.
-pub async fn get_traffic_totals() -> Result<(u64, u64), String> {
+/// (upload_bytes, download_bytes, memory_bytes) — суммарно с начала
+/// тоннеля. `spawn_blocking` по той же причине, что и остальные NE-вызовы
+/// в этом файле (см. doc-комментарий модуля): completion-блок
+/// `sendProviderMessage` зовётся на главном run loop'е, синхронное
+/// ожидание ответа должно идти с отдельного потока. `_app`/`_config_path`
+/// не используются на macOS (нужны только Linux-варианту, где нет
+/// собственного API опроса процесса — см. `engine/linux.rs::
+/// get_traffic_totals`), сигнатура общая ради единого вызова из
+/// `commands.rs`.
+pub async fn get_traffic_totals(
+    _app: &AppHandle,
+    _config_path: Option<&str>,
+) -> Result<(u64, u64, u64), String> {
     tauri::async_runtime::spawn_blocking(get_traffic_totals_blocking)
         .await
         .map_err(|e| e.to_string())?

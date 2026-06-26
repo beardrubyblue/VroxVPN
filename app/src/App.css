@@ -166,6 +166,67 @@ body {
   color: var(--dim-fg);
 }
 
+/* ---- индикатор памяти тоннеля (см. App.tsx::memoryBytes) ---- */
+.memory-card {
+  padding: 10px 16px;
+  margin-bottom: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.memory-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  font-size: 13px;
+}
+
+.memory-label {
+  color: var(--dim-fg);
+}
+
+.memory-value {
+  font-weight: 600;
+}
+
+.memory-value.memory-ok {
+  color: #2ec27e;
+}
+
+.memory-value.memory-warn {
+  color: #e5a50a;
+}
+
+.memory-value.memory-danger {
+  color: var(--destructive);
+}
+
+.memory-bar-track {
+  height: 5px;
+  border-radius: 3px;
+  background-color: var(--border);
+  overflow: hidden;
+}
+
+.memory-bar-fill {
+  height: 100%;
+  border-radius: 3px;
+  transition: width 0.3s ease;
+}
+
+.memory-bar-fill.memory-ok {
+  background-color: #2ec27e;
+}
+
+.memory-bar-fill.memory-warn {
+  background-color: #e5a50a;
+}
+
+.memory-bar-fill.memory-danger {
+  background-color: var(--destructive);
+}
+
 /* ---- статистика трафика (см. App.tsx::traffic) ---- */
 .traffic-card {
   padding: 10px 16px;
