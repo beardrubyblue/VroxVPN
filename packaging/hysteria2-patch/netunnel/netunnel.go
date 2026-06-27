@@ -418,7 +418,37 @@ func StartTunnel(configJSON string) (*TunnelHandle, error) {
 		stopMemoryReclaim: make(chan struct{}),
 	}
 	go handle.reclaimMemoryPeriodically()
+	go handle.evictUnderMemoryPressurePeriodically()
 	return handle, nil
+}
+
+// evictMemoryThreshold — если os_proc_available_memory() (см.
+// memory_ios.go) показывает запас МЕНЬШЕ этого порога, закрываем самое
+// старое активное соединение (handler.go::evictOldestConn), а не ждём,
+// пока за нас это сделает jetsam убийством всего расширения. 5 МиБ —
+// отправная точка, не результат профилирования: это сигнал от самой
+// iOS о реальном запасе (в отличие от наших собственных догадок про
+// абсолютный потолок ~50МБ), но конкретное число порога подбирается
+// эмпирически.
+const evictMemoryThreshold = 5 << 20
+
+// evictUnderMemoryPressurePeriodically — на macOS availableMemoryBytes
+// всегда возвращает "бесконечность" (см. memory_other.go), эвикшен там
+// никогда не сработает — жёсткого потолка NE на macOS нет, эвикшен
+// нужен только под реальным iOS-лимитом.
+func (h *TunnelHandle) evictUnderMemoryPressurePeriodically() {
+	ticker := time.NewTicker(2 * time.Second)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ticker.C:
+			if availableMemoryBytes() < evictMemoryThreshold {
+				evictOldestConn()
+			}
+		case <-h.stopMemoryReclaim:
+			return
+		}
+	}
 }
 
 // reclaimMemoryPeriodically — SetMemoryLimit/GOGC (см. init() выше)

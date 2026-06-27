@@ -4,6 +4,7 @@ import (
 	"io"
 	"net"
 	"strconv"
+	"sync"
 	"sync/atomic"
 	"time"
 
@@ -35,6 +36,67 @@ import (
 const maxActiveRelays = 48
 
 var activeRelays atomic.Int32
+
+// Реестр активных relay-соединений с временем создания — нужен, чтобы
+// под реальным давлением памяти (см. evictOldestConn,
+// netunnel.go::evictUnderMemoryPressurePeriodically) закрывать САМЫЕ
+// СТАРЫЕ соединения, а не просто ждать, пока iOS убьёт всё расширение
+// разом. До этого maxActiveRelays выше только не пускал НОВЫЕ
+// соединения сверх потолка — старые при этом копились без разбора, raз
+// открытые могли жить хоть до конца сессии. closeFn просто закрывает
+// сторону(ы) net.Conn — существующие defer'ы в relayTCP/relayUDP сами
+// разберут оставшуюся теardown-логику (ровно как при обычной ошибке
+// чтения/записи), отдельного пути остановки не нужно.
+type registeredConn struct {
+	createdAt time.Time
+	close     func()
+}
+
+var (
+	connRegistryMu sync.Mutex
+	connRegistry   = make(map[uint64]*registeredConn)
+	nextConnID     uint64
+)
+
+func registerConn(closeFn func()) uint64 {
+	connRegistryMu.Lock()
+	defer connRegistryMu.Unlock()
+	nextConnID++
+	id := nextConnID
+	connRegistry[id] = &registeredConn{createdAt: time.Now(), close: closeFn}
+	return id
+}
+
+func unregisterConn(id uint64) {
+	connRegistryMu.Lock()
+	defer connRegistryMu.Unlock()
+	delete(connRegistry, id)
+}
+
+// evictOldestConn закрывает самое долгоживущее активное соединение.
+// Возвращает false, если эвиктить уже больше нечего.
+func evictOldestConn() bool {
+	connRegistryMu.Lock()
+	var oldestID uint64
+	var oldestTime time.Time
+	found := false
+	for id, c := range connRegistry {
+		if !found || c.createdAt.Before(oldestTime) {
+			oldestID, oldestTime, found = id, c.createdAt, true
+		}
+	}
+	var closeFn func()
+	if found {
+		closeFn = connRegistry[oldestID].close
+		delete(connRegistry, oldestID)
+	}
+	connRegistryMu.Unlock()
+	if closeFn == nil {
+		return false
+	}
+	closeFn()
+	return true
+}
 
 // udpIdleTimeout — сколько ждать следующий пакет в UDP-"сессии" прежде
 // чем её закрыть. Раньше (sing-tun's System stack) это делал встроенный
@@ -95,11 +157,13 @@ func tcpForwarderHandler(hyClient client.Client) func(*tcp.ForwarderRequest) {
 
 		activeRelays.Add(1)
 		conn := gonet.NewTCPConn(&wq, ep)
-		go relayTCP(conn, hyConn)
+		connID := registerConn(func() { _ = conn.Close() })
+		go relayTCP(connID, conn, hyConn)
 	}
 }
 
-func relayTCP(local net.Conn, remote io.ReadWriteCloser) {
+func relayTCP(connID uint64, local net.Conn, remote io.ReadWriteCloser) {
+	defer unregisterConn(connID)
 	defer activeRelays.Add(-1)
 	defer local.Close()
 	defer remote.Close()
@@ -142,12 +206,14 @@ func udpForwarderHandler(hyClient client.Client) func(*udp.ForwarderRequest) boo
 		}
 
 		activeRelays.Add(1)
-		go relayUDP(local, rc, reqAddr)
+		connID := registerConn(func() { _ = local.Close() })
+		go relayUDP(connID, local, rc, reqAddr)
 		return true
 	}
 }
 
-func relayUDP(local net.Conn, remote client.HyUDPConn, reqAddr string) {
+func relayUDP(connID uint64, local net.Conn, remote client.HyUDPConn, reqAddr string) {
+	defer unregisterConn(connID)
 	defer activeRelays.Add(-1)
 	defer local.Close()
 	defer remote.Close()

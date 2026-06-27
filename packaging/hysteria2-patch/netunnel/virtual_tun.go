@@ -70,9 +70,16 @@ func (t *virtualTun) deliverInbound(pkt []byte) error {
 		return errors.New("netunnel: unknown IP version in packet")
 	}
 
-	cp := append([]byte(nil), pkt...)
+	// `pkt` уже уникально наш — gomobile копирует байты ОДИН раз при
+	// пересечении границы Swift→Go (NSData/[UInt8] → []byte), здесь
+	// никто больше на этот слайс не ссылается и не переиспользует его.
+	// Второй defensive-копии (append([]byte(nil), pkt...)) не было
+	// причины существовать — просила лишнюю аллокацию на КАЖДЫЙ пакет,
+	// то есть тысячи/сек под нагрузкой (см. Tailscale's go-linker blog
+	// про buffer reuse как один из главных рычагов памяти на iOS NE).
+	// buffer.MakeWithData просто забирает владение тем, что ей дали.
 	pb := stack.NewPacketBuffer(stack.PacketBufferOptions{
-		Payload: buffer.MakeWithData(cp),
+		Payload: buffer.MakeWithData(pkt),
 	})
 	defer pb.DecRef()
 	t.ep.InjectInbound(proto, pb)
