@@ -162,22 +162,68 @@ func tcpForwarderHandler(hyClient client.Client) func(*tcp.ForwarderRequest) {
 	}
 }
 
+// tcpIdleTimeout — то же самое, что udpIdleTimeout, но для TCP, у
+// которого раньше idle-таймаута не было ВООБЩЕ. Пойман вживую: память
+// расширения переставала падать обратно после реального браузинга — не
+// потому, что Go держит мусор (FreeOSMemory тикер на это уже отвечает,
+// см. netunnel.go), а потому, что браузер сам держит HTTP keep-alive
+// TCP-соединения открытыми ПОСЛЕ загрузки страницы, без передачи
+// данных — это легитимное, живое (не мусорное) соединение в нашем
+// реестре, GC его не освободит, потому что оно реально используется
+// (просто не активно прямо сейчас). io.Copy сам по себе не даёт зацепки
+// для отслеживания активности — заменён на ручной цикл с таймером.
+const tcpIdleTimeout = 60 * time.Second
+
+// activityReader оборачивает io.Reader и отмечает время последнего
+// успешного чтения — используется для отслеживания активности в обе
+// стороны (от браузера и от сервера), io.Copy сам такой хук не даёт.
+type activityReader struct {
+	r    io.Reader
+	last *atomic.Int64 // unix-нано последней активности
+}
+
+func (a *activityReader) Read(p []byte) (int, error) {
+	n, err := a.r.Read(p)
+	if n > 0 {
+		a.last.Store(time.Now().UnixNano())
+	}
+	return n, err
+}
+
 func relayTCP(connID uint64, local net.Conn, remote io.ReadWriteCloser) {
 	defer unregisterConn(connID)
 	defer activeRelays.Add(-1)
 	defer local.Close()
 	defer remote.Close()
 
+	var lastActivity atomic.Int64
+	lastActivity.Store(time.Now().UnixNano())
+
 	copyErrChan := make(chan error, 2)
 	go func() {
-		_, copyErr := io.Copy(remote, local)
+		_, copyErr := io.Copy(remote, &activityReader{r: local, last: &lastActivity})
 		copyErrChan <- copyErr
 	}()
 	go func() {
-		_, copyErr := io.Copy(local, remote)
+		_, copyErr := io.Copy(local, &activityReader{r: remote, last: &lastActivity})
 		copyErrChan <- copyErr
 	}()
-	<-copyErrChan
+
+	idleTicker := time.NewTicker(10 * time.Second)
+	defer idleTicker.Stop()
+	for {
+		select {
+		case <-copyErrChan:
+			return
+		case <-idleTicker.C:
+			if time.Since(time.Unix(0, lastActivity.Load())) > tcpIdleTimeout {
+				// Закрываем local — оба io.Copy получат ошибку чтения/
+				// записи, цикл выйдет на следующей итерации через
+				// copyErrChan, остальную teardown-логику доделают defer'ы.
+				_ = local.Close()
+			}
+		}
+	}
 }
 
 func udpForwarderHandler(hyClient client.Client) func(*udp.ForwarderRequest) bool {
