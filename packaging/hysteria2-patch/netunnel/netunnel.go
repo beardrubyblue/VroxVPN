@@ -229,11 +229,20 @@ func buildClientConfig(cfg *Config) (*client.Config, error) {
 		// SetTransportProtocolOption в StartTunnel — тот правит только
 		// локальный virtual-TCP, не сам тоннель к серверу). Снижено с
 		// большим запасом до бюджета iOS NE (~50МБ, см. init() ниже).
+		// Второй проход на снижение: QUIC flow-control окна растут под
+		// наблюдаемый throughput, но НЕ сжимаются обратно в рамках
+		// жизни соединения (стандартное поведение QUIC/HTTP-стилей
+		// flow control) — а у нас ОДНО QUIC-соединение на весь тоннель,
+		// все relay-потоки мультиплексируются через него. Поймано
+		// вживую: после разгона видео (Instagram Reels) пик 48МБ
+		// держался даже спустя >60с простоя — не падал, пока не
+		// переподключишь тоннель целиком. 4МБ/1МБ (первый проход) явно
+		// недостаточно тесно для видео-throughput.
 		QUICConfig: client.QUICConfig{
-			InitialStreamReceiveWindow:     256 << 10, // 256 КиБ
-			MaxStreamReceiveWindow:         1 << 20,   // 1 МиБ (было 8 МиБ)
-			InitialConnectionReceiveWindow: 512 << 10, // 512 КиБ
-			MaxConnectionReceiveWindow:     4 << 20,   // 4 МиБ (было 20 МиБ)
+			InitialStreamReceiveWindow:     128 << 10,  // 128 КиБ
+			MaxStreamReceiveWindow:         384 << 10,  // 384 КиБ (было 1 МиБ)
+			InitialConnectionReceiveWindow: 256 << 10,  // 256 КиБ
+			MaxConnectionReceiveWindow:     1536 << 10, // 1.5 МиБ (было 4 МиБ)
 		},
 		CongestionConfig: client.CongestionConfig{
 			Type:       cfg.Congestion.Type,
