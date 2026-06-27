@@ -178,13 +178,13 @@ pub async fn get_traffic_totals(
 }
 
 #[tauri::command]
-pub fn get_settings() -> serde_json::Value {
-    serde_json::Value::Object(settings::load())
+pub fn get_settings(app: AppHandle) -> serde_json::Value {
+    serde_json::Value::Object(settings::load(&app))
 }
 
 #[tauri::command]
-pub fn set_setting(key: String, value: serde_json::Value) -> Result<(), String> {
-    settings::set(&key, value)
+pub fn set_setting(app: AppHandle, key: String, value: serde_json::Value) -> Result<(), String> {
+    settings::set(&app, &key, value)
 }
 
 #[tauri::command]
@@ -194,13 +194,13 @@ pub async fn ping_servers(servers: Vec<Server>) -> Vec<ping::PingResult> {
 }
 
 #[tauri::command]
-pub async fn update_geoip() -> Result<geoip::UpdateResult, String> {
-    geoip::update_ru_cidrs().await
+pub async fn update_geoip(app: AppHandle) -> Result<geoip::UpdateResult, String> {
+    geoip::update_ru_cidrs(&app).await
 }
 
 #[tauri::command]
-pub async fn update_geosite() -> Result<geosite::UpdateResult, String> {
-    geosite::update_ru_domains().await
+pub async fn update_geosite(app: AppHandle) -> Result<geosite::UpdateResult, String> {
+    geosite::update_ru_domains(&app).await
 }
 
 #[tauri::command]

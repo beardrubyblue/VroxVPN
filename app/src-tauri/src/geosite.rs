@@ -9,8 +9,7 @@ use std::path::Path;
 use std::path::PathBuf;
 
 use serde::Serialize;
-#[cfg(target_os = "linux")]
-use tauri::AppHandle;
+use tauri::{AppHandle, Manager};
 
 #[cfg(target_os = "linux")]
 use crate::resources;
@@ -18,10 +17,14 @@ use crate::resources;
 const SOURCE_BASE: &str = "https://raw.githubusercontent.com/v2fly/domain-list-community/master/data/";
 const ROOT_CATEGORY: &str = "category-ru";
 
-fn user_dir() -> PathBuf {
-    dirs::home_dir()
-        .unwrap_or_else(|| PathBuf::from("."))
-        .join(".config/vroxory-vpn/geosite")
+/// `dirs::home_dir()` + `.config/...` ломается на iOS (EPERM в sandbox,
+/// см. тот же фикс в geoip.rs::user_dir) — `app.path().app_data_dir()`
+/// портативен.
+fn user_dir(app: &AppHandle) -> PathBuf {
+    app.path()
+        .app_data_dir()
+        .unwrap_or_else(|_| PathBuf::from("."))
+        .join("geosite")
 }
 
 // Используется только Linux-путём (config_gen::generate_config —
@@ -46,7 +49,7 @@ fn parse_domain_file(path: &Path) -> Vec<String> {
 
 #[cfg(target_os = "linux")]
 pub fn get_ru_domains(app: &AppHandle) -> Result<Vec<String>, String> {
-    let user_file = user_dir().join("ru_domains.txt");
+    let user_file = user_dir(app).join("ru_domains.txt");
     let path = if user_file.exists() {
         user_file
     } else {
@@ -82,7 +85,7 @@ async fn fetch_file(client: &reqwest::Client, name: &str, retries: u32) -> Optio
     None
 }
 
-pub async fn update_ru_domains() -> Result<UpdateResult, String> {
+pub async fn update_ru_domains(app: &AppHandle) -> Result<UpdateResult, String> {
     let client = reqwest::Client::new();
     let mut seen_files: HashSet<String> = HashSet::new();
     let mut domains: HashSet<String> = HashSet::new();
@@ -147,7 +150,7 @@ pub async fn update_ru_domains() -> Result<UpdateResult, String> {
         return Err("Не удалось скачать ни одного домена из category-ru".into());
     }
 
-    let dir = user_dir();
+    let dir = user_dir(app);
     fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
     let mut sorted: Vec<String> = domains.into_iter().collect();
     sorted.sort();

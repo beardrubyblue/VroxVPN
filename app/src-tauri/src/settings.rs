@@ -8,15 +8,23 @@ use std::fs;
 use std::path::PathBuf;
 
 use serde_json::{json, Map, Value};
+use tauri::{AppHandle, Manager};
 
-fn settings_dir() -> PathBuf {
-    dirs::home_dir()
-        .unwrap_or_else(|| PathBuf::from("."))
-        .join(".config/vroxory-vpn")
+/// `dirs::home_dir()` + `.config/...` ломается на iOS — App Sandbox не
+/// даёт стучаться в произвольный путь под HOME, `fs::write`/`create_dir_all`
+/// валятся с "Operation not permitted (os error 1)". Пойман вживую: эта
+/// функция вызывается сразу после успешного connect (фронтенд сохраняет
+/// last_selected_server), поэтому крash выглядел как "падает при
+/// включении тоннеля". `app.path().app_data_dir()` — портативный путь
+/// Tauri, тот же фикс, что и в geoip.rs/geosite.rs.
+fn settings_dir(app: &AppHandle) -> PathBuf {
+    app.path()
+        .app_data_dir()
+        .unwrap_or_else(|_| PathBuf::from("."))
 }
 
-fn settings_path() -> PathBuf {
-    settings_dir().join("settings.json")
+fn settings_path(app: &AppHandle) -> PathBuf {
+    settings_dir(app).join("settings.json")
 }
 
 fn defaults() -> Map<String, Value> {
@@ -31,9 +39,9 @@ fn defaults() -> Map<String, Value> {
     map
 }
 
-pub fn load() -> Map<String, Value> {
+pub fn load(app: &AppHandle) -> Map<String, Value> {
     let mut merged = defaults();
-    if let Ok(content) = fs::read_to_string(settings_path()) {
+    if let Ok(content) = fs::read_to_string(settings_path(app)) {
         if let Ok(Value::Object(data)) = serde_json::from_str::<Value>(&content) {
             for (k, v) in data {
                 merged.insert(k, v);
@@ -43,14 +51,14 @@ pub fn load() -> Map<String, Value> {
     merged
 }
 
-pub fn save(data: &Map<String, Value>) -> Result<(), String> {
-    fs::create_dir_all(settings_dir()).map_err(|e| e.to_string())?;
+pub fn save(app: &AppHandle, data: &Map<String, Value>) -> Result<(), String> {
+    fs::create_dir_all(settings_dir(app)).map_err(|e| e.to_string())?;
     let text = serde_json::to_string_pretty(data).map_err(|e| e.to_string())?;
-    fs::write(settings_path(), text).map_err(|e| e.to_string())
+    fs::write(settings_path(app), text).map_err(|e| e.to_string())
 }
 
-pub fn set(key: &str, value: Value) -> Result<(), String> {
-    let mut data = load();
+pub fn set(app: &AppHandle, key: &str, value: Value) -> Result<(), String> {
+    let mut data = load(app);
     data.insert(key.to_string(), value);
-    save(&data)
+    save(app, &data)
 }
