@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
-import type { TrafficDisplay, TrafficTotals } from "@/types";
+import type { MemoryDebug, TrafficDisplay, TrafficTotals } from "@/types";
 
 // Опрос трафика раз в секунду, как core/stats.py в питон-версии — там
 // дельта считалась в фоновом потоке Python, здесь её считает сам
@@ -12,6 +12,10 @@ export function useTrafficStats(connected: boolean, pushToast: (text: string, ki
   // 0, не null — карточка памяти видна постоянно, 0 — честное
   // отображение "тоннель не запущен, процесса нет", не "загрузка"
   const [memoryBytes, setMemoryBytes] = useState(0);
+  // Детальная разбивка (Go-куча/relay) — только macOS/iOS; null на Linux
+  // и до первого ответа .appex (поле приходит как undefined из-за
+  // serde skip_serializing_if).
+  const [memoryDebug, setMemoryDebug] = useState<MemoryDebug | null>(null);
 
   useEffect(() => {
     // Сброс отображаемых значений при disconnect — НЕ через setState
@@ -44,6 +48,7 @@ export function useTrafficStats(connected: boolean, pushToast: (text: string, ki
         }
         prev = { up: totals.upload_bytes, down: totals.download_bytes, time: now };
         setMemoryBytes(totals.memory_bytes);
+        setMemoryDebug(totals.debug ?? null);
       } catch (err) {
         // временная диагностика: раньше ошибка тут проглатывалась молча
         // (предполагалось, что это просто "тоннель отключился между
@@ -60,5 +65,5 @@ export function useTrafficStats(connected: boolean, pushToast: (text: string, ki
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [connected]);
 
-  return { traffic, memoryBytes };
+  return { traffic, memoryBytes, memoryDebug };
 }

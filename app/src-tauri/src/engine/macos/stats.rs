@@ -12,6 +12,7 @@ use objc2_network_extension::NETunnelProviderSession;
 use tauri::AppHandle;
 
 use super::manager::{load_or_create_manager_blocking, nserror_to_string};
+use crate::engine::MemoryDebug;
 
 /// `manager.connection()` всегда возвращает `NEVPNConnection`, но когда
 /// `protocolConfiguration` — `NETunnelProviderProtocol` (как у нас),
@@ -22,13 +23,15 @@ use super::manager::{load_or_create_manager_blocking, nserror_to_string};
 /// когда-нибудь это окажется не так (например, до первого реального
 /// connect, когда `connection()` может быть базовым `NEVPNConnection`).
 ///
-/// Возвращает (tx_bytes, rx_bytes, rss_bytes) — tx/rx суммарно с момента
-/// старта тоннеля (не дельту: дельту/скорость считает фронтенд между
-/// двумя опросами, см. `commands.rs::get_traffic_totals`, как и для
+/// Возвращает (tx_bytes, rx_bytes, rss_bytes, debug) — tx/rx суммарно с
+/// момента старта тоннеля (не дельту: дельту/скорость считает фронтенд
+/// между двумя опросами, см. `commands.rs::get_traffic_totals`, как и для
 /// Linux-варианта), rss_bytes — текущая резидентная память ВСЕГО
 /// процесса `.appex` (см. `PacketTunnelProvider.swift::currentRSSBytes`),
-/// не только Go-кучи.
-fn get_traffic_totals_blocking() -> Result<(u64, u64, u64), String> {
+/// не только Go-кучи. `debug` — детальная разбивка (Go-куча/горутины/
+/// relay), которую `.appex` уже кладёт в тот же JSON (см. `netunnel.go::
+/// GetStats`), просто раньше Rust её не парсил.
+fn get_traffic_totals_blocking() -> Result<(u64, u64, u64, Option<MemoryDebug>), String> {
     let manager = load_or_create_manager_blocking()?;
     let connection = unsafe { manager.connection() };
     let session = Retained::downcast::<NETunnelProviderSession>(connection)
@@ -73,7 +76,16 @@ fn get_traffic_totals_blocking() -> Result<(u64, u64, u64), String> {
     let tx_bytes = parsed["txBytes"].as_u64().unwrap_or(0);
     let rx_bytes = parsed["rxBytes"].as_u64().unwrap_or(0);
     let rss_bytes = parsed["rssBytes"].as_u64().unwrap_or(0);
-    Ok((tx_bytes, rx_bytes, rss_bytes))
+    let debug = MemoryDebug {
+        heap_in_use: parsed["heapInUse"].as_u64().unwrap_or(0),
+        heap_sys: parsed["heapSys"].as_u64().unwrap_or(0),
+        goroutines: parsed["goroutines"].as_u64().unwrap_or(0),
+        tcp_relays: parsed["tcpRelays"].as_u64().unwrap_or(0),
+        udp_relays: parsed["udpRelays"].as_u64().unwrap_or(0),
+        registry_size: parsed["registrySize"].as_u64().unwrap_or(0),
+        avail_mem: parsed["availMem"].as_u64().unwrap_or(0),
+    };
+    Ok((tx_bytes, rx_bytes, rss_bytes, Some(debug)))
 }
 
 /// (upload_bytes, download_bytes, memory_bytes) — суммарно с начала
@@ -88,7 +100,7 @@ fn get_traffic_totals_blocking() -> Result<(u64, u64, u64), String> {
 pub async fn get_traffic_totals(
     _app: &AppHandle,
     _config_path: Option<&str>,
-) -> Result<(u64, u64, u64), String> {
+) -> Result<(u64, u64, u64, Option<MemoryDebug>), String> {
     tauri::async_runtime::spawn_blocking(get_traffic_totals_blocking)
         .await
         .map_err(|e| e.to_string())?

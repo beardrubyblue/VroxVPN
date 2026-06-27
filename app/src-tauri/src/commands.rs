@@ -154,6 +154,12 @@ pub struct TrafficTotals {
     pub upload_bytes: u64,
     pub download_bytes: u64,
     pub memory_bytes: u64,
+    /// Детальная разбивка памяти — только macOS/iOS (см.
+    /// `engine::MemoryDebug`). `None` на Linux и до первого ответа от
+    /// `.appex`; `#[serde(skip_serializing_if)]` чтобы не слать `null`
+    /// в JS, когда разбивки нет.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub debug: Option<crate::engine::MemoryDebug>,
 }
 
 #[tauri::command]
@@ -168,12 +174,13 @@ pub async fn get_traffic_totals(
             _ => None,
         }
     };
-    let (upload_bytes, download_bytes, memory_bytes) =
+    let (upload_bytes, download_bytes, memory_bytes, debug) =
         engine::get_traffic_totals(&app, config_path.as_deref()).await?;
     Ok(TrafficTotals {
         upload_bytes,
         download_bytes,
         memory_bytes,
+        debug,
     })
 }
 

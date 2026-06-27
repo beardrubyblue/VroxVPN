@@ -36,7 +36,7 @@ function App() {
     killSwitch: settings.killSwitch,
     pushToast,
   });
-  const { traffic, memoryBytes } = useTrafficStats(connection.status.connected, pushToast);
+  const { traffic, memoryBytes, memoryDebug } = useTrafficStats(connection.status.connected, pushToast);
   const update = useAppUpdate(pushToast);
   const geo = useGeoUpdates(pushToast);
   const addSheet = useSheet();
@@ -104,7 +104,10 @@ function App() {
 
       {page === "home" ? (
         <main className="page">
-          <MemoryCard memoryBytes={connection.status.connected ? memoryBytes : 0} />
+          <MemoryCard
+            memoryBytes={connection.status.connected ? memoryBytes : 0}
+            memoryDebug={connection.status.connected ? memoryDebug : null}
+          />
           {connection.status.connected && traffic && <TrafficCard traffic={traffic} />}
           <SubscriptionList
             subscriptions={subs.subscriptions}

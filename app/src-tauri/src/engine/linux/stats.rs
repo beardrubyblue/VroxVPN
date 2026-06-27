@@ -16,7 +16,7 @@ use super::TUN_IFACE;
 pub async fn get_traffic_totals(
     app: &AppHandle,
     config_path: Option<&str>,
-) -> Result<(u64, u64, u64), String> {
+) -> Result<(u64, u64, u64, Option<crate::engine::MemoryDebug>), String> {
     let (upload_bytes, download_bytes) = read_interface_bytes(TUN_IFACE)?;
     let memory_bytes = match config_path {
         Some(path) => {
@@ -29,7 +29,10 @@ pub async fn get_traffic_totals(
         // не подключено — нет процесса, который можно было бы спросить
         None => 0,
     };
-    Ok((upload_bytes, download_bytes, memory_bytes))
+    // Детальная разбивка (Go-куча/relay) — концепция только NE-пути
+    // (macOS/iOS), где весь стек в одном .appex. На Linux тоннель —
+    // внешний vroxcore, эти счётчики недоступны: None.
+    Ok((upload_bytes, download_bytes, memory_bytes, None))
 }
 
 fn mem_usage_blocking(app: &AppHandle, config_path: &str) -> Result<u64, String> {

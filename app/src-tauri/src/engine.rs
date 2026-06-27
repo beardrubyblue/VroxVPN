@@ -11,6 +11,36 @@
 
 use std::sync::Mutex;
 
+use serde::Serialize;
+
+/// Детальная разбивка памяти тоннеля — только macOS/iOS, где весь стек
+/// (Go-рантайм + gVisor + QUIC) живёт внутри одного `.appex`-процесса с
+/// жёстким лимитом ~50МБ. Нужна, чтобы видеть в UI КУДА именно уходит
+/// память при росте под нагрузкой (Reels): Go-куча vs RSS всего процесса
+/// vs число активных relay/горутин. Linux оставляет `None` — там тоннель
+/// это внешний `vroxcore`, эти внутренние счётчики недоступны (и не
+/// нужны: нет жёсткого лимита процесса). Поля зеркалят JSON от
+/// `netunnel.go::TunnelHandle.GetStats` (см.).
+#[derive(Serialize, Clone, Default)]
+pub struct MemoryDebug {
+    /// Go heap, реально занятый живыми объектами (runtime.MemStats.HeapInuse).
+    pub heap_in_use: u64,
+    /// Вся память, которую Go-рантайм запросил у ОС (runtime.MemStats.Sys).
+    pub heap_sys: u64,
+    /// Число живых горутин — растёт, если relay-горутины утекают.
+    pub goroutines: u64,
+    /// Активные TCP-relay (handler.go::activeTCPRelays).
+    pub tcp_relays: u64,
+    /// Активные UDP-relay (handler.go::activeUDPRelays).
+    pub udp_relays: u64,
+    /// Размер реестра соединений (handler.go::connRegistry) — должен
+    /// совпадать с tcp+udp relays; расхождение = утечка регистрации.
+    pub registry_size: u64,
+    /// Сколько байт ОС ещё готова дать процессу (os_proc_available_memory,
+    /// только iOS) — на macOS вернётся 0/огромное.
+    pub avail_mem: u64,
+}
+
 /// Платформенно-специфичный "хвост" активного соединения, который нужно
 /// освободить при disconnect, но который commands.rs не интерпретирует
 /// сам (просто `drop`-ает) — на Linux это обёртка pkexec-процесса

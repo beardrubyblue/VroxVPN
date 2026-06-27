@@ -3,10 +3,23 @@ export interface ConnectionStatus {
   server_name: string | null;
 }
 
+// Детальная разбивка памяти тоннеля — только macOS/iOS (см.
+// engine::MemoryDebug в Rust). Поля зеркалят netunnel.go::GetStats.
+export interface MemoryDebug {
+  heap_in_use: number;
+  heap_sys: number;
+  goroutines: number;
+  tcp_relays: number;
+  udp_relays: number;
+  registry_size: number;
+  avail_mem: number;
+}
+
 export interface TrafficTotals {
   upload_bytes: number;
   download_bytes: number;
   memory_bytes: number;
+  debug?: MemoryDebug;
 }
 
 export interface TrafficDisplay {
