@@ -30,6 +30,25 @@ func currentRSSBytes() -> UInt64 {
     return kerr == KERN_SUCCESS ? UInt64(info.phys_footprint) : 0
 }
 
+/// CIDR-строка ("192.168.0.0/16") → dotted-decimal маска подсети —
+/// `NEIPv4Route` ждёт явную маску, не длину префикса (в отличие от
+/// IPv6-варианта, где у Apple есть networkPrefixLength). Источник
+/// строк — config_gen.rs::generate_excluded_routes, формат гарантирован
+/// этой же функцией на Rust-стороне, поэтому парсинг здесь минимальный.
+private func ipv4SubnetMask(prefixLength: Int) -> String {
+    guard prefixLength >= 0, prefixLength <= 32 else { return "255.255.255.255" }
+    let mask: UInt32 = prefixLength == 0 ? 0 : (0xFFFF_FFFF << (32 - prefixLength))
+    return "\((mask >> 24) & 0xFF).\((mask >> 16) & 0xFF).\((mask >> 8) & 0xFF).\(mask & 0xFF)"
+}
+
+private func parseIPv4ExcludedRoutes(_ cidrs: [String]) -> [NEIPv4Route] {
+    cidrs.compactMap { cidr in
+        let parts = cidr.split(separator: "/")
+        guard parts.count == 2, let prefixLength = Int(parts[1]) else { return nil }
+        return NEIPv4Route(destinationAddress: String(parts[0]), subnetMask: ipv4SubnetMask(prefixLength: prefixLength))
+    }
+}
+
 /// Хост для netunnel (см. packaging/hysteria2-patch/netunnel/) —
 /// gVisor-стек + hysteria2-клиент без настоящего TUN-устройства, собран
 /// через `gomobile bind` в GoNetunnel.xcframework (см. ../build-go-
@@ -86,9 +105,6 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
         // как тоннель поднялся, см. ARCHITECTURE.md). Весь трафик идёт
         // через тоннель по умолчанию, без отдельного pf-ruleset, который
         // был нужен в удалённом sidecar-пути.
-        // excludedRoutes (сервер + приватные диапазоны + RU-geoip) придут
-        // в providerConfig отдельным полем — TODO при первой интеграции
-        // с config_gen::generate_excluded_routes (см. control-bridge).
         // inet4Addr приходит как CIDR ("100.100.100.101/30", формат
         // config_gen.rs::generate_provider_config_json) — NEIPv4Settings/
         // tunnelRemoteAddress ждут чистый адрес без префикса, без этого
@@ -105,7 +121,33 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
         let settings = NEPacketTunnelNetworkSettings(tunnelRemoteAddress: remoteAddress)
         settings.ipv4Settings = NEIPv4Settings(addresses: [inet4], subnetMasks: ["255.255.255.252"])
         settings.ipv4Settings?.includedRoutes = [NEIPv4Route.default()]
+        // ipv4Exclude/ipv6Exclude — Rust считает их заранее
+        // (config_gen::generate_excluded_routes: приватные диапазоны +
+        // IP самого VPN-сервера + RU-geoip, если включён bypass) и
+        // присылает сюда в providerConfiguration (manager.rs::
+        // build_provider_configuration) — раньше эти поля долетали, но
+        // Swift их не читал вообще (TODO годами висел нерешённым).
+        // Без exclude для server-IP был риск routing loop (правда, NE
+        // обычно сам не заворачивает трафик СВОЕГО же процесса в
+        // собственный тоннель — но явная исключённость надёжнее, чем
+        // рассчитывать на это поведение неявно).
+        let ipv4Exclude = (providerConfig["ipv4Exclude"] as? [String]) ?? []
+        settings.ipv4Settings?.excludedRoutes = parseIPv4ExcludedRoutes(ipv4Exclude)
         settings.mtu = (providerConfig["mtu"] as? NSNumber) ?? 1500
+        // Системный/APNs/локальная сеть трафик не должен идти через
+        // тоннель — у Apple для этого штатные флаги (введены вместе с
+        // includeAllNetworks, но применимы и без него). excludeAPNs —
+        // прямой ответ на жалобу "фоновый системный трафик копится в
+        // тоннеле и держит память" (push-уведомления других приложений
+        // иначе тоже считаются нашими relay-соединениями). iOS-only —
+        // на macOS таких полей у NEPacketTunnelNetworkSettings нет
+        // вообще (APNs/cellular — мобильные понятия), этот файл общий
+        // для обеих платформ.
+        #if os(iOS)
+        settings.excludeLocalNetworks = true
+        settings.excludeAPNs = true
+        settings.excludeCellularServices = true
+        #endif
         // Без dnsSettings DNS-запросы продолжают идти на оригинальный
         // (обычно приватный, типа 192.168.x.x) резолвер системы — он
         // недостижим через тоннель, и резолвинг по имени просто не
