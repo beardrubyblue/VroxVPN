@@ -129,6 +129,12 @@ function App() {
           bypassStatus={geo.bypassStatus}
           killSwitch={settings.killSwitch}
           onKillSwitchChange={settings.onKillSwitchChange}
+          idleTimeoutSeconds={settings.idleTimeoutSeconds}
+          onIdleTimeoutSecondsChange={settings.onIdleTimeoutSecondsChange}
+          maxTcpConnections={settings.maxTcpConnections}
+          onMaxTcpConnectionsChange={settings.onMaxTcpConnectionsChange}
+          maxUdpConnections={settings.maxUdpConnections}
+          onMaxUdpConnectionsChange={settings.onMaxUdpConnectionsChange}
           updateChecking={update.checking}
           onCheckUpdate={update.check}
           updateInfo={update.info}

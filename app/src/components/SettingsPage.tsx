@@ -1,3 +1,4 @@
+import { RelayLimitsCard } from "@/components/RelayLimitsCard";
 import { Switch } from "@/components/Switch";
 import type { UpdateInfo } from "@/types";
 
@@ -12,6 +13,12 @@ interface SettingsPageProps {
   bypassStatus: string;
   killSwitch: boolean;
   onKillSwitchChange: (checked: boolean) => void;
+  idleTimeoutSeconds: number;
+  onIdleTimeoutSecondsChange: (value: number) => void;
+  maxTcpConnections: number;
+  onMaxTcpConnectionsChange: (value: number) => void;
+  maxUdpConnections: number;
+  onMaxUdpConnectionsChange: (value: number) => void;
   updateChecking: boolean;
   onCheckUpdate: () => void;
   updateInfo: UpdateInfo | null;
@@ -31,6 +38,12 @@ export function SettingsPage({
   bypassStatus,
   killSwitch,
   onKillSwitchChange,
+  idleTimeoutSeconds,
+  onIdleTimeoutSecondsChange,
+  maxTcpConnections,
+  onMaxTcpConnectionsChange,
+  maxUdpConnections,
+  onMaxUdpConnectionsChange,
   updateChecking,
   onCheckUpdate,
   updateInfo,
@@ -74,6 +87,16 @@ export function SettingsPage({
           )}
         </div>
       </div>
+
+      <RelayLimitsCard
+        idleTimeoutSeconds={idleTimeoutSeconds}
+        onIdleTimeoutSecondsChange={onIdleTimeoutSecondsChange}
+        maxTcpConnections={maxTcpConnections}
+        onMaxTcpConnectionsChange={onMaxTcpConnectionsChange}
+        maxUdpConnections={maxUdpConnections}
+        onMaxUdpConnectionsChange={onMaxUdpConnectionsChange}
+        connected={connected}
+      />
 
       <div>
         <div className="group-title">Защита</div>

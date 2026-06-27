@@ -16,26 +16,45 @@ import (
 	"github.com/apernet/hysteria/core/v2/client"
 )
 
-// maxActiveRelays — потолок одновременных relay-пар (TCP+UDP вместе,
-// общий бюджет). Пойман вживую: один реальный сайт + Speedtest
-// одновременно открывают десятки параллельных TCP/QUIC-потоков
-// (HTML/CSS/JS/картинки/аналитика/шрифты с разных доменов) — каждый
-// относительно небольшой буфер, умноженный на 50-80 одновременных
-// соединений, и набирает RSS far за бюджет iOS NE (~50МБ, см. init() в
-// netunnel.go), даже после того как сами QUIC receive windows уже
-// занижены. Это оказалось ГЛАВНЫМ потребителем памяти под нагрузкой —
-// занижение одних только окон на поток (без лимита на их количество)
-// само по себе только ухудшило ситуацию в живом тесте. Сверх лимита —
-// TCP получает RST (клиент сам переподключится/отвалится на это
-// конкретное соединение, остальной браузинг не страдает), UDP-датаграмма
-// тихо дропается (как обычный packet loss, нормально для UDP).
-//
-// 48 — отправная точка, не результат профилирования: возможны заметные
-// stalls при реальном использовании (если лимит слишком тесный) — в
-// этом случае стоит поднять до 64+ и заново замерить память.
-const maxActiveRelays = 48
+// maxTCPRelays/maxUDPRelays — раздельные потолки (не общий бюджет, как
+// было раньше maxActiveRelays) — настраиваются из UI через
+// applyRelayLimits (см. netunnel.go::Config), дефолты синхронизированы
+// с Happ (256 TCP / 128 UDP, см. doc-комментарий Config.
+// MaxTCPConnections). Сверх лимита — TCP получает RST (клиент сам
+// переподключится/отвалится на это конкретное соединение, остальной
+// браузинг не страдает), UDP-датаграмма тихо дропается (как обычный
+// packet loss, нормально для UDP).
+const (
+	defaultMaxTCPRelays = 256
+	defaultMaxUDPRelays = 128
+)
 
-var activeRelays atomic.Int32
+var (
+	maxTCPRelays = int32(defaultMaxTCPRelays)
+	maxUDPRelays = int32(defaultMaxUDPRelays)
+
+	activeTCPRelays atomic.Int32
+	activeUDPRelays atomic.Int32
+)
+
+// applyRelayLimits переносит настраиваемые из UI лимиты (см.
+// netunnel.go::Config) в переменные, которые реально читают
+// tcpForwarderHandler/udpForwarderHandler/relayTCP/relayUDP. Нулевые
+// значения в JSON (поле не задано на Rust-стороне) — фоллбек на дефолт,
+// а не "лимит = 0" (что заблокировало бы вообще все соединения).
+func applyRelayLimits(cfg *Config) {
+	if cfg.MaxTCPConnections > 0 {
+		maxTCPRelays = int32(cfg.MaxTCPConnections)
+	}
+	if cfg.MaxUDPConnections > 0 {
+		maxUDPRelays = int32(cfg.MaxUDPConnections)
+	}
+	if cfg.IdleTimeoutSeconds > 0 {
+		idleTimeout := time.Duration(cfg.IdleTimeoutSeconds) * time.Second
+		tcpIdleTimeout = idleTimeout
+		udpIdleTimeout = idleTimeout
+	}
+}
 
 // Реестр активных relay-соединений с временем создания — нужен, чтобы
 // под реальным давлением памяти (см. evictOldestConn,
@@ -104,10 +123,9 @@ func evictOldestConn() bool {
 // netunnel.go) эта логика пропала, и без неё каждый уникальный UDP-поток
 // (а DNS-запросы создают их пачками) держал две горутины + gVisor-
 // endpoint НАВСЕГДА, до полной остановки тоннеля — реальная утечка при
-// долгой сессии. 60с — то же значение, что используется как разумный
-// дефолт NAT-таймаута для UDP в большинстве реализаций (включая
-// исходный sidecar-путь).
-const udpIdleTimeout = 60 * time.Second
+// долгой сессии. 300с — дефолт Happ (настраивается из UI, см.
+// applyRelayLimits), не наша исходная эмпирика (60с).
+var udpIdleTimeout = time.Duration(300) * time.Second
 
 // tcpForwarderHandler и udpForwarderHandler — обработчики для
 // tcp.Forwarder/udp.Forwarder gVisor-стека (см. netunnel.go::StartTunnel,
@@ -132,7 +150,7 @@ func tcpForwarderHandler(hyClient client.Client) func(*tcp.ForwarderRequest) {
 	return func(r *tcp.ForwarderRequest) {
 		// Лимит ДО дозвона — нет смысла тратить TCP/QUIC-handshake на
 		// соединение, которое всё равно зарежем сразу после.
-		if activeRelays.Load() >= maxActiveRelays {
+		if activeTCPRelays.Load() >= maxTCPRelays {
 			r.Complete(true) // RST — браузер сам ретраит/откладывает, остальной браузинг не страдает
 			return
 		}
@@ -155,7 +173,7 @@ func tcpForwarderHandler(hyClient client.Client) func(*tcp.ForwarderRequest) {
 		}
 		r.Complete(false)
 
-		activeRelays.Add(1)
+		activeTCPRelays.Add(1)
 		conn := gonet.NewTCPConn(&wq, ep)
 		connID := registerConn(func() { _ = conn.Close() })
 		go relayTCP(connID, conn, hyConn)
@@ -172,7 +190,8 @@ func tcpForwarderHandler(hyClient client.Client) func(*tcp.ForwarderRequest) {
 // реестре, GC его не освободит, потому что оно реально используется
 // (просто не активно прямо сейчас). io.Copy сам по себе не даёт зацепки
 // для отслеживания активности — заменён на ручной цикл с таймером.
-const tcpIdleTimeout = 60 * time.Second
+// 300с — дефолт Happ (настраивается из UI, см. applyRelayLimits).
+var tcpIdleTimeout = time.Duration(300) * time.Second
 
 // activityReader оборачивает io.Reader и отмечает время последнего
 // успешного чтения — используется для отслеживания активности в обе
@@ -192,7 +211,7 @@ func (a *activityReader) Read(p []byte) (int, error) {
 
 func relayTCP(connID uint64, local net.Conn, remote io.ReadWriteCloser) {
 	defer unregisterConn(connID)
-	defer activeRelays.Add(-1)
+	defer activeTCPRelays.Add(-1)
 	defer local.Close()
 	defer remote.Close()
 
@@ -231,7 +250,7 @@ func udpForwarderHandler(hyClient client.Client) func(*udp.ForwarderRequest) boo
 		// Сверх лимита — тихо дропаем датаграмму (как обычный packet
 		// loss, нормальное поведение для UDP, отправитель сам ретраит
 		// при необходимости на уровне своего протокола).
-		if activeRelays.Load() >= maxActiveRelays {
+		if activeUDPRelays.Load() >= maxUDPRelays {
 			return false
 		}
 
@@ -251,7 +270,7 @@ func udpForwarderHandler(hyClient client.Client) func(*udp.ForwarderRequest) boo
 			return false
 		}
 
-		activeRelays.Add(1)
+		activeUDPRelays.Add(1)
 		connID := registerConn(func() { _ = local.Close() })
 		go relayUDP(connID, local, rc, reqAddr)
 		return true
@@ -260,7 +279,7 @@ func udpForwarderHandler(hyClient client.Client) func(*udp.ForwarderRequest) boo
 
 func relayUDP(connID uint64, local net.Conn, remote client.HyUDPConn, reqAddr string) {
 	defer unregisterConn(connID)
-	defer activeRelays.Add(-1)
+	defer activeUDPRelays.Add(-1)
 	defer local.Close()
 	defer remote.Close()
 

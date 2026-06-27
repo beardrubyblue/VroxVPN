@@ -107,6 +107,18 @@ type Config struct {
 	Inet4Addr  string           `json:"inet4Addr"`
 	Inet6Addr  string           `json:"inet6Addr,omitempty"`
 	MTU        uint32           `json:"mtu"`
+	// Настраиваемые из UI лимиты relay-слоя (handler.go) — 0 означает
+	// "не задано", тогда берётся дефолт (см. applyRelayLimits). Дефолты
+	// синхронизированы с Happ (другой клиент, у пользователя был живой
+	// сценарий сравнения): IdleTimeoutSeconds=300, MaxTCPConnections=256,
+	// MaxUDPConnections=128 — заметно мягче, чем наши прежние 60с/48,
+	// которые были подобраны эмпирически именно под нашу архитектуру
+	// (общий мультиплексированный QUIC-туннель, не отдельное соединение
+	// на каждый relay, как, по-видимому, у Happ/xray-core) — пользователь
+	// предпочёл цифры Happ как отправную точку, тюнить дальше по факту.
+	IdleTimeoutSeconds uint32 `json:"idleTimeoutSeconds,omitempty"`
+	MaxTCPConnections  uint32 `json:"maxTcpConnections,omitempty"`
+	MaxUDPConnections  uint32 `json:"maxUdpConnections,omitempty"`
 }
 
 type ObfsConfig struct {
@@ -298,6 +310,7 @@ func StartTunnel(configJSON string) (*TunnelHandle, error) {
 	if err := json.Unmarshal([]byte(configJSON), &cfg); err != nil {
 		return nil, fmt.Errorf("netunnel: bad config json: %w", err)
 	}
+	applyRelayLimits(&cfg)
 
 	hyConfig, err := buildClientConfig(&cfg)
 	if err != nil {

@@ -298,10 +298,47 @@ pub fn generate_excluded_routes(
 /// Не пишет на диск — под NE конфиг уходит в `NETunnelProviderProtocol.
 /// providerConfiguration` в памяти, не файлом.
 ///
+/// Лимиты relay-слоя (packaging/hysteria2-patch/netunnel/handler.go::
+/// applyRelayLimits) — настраиваемые из UI через settings.json. 0 в
+/// каждом поле означает "не задано" (старый settings.json без миграции,
+/// или ключ отсутствует) — Go-сторона сама подставит дефолт в этом
+/// случае (см. doc-комментарий applyRelayLimits), поэтому здесь просто
+/// `unwrap_or(0)`, не паника на отсутствующий ключ.
+#[cfg(any(target_os = "macos", target_os = "ios"))]
+#[derive(Default, Clone, Copy)]
+pub struct RelayLimits {
+    pub idle_timeout_seconds: u64,
+    pub max_tcp_connections: u64,
+    pub max_udp_connections: u64,
+}
+
+#[cfg(any(target_os = "macos", target_os = "ios"))]
+impl RelayLimits {
+    pub fn from_settings(settings: &serde_json::Map<String, serde_json::Value>) -> Self {
+        Self {
+            idle_timeout_seconds: settings
+                .get("idle_timeout_seconds")
+                .and_then(|v| v.as_u64())
+                .unwrap_or(0),
+            max_tcp_connections: settings
+                .get("max_tcp_connections")
+                .and_then(|v| v.as_u64())
+                .unwrap_or(0),
+            max_udp_connections: settings
+                .get("max_udp_connections")
+                .and_then(|v| v.as_u64())
+                .unwrap_or(0),
+        }
+    }
+}
+
 /// `#[cfg(any(target_os = "macos", target_os = "ios"))]` — см. комментарий у
 /// `generate_excluded_routes` выше, та же причина.
 #[cfg(any(target_os = "macos", target_os = "ios"))]
-pub fn generate_provider_config_json(server: &Server) -> serde_json::Value {
+pub fn generate_provider_config_json(
+    server: &Server,
+    relay_limits: RelayLimits,
+) -> serde_json::Value {
     let sni = if server.sni.is_empty() {
         server.host.clone()
     } else {
@@ -347,6 +384,9 @@ pub fn generate_provider_config_json(server: &Server) -> serde_json::Value {
         "inet4Addr": "100.100.100.101/30",
         "inet6Addr": "2001::ffff:ffff:ffff:fff1/126",
         "mtu": 1500,
+        "idleTimeoutSeconds": relay_limits.idle_timeout_seconds,
+        "maxTcpConnections": relay_limits.max_tcp_connections,
+        "maxUdpConnections": relay_limits.max_udp_connections,
     })
 }
 
@@ -379,7 +419,7 @@ mod tests {
     #[test]
     fn provider_config_json_matches_netunnel_config_shape() {
         let server = test_server();
-        let json = generate_provider_config_json(&server);
+        let json = generate_provider_config_json(&server, RelayLimits::default());
 
         assert_eq!(json["server"], "vpn.example.com:443");
         assert_eq!(json["auth"], "secret");

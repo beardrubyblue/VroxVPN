@@ -54,6 +54,11 @@ export interface Settings {
   last_selected_server: string;
   ru_bypass_enabled: boolean;
   kill_switch_enabled: boolean;
+  // Лимиты relay-слоя на iOS (packaging/hysteria2-patch/netunnel/
+  // handler.go::applyRelayLimits) — дефолты синхронизированы с Happ.
+  idle_timeout_seconds: number;
+  max_tcp_connections: number;
+  max_udp_connections: number;
 }
 
 export interface UpdateCheck {

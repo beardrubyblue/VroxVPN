@@ -326,6 +326,21 @@ body {
   font-size: 13px;
 }
 
+.number-input {
+  width: 80px;
+  padding: 6px 8px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background-color: var(--window-bg);
+  color: var(--fg);
+  font-size: 13px;
+  text-align: right;
+}
+
+.number-input:disabled {
+  opacity: 0.5;
+}
+
 .plain-button {
   padding: 8px 14px;
   border-radius: 8px;

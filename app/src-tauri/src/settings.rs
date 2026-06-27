@@ -33,6 +33,15 @@ fn defaults() -> Map<String, Value> {
         "last_selected_server": "",
         "ru_bypass_enabled": false,
         "kill_switch_enabled": false,
+        // Лимиты relay-слоя на iOS (packaging/hysteria2-patch/netunnel/
+        // handler.go::applyRelayLimits) — настраиваемые из UI, дефолты
+        // синхронизированы с Happ (другим клиентом, использован как
+        // отправная точка для сравнения вживую), не с нашей прежней
+        // эмпирикой (60с/48 — заметно туже, подбиралось отдельно под
+        // нашу архитектуру общего мультиплексированного QUIC-туннеля).
+        "idle_timeout_seconds": 300,
+        "max_tcp_connections": 256,
+        "max_udp_connections": 128,
     }) else {
         unreachable!()
     };

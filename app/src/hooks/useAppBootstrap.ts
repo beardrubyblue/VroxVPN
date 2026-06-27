@@ -19,6 +19,9 @@ export function useAppBootstrap({ settings, subs, setSelectedServer }: UseAppBoo
       const saved = await invoke<Settings>("get_settings");
       settings.setRuBypass(saved.ru_bypass_enabled);
       settings.setKillSwitch(saved.kill_switch_enabled);
+      settings.setIdleTimeoutSeconds(saved.idle_timeout_seconds);
+      settings.setMaxTcpConnections(saved.max_tcp_connections);
+      settings.setMaxUdpConnections(saved.max_udp_connections);
       const loaded = await subs.loadFromMetas(saved.subscriptions ?? []);
       if (saved.last_selected_server) {
         for (const sub of loaded) {
