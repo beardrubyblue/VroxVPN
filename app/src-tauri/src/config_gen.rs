@@ -321,6 +321,18 @@ pub fn generate_provider_config_json(server: &Server) -> serde_json::Value {
         .next()
         .unwrap_or_else(|| server.host.clone());
 
+    // iOS NE-расширение жёстко лимитировано по памяти ОС (~50МБ,
+    // поймано вживую — реальный спидтест разгонял RSS до ~59МБ и iOS
+    // убивала расширение). hysteria2/QUIC сайзит буфера congestion
+    // control под заявленную bandwidth — чем больше цифра, тем больше
+    // окна на приём/отправку. На macOS этого жёсткого потолка нет
+    // (NE там much менее зажат), поэтому занижаем только для iOS, не
+    // трогая macOS-throughput.
+    #[cfg(target_os = "ios")]
+    let bandwidth_mbps = "25 mbps";
+    #[cfg(not(target_os = "ios"))]
+    let bandwidth_mbps = "100 mbps";
+
     serde_json::json!({
         "server": format!("{}:{}", server_addr, server.port),
         "auth": server.password,
@@ -331,7 +343,7 @@ pub fn generate_provider_config_json(server: &Server) -> serde_json::Value {
             "type": server.obfs,
             "salamander": { "password": server.obfs_password },
         },
-        "bandwidth": { "up": "100 mbps", "down": "100 mbps" },
+        "bandwidth": { "up": bandwidth_mbps, "down": bandwidth_mbps },
         "inet4Addr": "100.100.100.101/30",
         "inet6Addr": "2001::ffff:ffff:ffff:fff1/126",
         "mtu": 1500,
