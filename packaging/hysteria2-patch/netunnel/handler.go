@@ -4,6 +4,7 @@ import (
 	"io"
 	"net"
 	"strconv"
+	"sync/atomic"
 	"time"
 
 	"gvisor.dev/gvisor/pkg/tcpip/adapters/gonet"
@@ -13,6 +14,27 @@ import (
 
 	"github.com/apernet/hysteria/core/v2/client"
 )
+
+// maxActiveRelays — потолок одновременных relay-пар (TCP+UDP вместе,
+// общий бюджет). Пойман вживую: один реальный сайт + Speedtest
+// одновременно открывают десятки параллельных TCP/QUIC-потоков
+// (HTML/CSS/JS/картинки/аналитика/шрифты с разных доменов) — каждый
+// относительно небольшой буфер, умноженный на 50-80 одновременных
+// соединений, и набирает RSS far за бюджет iOS NE (~50МБ, см. init() в
+// netunnel.go), даже после того как сами QUIC receive windows уже
+// занижены. Это оказалось ГЛАВНЫМ потребителем памяти под нагрузкой —
+// занижение одних только окон на поток (без лимита на их количество)
+// само по себе только ухудшило ситуацию в живом тесте. Сверх лимита —
+// TCP получает RST (клиент сам переподключится/отвалится на это
+// конкретное соединение, остальной браузинг не страдает), UDP-датаграмма
+// тихо дропается (как обычный packet loss, нормально для UDP).
+//
+// 48 — отправная точка, не результат профилирования: возможны заметные
+// stalls при реальном использовании (если лимит слишком тесный) — в
+// этом случае стоит поднять до 64+ и заново замерить память.
+const maxActiveRelays = 48
+
+var activeRelays atomic.Int32
 
 // udpIdleTimeout — сколько ждать следующий пакет в UDP-"сессии" прежде
 // чем её закрыть. Раньше (sing-tun's System stack) это делал встроенный
@@ -46,6 +68,13 @@ const udpIdleTimeout = 60 * time.Second
 
 func tcpForwarderHandler(hyClient client.Client) func(*tcp.ForwarderRequest) {
 	return func(r *tcp.ForwarderRequest) {
+		// Лимит ДО дозвона — нет смысла тратить TCP/QUIC-handshake на
+		// соединение, которое всё равно зарежем сразу после.
+		if activeRelays.Load() >= maxActiveRelays {
+			r.Complete(true) // RST — браузер сам ретраит/откладывает, остальной браузинг не страдает
+			return
+		}
+
 		id := r.ID()
 		reqAddr := net.JoinHostPort(id.LocalAddress.String(), strconv.Itoa(int(id.LocalPort)))
 
@@ -64,12 +93,14 @@ func tcpForwarderHandler(hyClient client.Client) func(*tcp.ForwarderRequest) {
 		}
 		r.Complete(false)
 
+		activeRelays.Add(1)
 		conn := gonet.NewTCPConn(&wq, ep)
 		go relayTCP(conn, hyConn)
 	}
 }
 
 func relayTCP(local net.Conn, remote io.ReadWriteCloser) {
+	defer activeRelays.Add(-1)
 	defer local.Close()
 	defer remote.Close()
 
@@ -87,6 +118,13 @@ func relayTCP(local net.Conn, remote io.ReadWriteCloser) {
 
 func udpForwarderHandler(hyClient client.Client) func(*udp.ForwarderRequest) bool {
 	return func(r *udp.ForwarderRequest) bool {
+		// Сверх лимита — тихо дропаем датаграмму (как обычный packet
+		// loss, нормальное поведение для UDP, отправитель сам ретраит
+		// при необходимости на уровне своего протокола).
+		if activeRelays.Load() >= maxActiveRelays {
+			return false
+		}
+
 		id := r.ID()
 		reqAddr := net.JoinHostPort(id.LocalAddress.String(), strconv.Itoa(int(id.LocalPort)))
 
@@ -103,12 +141,14 @@ func udpForwarderHandler(hyClient client.Client) func(*udp.ForwarderRequest) boo
 			return false
 		}
 
+		activeRelays.Add(1)
 		go relayUDP(local, rc, reqAddr)
 		return true
 	}
 }
 
 func relayUDP(local net.Conn, remote client.HyUDPConn, reqAddr string) {
+	defer activeRelays.Add(-1)
 	defer local.Close()
 	defer remote.Close()
 
