@@ -254,11 +254,13 @@ func buildClientConfig(cfg *Config) (*client.Config, error) {
 		// тоннеля — ожидаемо, окно живёт, пока жив сам QUIC-коннект к
 		// серверу (один на весь тоннель). Дальнейшее ужимание снижает
 		// потолок ценой риска подвисаний при быстрой прокрутке видео.
+		// Четвёртый проход — пользователь подтвердил вживую, что 256КБ/
+		// 1МБ не давали подвисаний на видео, попросил ужать ещё.
 		QUICConfig: client.QUICConfig{
-			InitialStreamReceiveWindow:     64 << 10,  // 64 КиБ
-			MaxStreamReceiveWindow:         256 << 10, // 256 КиБ (было 384 КиБ)
-			InitialConnectionReceiveWindow: 128 << 10, // 128 КиБ
-			MaxConnectionReceiveWindow:     1 << 20,   // 1 МиБ (было 1.5 МиБ)
+			InitialStreamReceiveWindow:     32 << 10,  // 32 КиБ
+			MaxStreamReceiveWindow:         128 << 10, // 128 КиБ (было 256 КиБ)
+			InitialConnectionReceiveWindow: 64 << 10,  // 64 КиБ
+			MaxConnectionReceiveWindow:     512 << 10, // 512 КиБ (было 1 МиБ)
 		},
 		CongestionConfig: client.CongestionConfig{
 			Type:       cfg.Congestion.Type,
