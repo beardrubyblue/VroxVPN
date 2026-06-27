@@ -213,6 +213,21 @@ func buildClientConfig(cfg *Config) (*client.Config, error) {
 			ServerName:         sni,
 			InsecureSkipVerify: cfg.Insecure,
 		},
+		// НЕ настроено по умолчанию в core/client/config.go —
+		// MaxStreamReceiveWindow дефолтится в 8МБ НА КАЖДЫЙ stream (а
+		// stream = одно relayTCP-соединение, реальный сайт открывает
+		// их десятками), MaxConnectionReceiveWindow — в 20МБ суммарно
+		// на всё QUIC-соединение. Это и оказалось основным потребителем
+		// памяти под нагрузкой, не gVisor TCP-буфера (см. соседний
+		// SetTransportProtocolOption в StartTunnel — тот правит только
+		// локальный virtual-TCP, не сам тоннель к серверу). Снижено с
+		// большим запасом до бюджета iOS NE (~50МБ, см. init() ниже).
+		QUICConfig: client.QUICConfig{
+			InitialStreamReceiveWindow:     256 << 10, // 256 КиБ
+			MaxStreamReceiveWindow:         1 << 20,   // 1 МиБ (было 8 МиБ)
+			InitialConnectionReceiveWindow: 512 << 10, // 512 КиБ
+			MaxConnectionReceiveWindow:     4 << 20,   // 4 МиБ (было 20 МиБ)
+		},
 		CongestionConfig: client.CongestionConfig{
 			Type:       cfg.Congestion.Type,
 			BBRProfile: cfg.Congestion.BBRProfile,
