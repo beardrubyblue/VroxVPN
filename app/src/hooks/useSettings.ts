@@ -4,9 +4,9 @@ import { invoke } from "@tauri-apps/api/core";
 // Дефолты для relay-лимитов iOS (см. settings.rs::defaults) — нужны
 // здесь же, чтобы UI показывал разумные числа до первого get_settings
 // (тот же подход, что и false/false выше для переключателей).
-const DEFAULT_IDLE_TIMEOUT_SECONDS = 300;
-const DEFAULT_MAX_TCP_CONNECTIONS = 256;
-const DEFAULT_MAX_UDP_CONNECTIONS = 128;
+const DEFAULT_IDLE_TIMEOUT_SECONDS = 30;
+const DEFAULT_MAX_TCP_CONNECTIONS = 64;
+const DEFAULT_MAX_UDP_CONNECTIONS = 32;
 
 export function useSettings() {
   const [ruBypass, setRuBypass] = useState(false);
