@@ -27,6 +27,12 @@ targets:
   VroxVPNHost:
     type: application
     platform: macOS
+    # Явная схема в project.yml (а не созданная руками в Xcode) — иначе
+    # `xcodegen generate` сносит локально созданные схемы, и
+    # build-testflight*.sh падает с "does not contain a scheme". Пустой
+    # scheme: {} даёт xcodegen стандартный набор action'ов (build/run/
+    # archive с Release-конфигом) для этого таргета.
+    scheme: {}
     sources:
       - VroxVPNHost
     settings:
@@ -63,6 +69,7 @@ targets:
   VroxTunnelExtension:
     type: app-extension
     platform: macOS
+    scheme: {}
     sources:
       - VroxTunnelExtension
     settings:
@@ -95,6 +102,9 @@ targets:
   VroxVPNHost-iOS:
     type: application
     platform: iOS
+    # Нужна build-testflight-ios.sh (-scheme VroxVPNHost-iOS) — см.
+    # комментарий про scheme у VroxVPNHost выше.
+    scheme: {}
     sources:
       - VroxVPNHost-iOS
     settings:
@@ -138,6 +148,7 @@ targets:
   VroxTunnelExtension-iOS:
     type: app-extension
     platform: iOS
+    scheme: {}
     sources:
       - path: VroxTunnelExtension/PacketTunnelProvider.swift
         group: VroxTunnelExtension-iOS
