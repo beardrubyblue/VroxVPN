@@ -30,7 +30,14 @@ targets:
     sources:
       - path: Sources
       - path: Assets.xcassets
+      # buildPhase: none — без этого xcodegen копирует libapp.a (статлиб
+      # Rust-кода, нужна только для линковки, см. LIBRARY_SEARCH_PATHS
+      # ниже) прямо в .app как ресурс. App Store Connect это отклоняет:
+      # "Invalid bundle structure... cannot contain standalone
+      # executables or libraries" (code 90171), проверено вживую на
+      # реальной загрузке.
       - path: Externals
+        buildPhase: none
       - path: app_iOS
       - path: assets
         buildPhase: resources
@@ -53,14 +60,18 @@ targets:
           - UIInterfaceOrientationLandscapeRight
         CFBundleShortVersionString: 4.0.0
         CFBundleVersion: "4.0.0"
-    entitlements:
-      path: app_iOS/app_iOS.entitlements
     scheme:
       environmentVariables:
         RUST_BACKTRACE: full
         RUST_LOG: info
     settings:
       base:
+        # CODE_SIGN_ENTITLEMENTS вместо xcodegen-ключа `entitlements:` —
+        # тот генерирует файл с нуля при каждом `xcodegen generate` и
+        # затирал наш NetworkExtension entitlement обратно в пустой
+        # <dict/> (проверено вживую несколько раз подряд). Это поле
+        # Tauri сам сюда вписал при `tauri ios init` — переопределяем.
+        CODE_SIGN_ENTITLEMENTS: app_iOS/app_iOS.entitlements
         ENABLE_BITCODE: false
         ARCHS: [arm64]
         VALID_ARCHS: arm64 
@@ -69,6 +80,16 @@ targets:
         ALWAYS_EMBED_SWIFT_STANDARD_LIBRARIES: true
         EXCLUDED_ARCHS[sdk=iphoneos*]: x86_64
       groups: [app]
+      # Automatic-подпись переключается на Apple Distribution только во
+      # время настоящего archive-action в Xcode — `tauri ios build`
+      # гонит plain `xcodebuild build`, поэтому без явного Manual здесь
+      # подпись тихо остаётся Development (см. doc-комментарий в
+      # macos-ext/project.yml — та же грабля, что и на macOS).
+      configs:
+        release:
+          CODE_SIGN_STYLE: Manual
+          CODE_SIGN_IDENTITY: "Apple Distribution"
+          PROVISIONING_PROFILE_SPECIFIER: "vrox.vpn iOS App Store"
     dependencies:
       - framework: libapp.a
         embed: false
@@ -80,6 +101,9 @@ targets:
       - sdk: Security.framework
       - sdk: UIKit.framework
       - sdk: WebKit.framework
+      - target: VroxTunnelExtension
+        embed: true
+        codeSign: true
     preBuildScripts:
       - script: pnpm tauri ios xcode-script -v --platform ${PLATFORM_DISPLAY_NAME:?} --sdk-root ${SDKROOT:?} --framework-search-paths "${FRAMEWORK_SEARCH_PATHS:?}" --header-search-paths "${HEADER_SEARCH_PATHS:?}" --gcc-preprocessor-definitions "${GCC_PREPROCESSOR_DEFINITIONS:-}" --configuration ${CONFIGURATION:?} ${FORCE_COLOR} ${ARCHS:?}
         name: Build Rust Code
@@ -87,3 +111,55 @@ targets:
         outputFiles:
           - $(SRCROOT)/Externals/x86_64/${CONFIGURATION}/libapp.a
           - $(SRCROOT)/Externals/arm64/${CONFIGURATION}/libapp.a
+
+  # NEPacketTunnelProvider — без него app_iOS вызывает NETunnelProviderManager
+  # с providerBundleIdentifier "com.vroxory.vpn.tunnel" (см. engine/macos/
+  # manager.rs::PROVIDER_BUNDLE_ID), но реального расширения с этим bundle
+  # id не существует — Connect доходил бы до Rust-кода, но тоннель
+  # никогда бы не поднялся. Переиспользует ОДИН И ТОТ ЖЕ Swift-файл, что
+  # и macos-ext/VroxTunnelExtension-iOS (PacketTunnelProvider.swift уже
+  # платформонезависимый — Darwin/NetworkExtension/os.log, без AppKit/
+  # UIKit), и тот же GoNetunnel.xcframework (ios-arm64 слайс, собран
+  # macos-ext/build-go-framework.sh).
+  VroxTunnelExtension:
+    type: app-extension
+    platform: iOS
+    deploymentTarget: "16.0"
+    sources:
+      - path: ../../../../macos-ext/VroxTunnelExtension/PacketTunnelProvider.swift
+        group: VroxTunnelExtension
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.vroxory.vpn.tunnel
+        PRODUCT_NAME: VroxTunnelExtension
+        # app_iOS получает DEVELOPMENT_TEAM через APPLE_DEVELOPMENT_TEAM
+        # env var, который подставляет сам `tauri ios build` — но это
+        # затрагивает только тот таргет, на который Tauri явно
+        # ориентирован, не наш добавленный вручную. Задаём явно тем же
+        # team ID, что и остальные таргеты в этом репозитории.
+        DEVELOPMENT_TEAM: QRZT5R3Q28
+        # Обычные build-settings, НЕ xcodegen-ключи `info:`/`entitlements:`
+        # — те генерируют файл с нуля при каждом `xcodegen generate`,
+        # затирая существующий (проверено на собственном опыте: стёрло
+        # NSExtension-блок из этого самого Info.plist). INFOPLIST_FILE/
+        # CODE_SIGN_ENTITLEMENTS просто передают путь как есть, файл не
+        # трогают — тот же приём, что в macos-ext/project.yml.
+        INFOPLIST_FILE: ../../../../macos-ext/VroxTunnelExtension-iOS/Info.plist
+        CODE_SIGN_ENTITLEMENTS: ../../../../macos-ext/VroxTunnelExtension-iOS/VroxTunnelExtension-iOS.entitlements
+        # Info.plist расширения ссылается на $(CURRENT_PROJECT_VERSION) —
+        # без явного значения подставилась бы пустота (никто его здесь
+        # не задаёт иначе). app_iOS использует литерал "4.0.0" для
+        # CFBundleVersion — держим то же самое здесь же, синхронно.
+        CURRENT_PROJECT_VERSION: "4.0.0"
+        ARCHS: [arm64]
+        VALID_ARCHS: arm64
+        EXCLUDED_ARCHS[sdk=iphoneos*]: x86_64
+        SKIP_INSTALL: YES
+      configs:
+        release:
+          CODE_SIGN_STYLE: Manual
+          CODE_SIGN_IDENTITY: "Apple Distribution"
+          PROVISIONING_PROFILE_SPECIFIER: "vrox.vpn tunnel iOS App Store"
+    dependencies:
+      - framework: ../../../../macos-ext/Frameworks/GoNetunnel.xcframework
+        embed: false

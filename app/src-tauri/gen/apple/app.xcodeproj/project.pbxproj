@@ -7,21 +7,47 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		286A1B07786A085C3D0ECE69 /* VroxTunnelExtension.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = D46D076375DC851CAB3360A1 /* VroxTunnelExtension.appex */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
 		299814393FFBF154FAD94CA8 /* QuartzCore.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = F3673D372C5ABDD1AD6E7067 /* QuartzCore.framework */; };
+		2A63EBB5CEFE25890CF2D959 /* GoNetunnel.xcframework in Frameworks */ = {isa = PBXBuildFile; fileRef = B156D50861B260AF2FC718A7 /* GoNetunnel.xcframework */; };
 		3036F7131E55779ABF15BD58 /* LaunchScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 02B7F8347F94B067E6B27396 /* LaunchScreen.storyboard */; };
 		31585529C029A01BE249A285 /* CoreGraphics.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 1E81BD6B453D87B7F7B1597B /* CoreGraphics.framework */; };
 		324A1E9A4258E7911D4DAC39 /* Security.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 9FACFFCB6E3743955F72464C /* Security.framework */; };
+		34E5F0084C880C2075202902 /* PacketTunnelProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = F43854A0A79C2EA2645DA35E /* PacketTunnelProvider.swift */; };
 		47E85818D7FA7F9AC1915F71 /* NetworkExtension.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 00F6A450B240B73011A85C22 /* NetworkExtension.framework */; };
 		53CDD0ACFBE8BDF1550B2E53 /* main.mm in Sources */ = {isa = PBXBuildFile; fileRef = 682535EEFE1DA20BE07B123C /* main.mm */; };
 		5C516481BCA83A182C2BCC94 /* assets in Resources */ = {isa = PBXBuildFile; fileRef = 3842AE2A64FB9933D0400EA4 /* assets */; };
 		618672DC8A5E0605441C9935 /* UIKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 0E2B15F176E4B041AE33EEEA /* UIKit.framework */; };
 		836D84C5F07860664DAF79C8 /* WebKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = D8F57162F5CC7AEDD55F173D /* WebKit.framework */; };
 		9D59FB167BB4E699DA17D1E9 /* MetalKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 04B56F58E2E44DDE1D67E7B7 /* MetalKit.framework */; };
-		C035876B2CBF946AA4D70D38 /* libapp.a in Resources */ = {isa = PBXBuildFile; fileRef = D047DEEBAEDBFEFD1943D4CF /* libapp.a */; };
 		C6BD59C055C986EA4A77FDA2 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = AF1DE57E7D9CF13BB2E0E038 /* Assets.xcassets */; };
 		C869023DDFE275D42F3FBF29 /* libapp.a in Frameworks */ = {isa = PBXBuildFile; fileRef = 39EEC6A55698228E08917A52 /* libapp.a */; };
 		E68F6CFDAED6503ABB4044A5 /* Metal.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = CE1209BFDECB28E00189B168 /* Metal.framework */; };
 /* End PBXBuildFile section */
+
+/* Begin PBXContainerItemProxy section */
+		20EB446D7EBB2B1EF077B48F /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = A9B1B09F1872768368ACECE2 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = E569FCEB94ACB3D96A2120D4;
+			remoteInfo = VroxTunnelExtension;
+		};
+/* End PBXContainerItemProxy section */
+
+/* Begin PBXCopyFilesBuildPhase section */
+		84895F3D2512B6F87AA9E1B3 /* Embed Foundation Extensions */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 13;
+			files = (
+				286A1B07786A085C3D0ECE69 /* VroxTunnelExtension.appex in Embed Foundation Extensions */,
+			);
+			name = "Embed Foundation Extensions";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
 		007E478DB8BC37A788C4730F /* app_iOS.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = app_iOS.entitlements; sourceTree = "<group>"; };
@@ -58,16 +84,19 @@
 		A316EEA69C47F4F7861D337D /* disconnect.rs */ = {isa = PBXFileReference; path = disconnect.rs; sourceTree = "<group>"; };
 		AEE1E7A9BA1D8271EF0FA5FB /* stats.rs */ = {isa = PBXFileReference; path = stats.rs; sourceTree = "<group>"; };
 		AF1DE57E7D9CF13BB2E0E038 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		B156D50861B260AF2FC718A7 /* GoNetunnel.xcframework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.xcframework; name = GoNetunnel.xcframework; path = "../../../../macos-ext/Frameworks/GoNetunnel.xcframework"; sourceTree = "<group>"; };
 		B2FC15BBAA85337765CD9515 /* connect.rs */ = {isa = PBXFileReference; path = connect.rs; sourceTree = "<group>"; };
 		CCDDF75F2877AEB57AB11B85 /* wait_result.rs */ = {isa = PBXFileReference; path = wait_result.rs; sourceTree = "<group>"; };
 		CE1209BFDECB28E00189B168 /* Metal.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Metal.framework; path = System/Library/Frameworks/Metal.framework; sourceTree = SDKROOT; };
 		D047DEEBAEDBFEFD1943D4CF /* libapp.a */ = {isa = PBXFileReference; lastKnownFileType = archive.ar; path = libapp.a; sourceTree = "<group>"; };
 		D050017F49FC313D9DA6FD5D /* killswitch.rs */ = {isa = PBXFileReference; path = killswitch.rs; sourceTree = "<group>"; };
+		D46D076375DC851CAB3360A1 /* VroxTunnelExtension.appex */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = "wrapper.app-extension"; path = VroxTunnelExtension.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		D8F57162F5CC7AEDD55F173D /* WebKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = WebKit.framework; path = System/Library/Frameworks/WebKit.framework; sourceTree = SDKROOT; };
 		DCD5C1A8AD1AEC801B9F6A5C /* subscription.rs */ = {isa = PBXFileReference; path = subscription.rs; sourceTree = "<group>"; };
 		DE944FFD75F4654FD2221833 /* tray.rs */ = {isa = PBXFileReference; path = tray.rs; sourceTree = "<group>"; };
 		E2D0499FF55F132C1E563FD9 /* resources.rs */ = {isa = PBXFileReference; path = resources.rs; sourceTree = "<group>"; };
 		F3673D372C5ABDD1AD6E7067 /* QuartzCore.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = QuartzCore.framework; path = System/Library/Frameworks/QuartzCore.framework; sourceTree = SDKROOT; };
+		F43854A0A79C2EA2645DA35E /* PacketTunnelProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = PacketTunnelProvider.swift; path = "../../../../macos-ext/VroxTunnelExtension/PacketTunnelProvider.swift"; sourceTree = "<group>"; };
 		FBC720DFA1D01F55B0A32344 /* app_iOS.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = app_iOS.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		FDE7C471486E90794996E443 /* manager.rs */ = {isa = PBXFileReference; path = manager.rs; sourceTree = "<group>"; };
 /* End PBXFileReference section */
@@ -89,6 +118,14 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		605B6C7CA73F250D1C0ADA49 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				2A63EBB5CEFE25890CF2D959 /* GoNetunnel.xcframework in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
@@ -104,6 +141,7 @@
 			isa = PBXGroup;
 			children = (
 				1E81BD6B453D87B7F7B1597B /* CoreGraphics.framework */,
+				B156D50861B260AF2FC718A7 /* GoNetunnel.xcframework */,
 				39EEC6A55698228E08917A52 /* libapp.a */,
 				CE1209BFDECB28E00189B168 /* Metal.framework */,
 				04B56F58E2E44DDE1D67E7B7 /* MetalKit.framework */,
@@ -218,6 +256,7 @@
 				BAFB695BB8415511FEC74542 /* Externals */,
 				78CBE3E5873199C0066F12DF /* Sources */,
 				855775165ACE55D883F89EB3 /* src */,
+				FAC635E328DF60DE7144CF21 /* VroxTunnelExtension */,
 				1BBF8C620E54F8C028CA130C /* Frameworks */,
 				EE72B6AC647386A11F795E44 /* Products */,
 			);
@@ -244,8 +283,17 @@
 			isa = PBXGroup;
 			children = (
 				FBC720DFA1D01F55B0A32344 /* app_iOS.app */,
+				D46D076375DC851CAB3360A1 /* VroxTunnelExtension.appex */,
 			);
 			name = Products;
+			sourceTree = "<group>";
+		};
+		FAC635E328DF60DE7144CF21 /* VroxTunnelExtension */ = {
+			isa = PBXGroup;
+			children = (
+				F43854A0A79C2EA2645DA35E /* PacketTunnelProvider.swift */,
+			);
+			name = VroxTunnelExtension;
 			sourceTree = "<group>";
 		};
 		FB1C68C0357A1866B3D27465 /* app */ = {
@@ -257,7 +305,7 @@
 			path = app;
 			sourceTree = "<group>";
 		};
-		"TEMP_BA0A5F3E-5DAE-4542-8047-CE450A215949" /* x86_64 */ = {
+		"TEMP_277E623D-8EDF-417D-8795-2539F4DBA28A" /* x86_64 */ = {
 			isa = PBXGroup;
 			children = (
 			);
@@ -267,6 +315,24 @@
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
+		E569FCEB94ACB3D96A2120D4 /* VroxTunnelExtension */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = D1EAFE1C1BCCA4578530F413 /* Build configuration list for PBXNativeTarget "VroxTunnelExtension" */;
+			buildPhases = (
+				481B5DDBA28786DEE78C37F9 /* Sources */,
+				605B6C7CA73F250D1C0ADA49 /* Frameworks */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = VroxTunnelExtension;
+			packageProductDependencies = (
+			);
+			productName = VroxTunnelExtension;
+			productReference = D46D076375DC851CAB3360A1 /* VroxTunnelExtension.appex */;
+			productType = "com.apple.product-type.app-extension";
+		};
 		E86255CB8A1836C0BF0C0E14 /* app_iOS */ = {
 			isa = PBXNativeTarget;
 			buildConfigurationList = CDCB6DFA1AEBFEE3F608BA27 /* Build configuration list for PBXNativeTarget "app_iOS" */;
@@ -275,10 +341,12 @@
 				81BE6BC5B603407AF570E994 /* Sources */,
 				2FBCB8C3ED193E9C4A9FDB59 /* Resources */,
 				4825CF6C55516D374210C8E1 /* Frameworks */,
+				84895F3D2512B6F87AA9E1B3 /* Embed Foundation Extensions */,
 			);
 			buildRules = (
 			);
 			dependencies = (
+				42FD36F0A8E302CC5DC7D873 /* PBXTargetDependency */,
 			);
 			name = app_iOS;
 			packageProductDependencies = (
@@ -296,6 +364,9 @@
 				BuildIndependentTargetsInParallel = YES;
 				LastUpgradeCheck = 1430;
 				TargetAttributes = {
+					E569FCEB94ACB3D96A2120D4 = {
+						DevelopmentTeam = QRZT5R3Q28;
+					};
 				};
 			};
 			buildConfigurationList = B302E784349268C93E6F0A36 /* Build configuration list for PBXProject "app" */;
@@ -312,6 +383,7 @@
 			projectDirPath = "";
 			projectRoot = "";
 			targets = (
+				E569FCEB94ACB3D96A2120D4 /* VroxTunnelExtension */,
 				E86255CB8A1836C0BF0C0E14 /* app_iOS */,
 			);
 		};
@@ -325,7 +397,6 @@
 				C6BD59C055C986EA4A77FDA2 /* Assets.xcassets in Resources */,
 				3036F7131E55779ABF15BD58 /* LaunchScreen.storyboard in Resources */,
 				5C516481BCA83A182C2BCC94 /* assets in Resources */,
-				C035876B2CBF946AA4D70D38 /* libapp.a in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -356,6 +427,14 @@
 /* End PBXShellScriptBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
+		481B5DDBA28786DEE78C37F9 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				34E5F0084C880C2075202902 /* PacketTunnelProvider.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		81BE6BC5B603407AF570E994 /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
@@ -365,6 +444,14 @@
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		42FD36F0A8E302CC5DC7D873 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = E569FCEB94ACB3D96A2120D4 /* VroxTunnelExtension */;
+			targetProxy = 20EB446D7EBB2B1EF077B48F /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
 
 /* Begin XCBuildConfiguration section */
 		1B9D5B8D34E6E0C88D0207F2 /* release */ = {
@@ -376,7 +463,8 @@
 				);
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_ENTITLEMENTS = app_iOS/app_iOS.entitlements;
-				CODE_SIGN_IDENTITY = "iPhone Developer";
+				CODE_SIGN_IDENTITY = "Apple Distribution";
+				CODE_SIGN_STYLE = Manual;
 				ENABLE_BITCODE = NO;
 				"EXCLUDED_ARCHS[sdk=iphoneos*]" = x86_64;
 				FRAMEWORK_SEARCH_PATHS = (
@@ -392,10 +480,74 @@
 				"LIBRARY_SEARCH_PATHS[arch=x86_64]" = "$(inherited) $(PROJECT_DIR)/Externals/x86_64/$(CONFIGURATION) $(SDKROOT)/usr/lib/swift $(DEVELOPER_DIR)/Toolchains/XcodeDefault.xctoolchain/usr/lib/swift/$(PLATFORM_NAME) $(DEVELOPER_DIR)/Toolchains/XcodeDefault.xctoolchain/usr/lib/swift-5.0/$(PLATFORM_NAME)";
 				PRODUCT_BUNDLE_IDENTIFIER = com.vroxory.vpn;
 				PRODUCT_NAME = "vrox.vpn";
+				PROVISIONING_PROFILE_SPECIFIER = "vrox.vpn iOS App Store";
 				SDKROOT = iphoneos;
 				TARGETED_DEVICE_FAMILY = "1,2";
 				VALID_ARCHS = arm64;
 				DEVELOPMENT_TEAM = "QRZT5R3Q28";
+			};
+			name = release;
+		};
+		2077A0C61BE6CE7E0DF7570C /* debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ARCHS = (
+					arm64,
+				);
+				CODE_SIGN_ENTITLEMENTS = "../../../../macos-ext/VroxTunnelExtension-iOS/VroxTunnelExtension-iOS.entitlements";
+				CURRENT_PROJECT_VERSION = 4.0.0;
+				DEVELOPMENT_TEAM = QRZT5R3Q28;
+				"EXCLUDED_ARCHS[sdk=iphoneos*]" = x86_64;
+				FRAMEWORK_SEARCH_PATHS = (
+					"$(inherited)",
+					"\"../../../../macos-ext/Frameworks\"",
+				);
+				INFOPLIST_FILE = "../../../../macos-ext/VroxTunnelExtension-iOS/Info.plist";
+				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.vroxory.vpn.tunnel;
+				PRODUCT_NAME = VroxTunnelExtension;
+				SDKROOT = iphoneos;
+				SKIP_INSTALL = YES;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				VALID_ARCHS = arm64;
+			};
+			name = debug;
+		};
+		30C632709289FBC1A521A5E9 /* release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ARCHS = (
+					arm64,
+				);
+				CODE_SIGN_ENTITLEMENTS = "../../../../macos-ext/VroxTunnelExtension-iOS/VroxTunnelExtension-iOS.entitlements";
+				CODE_SIGN_IDENTITY = "Apple Distribution";
+				CODE_SIGN_STYLE = Manual;
+				CURRENT_PROJECT_VERSION = 4.0.0;
+				DEVELOPMENT_TEAM = QRZT5R3Q28;
+				"EXCLUDED_ARCHS[sdk=iphoneos*]" = x86_64;
+				FRAMEWORK_SEARCH_PATHS = (
+					"$(inherited)",
+					"\"../../../../macos-ext/Frameworks\"",
+				);
+				INFOPLIST_FILE = "../../../../macos-ext/VroxTunnelExtension-iOS/Info.plist";
+				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.vroxory.vpn.tunnel;
+				PRODUCT_NAME = VroxTunnelExtension;
+				PROVISIONING_PROFILE_SPECIFIER = "vrox.vpn tunnel iOS App Store";
+				SDKROOT = iphoneos;
+				SKIP_INSTALL = YES;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				VALID_ARCHS = arm64;
 			};
 			name = release;
 		};
@@ -567,6 +719,15 @@
 			buildConfigurations = (
 				4AC19FD47C6011940ACEB467 /* debug */,
 				1B9D5B8D34E6E0C88D0207F2 /* release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = debug;
+		};
+		D1EAFE1C1BCCA4578530F413 /* Build configuration list for PBXNativeTarget "VroxTunnelExtension" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				2077A0C61BE6CE7E0DF7570C /* debug */,
+				30C632709289FBC1A521A5E9 /* release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = debug;
