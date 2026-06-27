@@ -3,23 +3,31 @@ import GoNetunnel
 import NetworkExtension
 import os.log
 
-/// RSS (resident set size) ЭТОГО процесса (.appex) в байтах — через
-/// mach_task_basic_info, тот же API, которым пользуется Activity Monitor.
-/// Безопасно дёргать на себе (mach_task_self_) без особых entitlement —
-/// ограничения task_for_pid на чужие процессы здесь не применимы, это
-/// "self" frame. Используется для индикатора памяти в UI (см.
-/// docs/ARCHITECTURE.md, Apple ограничивает NE-расширения на iOS ~50МБ —
-/// на macOS лимит не задокументирован так чётко, но держим тот же бюджет
-/// как цель, на случай будущего iOS-порта).
+/// Память ЭТОГО процесса (.appex) в байтах — через task_vm_info.
+/// phys_footprint, НЕ mach_task_basic_info.resident_size (старая версия
+/// этой функции читала именно его — то же, что показывает Activity
+/// Monitor по умолчанию, но это НЕ та метрика, по которой iOS принимает
+/// решение об OOM-убийстве NE-расширения). phys_footprint — это именно
+/// то число, по которому jetsam считает лимит (~50МБ): учитывает сжатую
+/// память и purgeable-состояние так, как делает сам kernel, а
+/// resident_size может ОТСТАВАТЬ от реальности — Go на Darwin возвращает
+/// память через madvise(MADV_FREE), который не сразу убирает страницы из
+/// resident_size (ядро держит их "на всякий случай" до реального
+/// переиспользования), из-за чего наш собственный индикатор показывал
+/// "память не падает" даже после реального освобождения на стороне Go
+/// (см. netunnel.go::reclaimMemoryPeriodically). phys_footprint
+/// отражает это куда точнее. Безопасно дёргать на себе (mach_task_self_)
+/// без особых entitlement — ограничения task_for_pid на чужие процессы
+/// здесь не применимы, это "self" frame.
 func currentRSSBytes() -> UInt64 {
-    var info = mach_task_basic_info()
-    var count = mach_msg_type_number_t(MemoryLayout<mach_task_basic_info>.size / MemoryLayout<integer_t>.size)
+    var info = task_vm_info_data_t()
+    var count = mach_msg_type_number_t(MemoryLayout<task_vm_info_data_t>.size / MemoryLayout<integer_t>.size)
     let kerr: kern_return_t = withUnsafeMutablePointer(to: &info) { ptr -> kern_return_t in
         ptr.withMemoryRebound(to: integer_t.self, capacity: Int(count)) {
-            task_info(mach_task_self_, task_flavor_t(MACH_TASK_BASIC_INFO), $0, &count)
+            task_info(mach_task_self_, task_flavor_t(TASK_VM_INFO), $0, &count)
         }
     }
-    return kerr == KERN_SUCCESS ? UInt64(info.resident_size) : 0
+    return kerr == KERN_SUCCESS ? UInt64(info.phys_footprint) : 0
 }
 
 /// Хост для netunnel (см. packaging/hysteria2-patch/netunnel/) —
