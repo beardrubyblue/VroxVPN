@@ -90,6 +90,14 @@ targets:
           CODE_SIGN_STYLE: Manual
           CODE_SIGN_IDENTITY: "Apple Distribution"
           PROVISIONING_PROFILE_SPECIFIER: "vrox.vpn iOS App Store"
+        # Для `tauri ios dev`/быстрого прогона по кабелю без TestFlight —
+        # тот же приём, но Development-сертификат + отдельный профиль с
+        # capability Network Extensions (Automatic создаёт обобщённый
+        # профиль без неё).
+        debug:
+          CODE_SIGN_STYLE: Manual
+          CODE_SIGN_IDENTITY: "Apple Development"
+          PROVISIONING_PROFILE_SPECIFIER: "Dev vrox.vpn Apple Store"
     dependencies:
       - framework: libapp.a
         embed: false
@@ -160,6 +168,10 @@ targets:
           CODE_SIGN_STYLE: Manual
           CODE_SIGN_IDENTITY: "Apple Distribution"
           PROVISIONING_PROFILE_SPECIFIER: "vrox.vpn tunnel iOS App Store"
+        debug:
+          CODE_SIGN_STYLE: Manual
+          CODE_SIGN_IDENTITY: "Apple Development"
+          PROVISIONING_PROFILE_SPECIFIER: "Dev vrox.vpn tunnel Apple Store"
     dependencies:
       - framework: ../../../../macos-ext/Frameworks/GoNetunnel.xcframework
         embed: false
