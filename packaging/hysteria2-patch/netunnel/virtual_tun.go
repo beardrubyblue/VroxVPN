@@ -42,7 +42,10 @@ type virtualTun struct {
 func newVirtualTun(mtu uint32) *virtualTun {
 	ctx, cancel := context.WithCancel(context.Background())
 	return &virtualTun{
-		ep:     channel.New(256, mtu, ""),
+		// 256 → 64: при MTU 1500 это снижает потолок очереди с ~384КиБ
+		// до ~96КиБ — небольшая, но бесплатная экономия в общем бюджете
+		// памяти расширения (см. init() в netunnel.go про лимит iOS NE).
+		ep:     channel.New(64, mtu, ""),
 		ctx:    ctx,
 		cancel: cancel,
 	}

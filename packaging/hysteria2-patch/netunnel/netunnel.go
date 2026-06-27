@@ -135,6 +135,8 @@ type TunnelHandle struct {
 
 	txBytes uint64 // WritePacket: пакеты ОТ ОС, "наружу" через тоннель — upload
 	rxBytes uint64 // ReadPacket: пакеты К ОС, "из" тоннеля — download
+
+	stopMemoryReclaim chan struct{}
 }
 
 // normalizeCertHash — копия app/cmd/client.go::normalizeCertHash (не
@@ -344,6 +346,24 @@ func StartTunnel(configJSON string) (*TunnelHandle, error) {
 		return nil, fmt.Errorf("netunnel: set spoofing: %s", err)
 	}
 
+	// gVisor по умолчанию авто-тюнит TCP-буфера ВВЕРХ под наблюдаемый
+	// throughput/RTT — у настоящего сайта десятки параллельных TCP-
+	// соединений (HTML/CSS/JS/картинки/аналитика), и без явного потолка
+	// суммарная память легко улетает за бюджет iOS NE (~50МБ, см.
+	// init() выше). 256 КиБ на соединение — компромисс: достаточно для
+	// нормального throughput на одно соединение, но не даёт 30+
+	// соединениям растащить память бесконтрольно. Min/Default — то, что
+	// у gVisor стоит по умолчанию само (не трогаем нижнюю границу).
+	for _, opt := range []tcpip.SettableTransportProtocolOption{
+		&tcpip.TCPReceiveBufferSizeRangeOption{Min: 4 << 10, Default: 64 << 10, Max: 256 << 10},
+		&tcpip.TCPSendBufferSizeRangeOption{Min: 4 << 10, Default: 64 << 10, Max: 256 << 10},
+	} {
+		if err := netStack.SetTransportProtocolOption(tcp.ProtocolNumber, opt); err != nil {
+			_ = hyClient.Close()
+			return nil, fmt.Errorf("netunnel: set tcp buffer option: %s", err)
+		}
+	}
+
 	if err := netStack.AddProtocolAddress(nicID, tcpip.ProtocolAddress{
 		Protocol:          ipv4.ProtocolNumber,
 		AddressWithPrefix: tcpip.AddrFromSlice(inet4.Addr().AsSlice()).WithPrefix(),
@@ -369,7 +389,37 @@ func StartTunnel(configJSON string) (*TunnelHandle, error) {
 	udpForwarder := udp.NewForwarder(netStack, udpForwarderHandler(hyClient))
 	netStack.SetTransportProtocolHandler(udp.ProtocolNumber, udpForwarder.HandlePacket)
 
-	return &TunnelHandle{vtun: vtun, stack: netStack, client: hyClient}, nil
+	handle := &TunnelHandle{
+		vtun:              vtun,
+		stack:             netStack,
+		client:            hyClient,
+		stopMemoryReclaim: make(chan struct{}),
+	}
+	go handle.reclaimMemoryPeriodically()
+	return handle, nil
+}
+
+// reclaimMemoryPeriodically — SetMemoryLimit/GOGC (см. init() выше)
+// заставляют GC запускаться чаще, но не гарантируют, что освобождённые
+// страницы реально уйдут обратно ОС прямо сейчас — рантайм сам решает,
+// когда звать madvise, и может придерживать память "на будущее". Под
+// реальным браузингом (десятки TCP-соединений разом) это и давало
+// эффект "память не сбрасывается" — после всплеска нагрузки RSS
+// оставался высоким даже когда соединения уже закрылись. FreeOSMemory
+// форсирует полный GC + немедленный возврат страниц ОС, не дожидаясь
+// рантайм-эвристики. Раз в 10с — компромисс между "RSS реально падает"
+// и "не жжём CPU на лишние stop-the-world паузы постоянно".
+func (h *TunnelHandle) reclaimMemoryPeriodically() {
+	ticker := time.NewTicker(10 * time.Second)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ticker.C:
+			debug.FreeOSMemory()
+		case <-h.stopMemoryReclaim:
+			return
+		}
+	}
 }
 
 // WritePacket — пакет ОТ Swift (NEPacketTunnelFlow.readPackets), отдаём
@@ -402,6 +452,7 @@ func (h *TunnelHandle) GetStats() string {
 }
 
 func (h *TunnelHandle) Stop() error {
+	close(h.stopMemoryReclaim)
 	h.stack.Close()
 	_ = h.vtun.Close()
 	return h.client.Close()
