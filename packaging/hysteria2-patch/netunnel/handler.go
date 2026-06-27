@@ -16,17 +16,39 @@ import (
 	"github.com/apernet/hysteria/core/v2/client"
 )
 
-// maxTCPRelays/maxUDPRelays — раздельные потолки (не общий бюджет, как
-// было раньше maxActiveRelays) — настраиваются из UI через
-// applyRelayLimits (см. netunnel.go::Config), дефолты синхронизированы
-// с Happ (256 TCP / 128 UDP, см. doc-комментарий Config.
-// MaxTCPConnections). Сверх лимита — TCP получает RST (клиент сам
+// copyBufPool — пул буферов для io.CopyBuffer. 4 КиБ вместо дефолтных
+// 32 КиБ io.Copy: при 64 TCP-relay (2 копии на каждый) экономия
+// (32−4)×2×64 = 3.5 МиБ живой памяти. На throughput не влияет — данные
+// всё равно уходят в QUIC-stream, который сам буферизует.
+var copyBufPool = sync.Pool{
+	New: func() any {
+		buf := make([]byte, 4<<10)
+		return &buf
+	},
+}
+
+// udpBufPool — пул буферов для чтения UDP-датаграмм из gVisor-endpoint.
+// Без пула каждый relayUDP аллоцировал 65535 байт навсегда (до конца
+// жизни горутины) — при 32 relay это 2 МиБ, которые не возвращались в
+// кучу, пока relay не закроется.
+var udpBufPool = sync.Pool{
+	New: func() any {
+		buf := make([]byte, 65535)
+		return &buf
+	},
+}
+
+// maxTCPRelays/maxUDPRelays — раздельные потолки, настраиваемые из UI
+// через applyRelayLimits (см. netunnel.go::Config). Дефолты 64/32 —
+// агрессивно низкие для iOS NE (~50 МиБ jetsam): каждый TCP relay
+// стоит ~50–100 КиБ живой памяти (gVisor-буфера + goroutine stacks +
+// io.CopyBuffer). Сверх лимита — TCP получает RST (клиент сам
 // переподключится/отвалится на это конкретное соединение, остальной
 // браузинг не страдает), UDP-датаграмма тихо дропается (как обычный
 // packet loss, нормально для UDP).
 const (
-	defaultMaxTCPRelays = 256
-	defaultMaxUDPRelays = 128
+	defaultMaxTCPRelays = 64
+	defaultMaxUDPRelays = 32
 )
 
 var (
@@ -118,14 +140,11 @@ func evictOldestConn() bool {
 }
 
 // udpIdleTimeout — сколько ждать следующий пакет в UDP-"сессии" прежде
-// чем её закрыть. Раньше (sing-tun's System stack) это делал встроенный
-// udpnat.New(udpTimeout, ...) — после перехода на gVisor напрямую (см.
-// netunnel.go) эта логика пропала, и без неё каждый уникальный UDP-поток
-// (а DNS-запросы создают их пачками) держал две горутины + gVisor-
-// endpoint НАВСЕГДА, до полной остановки тоннеля — реальная утечка при
-// долгой сессии. 300с — дефолт Happ (настраивается из UI, см.
-// applyRelayLimits), не наша исходная эмпирика (60с).
-var udpIdleTimeout = time.Duration(300) * time.Second
+// чем её закрыть. 30с — агрессивно для iOS NE: DNS-запросы fire-and-
+// forget (ответ за <1с), другие UDP-потоки (QUIC-inside-tunnel) имеют
+// свой keepalive. Было 300с (дефолт Happ), что копило десятки мёртвых
+// UDP-сессий при долгом браузинге. Настраивается из UI (applyRelayLimits).
+var udpIdleTimeout = 30 * time.Second
 
 // tcpForwarderHandler и udpForwarderHandler — обработчики для
 // tcp.Forwarder/udp.Forwarder gVisor-стека (см. netunnel.go::StartTunnel,
@@ -146,21 +165,19 @@ var udpIdleTimeout = time.Duration(300) * time.Second
 // macOS/NetworkExtension, Фаза 3) на NE-пути это становится статическим
 // excludedRoutes на стороне Rust (config_gen.rs), а не runtime-сниффингом.
 
-func tcpForwarderHandler(hyClient client.Client) func(*tcp.ForwarderRequest) {
+func tcpForwarderHandler(h *TunnelHandle) func(*tcp.ForwarderRequest) {
 	return func(r *tcp.ForwarderRequest) {
-		// Лимит ДО дозвона — нет смысла тратить TCP/QUIC-handshake на
-		// соединение, которое всё равно зарежем сразу после.
 		if activeTCPRelays.Load() >= maxTCPRelays {
-			r.Complete(true) // RST — браузер сам ретраит/откладывает, остальной браузинг не страдает
+			r.Complete(true)
 			return
 		}
 
 		id := r.ID()
 		reqAddr := net.JoinHostPort(id.LocalAddress.String(), strconv.Itoa(int(id.LocalPort)))
 
-		hyConn, err := hyClient.TCP(reqAddr)
+		hyConn, err := h.getClient().TCP(reqAddr)
 		if err != nil {
-			r.Complete(true) // RST — как и в server.go, ошибка не всплывает наверх
+			r.Complete(true)
 			return
 		}
 
@@ -180,18 +197,14 @@ func tcpForwarderHandler(hyClient client.Client) func(*tcp.ForwarderRequest) {
 	}
 }
 
-// tcpIdleTimeout — то же самое, что udpIdleTimeout, но для TCP, у
-// которого раньше idle-таймаута не было ВООБЩЕ. Пойман вживую: память
-// расширения переставала падать обратно после реального браузинга — не
-// потому, что Go держит мусор (FreeOSMemory тикер на это уже отвечает,
-// см. netunnel.go), а потому, что браузер сам держит HTTP keep-alive
-// TCP-соединения открытыми ПОСЛЕ загрузки страницы, без передачи
-// данных — это легитимное, живое (не мусорное) соединение в нашем
-// реестре, GC его не освободит, потому что оно реально используется
-// (просто не активно прямо сейчас). io.Copy сам по себе не даёт зацепки
-// для отслеживания активности — заменён на ручной цикл с таймером.
-// 300с — дефолт Happ (настраивается из UI, см. applyRelayLimits).
-var tcpIdleTimeout = time.Duration(300) * time.Second
+// tcpIdleTimeout — главный рычаг против накопления памяти при листании
+// Reels: браузер держит HTTP keep-alive TCP-соединения от КАЖДОГО видео
+// открытыми после загрузки — это живые (не мусорные) соединения, GC их
+// не освободит. При 300с таймауте (старый дефолт) за 5 минут листания
+// копилось 50-150 соединений × ~100 КиБ = 5-15 МиБ только в relay-
+// overhead. 30с — соединения от видео 30-секундной давности уже мертвы,
+// базовый RSS остаётся низким. Настраивается из UI (applyRelayLimits).
+var tcpIdleTimeout = 30 * time.Second
 
 // activityReader оборачивает io.Reader и отмечает время последнего
 // успешного чтения — используется для отслеживания активности в обе
@@ -220,11 +233,15 @@ func relayTCP(connID uint64, local net.Conn, remote io.ReadWriteCloser) {
 
 	copyErrChan := make(chan error, 2)
 	go func() {
-		_, copyErr := io.Copy(remote, &activityReader{r: local, last: &lastActivity})
+		bp := copyBufPool.Get().(*[]byte)
+		_, copyErr := io.CopyBuffer(remote, &activityReader{r: local, last: &lastActivity}, *bp)
+		copyBufPool.Put(bp)
 		copyErrChan <- copyErr
 	}()
 	go func() {
-		_, copyErr := io.Copy(local, &activityReader{r: remote, last: &lastActivity})
+		bp := copyBufPool.Get().(*[]byte)
+		_, copyErr := io.CopyBuffer(local, &activityReader{r: remote, last: &lastActivity}, *bp)
+		copyBufPool.Put(bp)
 		copyErrChan <- copyErr
 	}()
 
@@ -245,11 +262,8 @@ func relayTCP(connID uint64, local net.Conn, remote io.ReadWriteCloser) {
 	}
 }
 
-func udpForwarderHandler(hyClient client.Client) func(*udp.ForwarderRequest) bool {
+func udpForwarderHandler(h *TunnelHandle) func(*udp.ForwarderRequest) bool {
 	return func(r *udp.ForwarderRequest) bool {
-		// Сверх лимита — тихо дропаем датаграмму (как обычный packet
-		// loss, нормальное поведение для UDP, отправитель сам ретраит
-		// при необходимости на уровне своего протокола).
 		if activeUDPRelays.Load() >= maxUDPRelays {
 			return false
 		}
@@ -264,7 +278,7 @@ func udpForwarderHandler(hyClient client.Client) func(*udp.ForwarderRequest) boo
 		}
 		local := gonet.NewUDPConn(&wq, ep)
 
-		rc, err := hyClient.UDP()
+		rc, err := h.getClient().UDP()
 		if err != nil {
 			_ = local.Close()
 			return false
@@ -294,7 +308,9 @@ func relayUDP(connID uint64, local net.Conn, remote client.HyUDPConn, reqAddr st
 	// если по этому UDP-потоку больше никогда ничего не придёт (см.
 	// udpIdleTimeout выше).
 	go func() {
-		buf := make([]byte, 65535)
+		bp := udpBufPool.Get().(*[]byte)
+		defer udpBufPool.Put(bp)
+		buf := *bp
 		for {
 			_ = local.SetReadDeadline(time.Now().Add(udpIdleTimeout))
 			n, err := local.Read(buf)

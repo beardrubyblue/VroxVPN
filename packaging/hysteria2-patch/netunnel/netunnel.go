@@ -148,14 +148,91 @@ type CongestionConfig struct {
 // считались rx/tx на самом tun-интерфейсе (core/stats.py::
 // _read_interface_bytes), а не на отдельных соединениях.
 type TunnelHandle struct {
-	vtun   *virtualTun
-	stack  *stack.Stack
-	client client.Client
+	vtun     *virtualTun
+	stack    *stack.Stack
+	hyConfig *client.Config // для периодического реконнекта
+
+	obfsType     string // для пересоздания ConnFactory при реконнекте
+	obfsPassword string
+
+	clientMu sync.RWMutex
+	client   client.Client
+
+	reconnectMu sync.Mutex // сериализует вызовы reconnectClient
 
 	txBytes uint64 // WritePacket: пакеты ОТ ОС, "наружу" через тоннель — upload
 	rxBytes uint64 // ReadPacket: пакеты К ОС, "из" тоннеля — download
 
 	stopMemoryReclaim chan struct{}
+}
+
+// getClient — потокобезопасный доступ к текущему hysteria-клиенту.
+// Forwarder-хэндлеры (handler.go) вызывают его на каждое новое
+// соединение, а не захватывают client в замыкание при создании
+// forwarder'а — это позволяет reconnectClient() подменить клиент
+// на лету, без пересоздания gVisor-стека.
+func (h *TunnelHandle) getClient() client.Client {
+	h.clientMu.RLock()
+	c := h.client
+	h.clientMu.RUnlock()
+	return c
+}
+
+// reconnectClient — пересоздаёт QUIC-соединение к серверу, сбрасывая
+// ВСЮ накопленную память quic-go (stream tracking, flow control windows,
+// internal buffers). Главный рычаг против "память растёт пока не
+// сдохнет": единственное QUIC-соединение тоннеля копит состояние
+// пропорционально числу streams, которые когда-либо через него прошли
+// — ни GC, ни FreeOSMemory это не освободят, потому что ссылки живые.
+// Пересоздание занимает ~1 RTT (30–100мс), во время которого новые
+// relay получат ошибку и пересоздадутся — кратковременный stutter.
+func (h *TunnelHandle) reconnectClient() error {
+	h.reconnectMu.Lock()
+	defer h.reconnectMu.Unlock()
+
+	type result struct {
+		c   client.Client
+		err error
+	}
+	ch := make(chan result, 1)
+	go func() {
+		h.hyConfig.ConnFactory = &singleUseConnFactory{
+			obfsType:     h.obfsType,
+			obfsPassword: h.obfsPassword,
+		}
+		newClient, _, err := client.NewClient(h.hyConfig)
+		ch <- result{newClient, err}
+	}()
+
+	var res result
+	select {
+	case res = <-ch:
+	case <-time.After(10 * time.Second):
+		return errors.New("reconnect: timeout")
+	case <-h.stopMemoryReclaim:
+		return errors.New("reconnect: stopped")
+	}
+	if res.err != nil {
+		return fmt.Errorf("reconnect: %w", res.err)
+	}
+
+	// Подменяем клиент атомарно — новые relay сразу пойдут через
+	// новое QUIC-соединение
+	h.clientMu.Lock()
+	oldClient := h.client
+	h.client = res.c
+	h.clientMu.Unlock()
+
+	// Эвиктим ВСЕ старые соединения (они держат ссылки на streams
+	// старого клиента)
+	for evictOldestConn() {
+	}
+
+	_ = oldClient.Close()
+
+	runtime.GC()
+	debug.FreeOSMemory()
+	return nil
 }
 
 // normalizeCertHash — копия app/cmd/client.go::normalizeCertHash (не
@@ -255,12 +332,25 @@ func buildClientConfig(cfg *Config) (*client.Config, error) {
 		// серверу (один на весь тоннель). Дальнейшее ужимание снижает
 		// потолок ценой риска подвисаний при быстрой прокрутке видео.
 		// Четвёртый проход — пользователь подтвердил вживую, что 256КБ/
-		// 1МБ не давали подвисаний на видео, попросил ужать ещё.
+		// 1МБ не давали подвисаний на видео, попросил ужать ещё. Пятый
+		// проход: скорость загрузки почти не отличалась от четвёртого —
+		// запас всё ещё есть, ужимаем до практического пола. 16384 —
+		// минимум, который принимает hysteria2 для Initial*-полей (см.
+		// core/client/config.go::verifyAndFill, "must be at least
+		// 16384") — ниже этого библиотека просто вернёт ошибку конфига.
+		// Проблема "накапливается и не падает при долгой прокрутке" —
+		// НЕ про потолок окна (он теперь маленький), а про то, что
+		// единственное QUIC-соединение тоннеля само НЕ сжимает окно
+		// обратно в рамках своей жизни — это снижает максимум, но не
+		// лечит сам факт накопления при достаточно долгой нагрузке
+		// (нужен будет либо периодический реконнект, либо патч
+		// AllowConnectionWindowIncrease в форке — отложено, см. историю
+		// обсуждения).
 		QUICConfig: client.QUICConfig{
-			InitialStreamReceiveWindow:     32 << 10,  // 32 КиБ
-			MaxStreamReceiveWindow:         128 << 10, // 128 КиБ (было 256 КиБ)
-			InitialConnectionReceiveWindow: 64 << 10,  // 64 КиБ
-			MaxConnectionReceiveWindow:     512 << 10, // 512 КиБ (было 1 МиБ)
+			InitialStreamReceiveWindow:     64 << 10,  // 64 КиБ
+			MaxStreamReceiveWindow:         512 << 10, // 512 КиБ
+			InitialConnectionReceiveWindow: 256 << 10, // 256 КиБ
+			MaxConnectionReceiveWindow:     2 << 20,   // 2 МиБ — ~500 Мбит/с при RTT 30мс
 		},
 		CongestionConfig: client.CongestionConfig{
 			Type:       cfg.Congestion.Type,
@@ -404,9 +494,12 @@ func StartTunnel(configJSON string) (*TunnelHandle, error) {
 	// нормального throughput на одно соединение, но не даёт 30+
 	// соединениям растащить память бесконтрольно. Min/Default — то, что
 	// у gVisor стоит по умолчанию само (не трогаем нижнюю границу).
+	// Max 64 КиБ (было 256 КиБ): gVisor авто-тюнит TCP-буфера ВВЕРХ под
+	// throughput и НЕ сжимает обратно — при 64 TCP relay × 128 КиБ
+	// (send+receive max) = 8 МиБ потолок, вместо прежних 32 МиБ.
 	for _, opt := range []tcpip.SettableTransportProtocolOption{
-		&tcpip.TCPReceiveBufferSizeRangeOption{Min: 4 << 10, Default: 64 << 10, Max: 256 << 10},
-		&tcpip.TCPSendBufferSizeRangeOption{Min: 4 << 10, Default: 64 << 10, Max: 256 << 10},
+		&tcpip.TCPReceiveBufferSizeRangeOption{Min: 4 << 10, Default: 16 << 10, Max: 64 << 10},
+		&tcpip.TCPSendBufferSizeRangeOption{Min: 4 << 10, Default: 16 << 10, Max: 64 << 10},
 	} {
 		if err := netStack.SetTransportProtocolOption(tcp.ProtocolNumber, opt); err != nil {
 			_ = hyClient.Close()
@@ -434,45 +527,62 @@ func StartTunnel(configJSON string) (*TunnelHandle, error) {
 	}
 	netStack.SetRouteTable(routes)
 
-	tcpForwarder := tcp.NewForwarder(netStack, 0, 1024, tcpForwarderHandler(hyClient))
-	netStack.SetTransportProtocolHandler(tcp.ProtocolNumber, tcpForwarder.HandlePacket)
-	udpForwarder := udp.NewForwarder(netStack, udpForwarderHandler(hyClient))
-	netStack.SetTransportProtocolHandler(udp.ProtocolNumber, udpForwarder.HandlePacket)
-
 	handle := &TunnelHandle{
 		vtun:              vtun,
 		stack:             netStack,
+		hyConfig:          hyConfig,
+		obfsType:          cfg.Obfs.Type,
+		obfsPassword:      cfg.Obfs.Salamander.Password,
 		client:            hyClient,
 		stopMemoryReclaim: make(chan struct{}),
 	}
+
+	tcpForwarder := tcp.NewForwarder(netStack, 0, 1024, tcpForwarderHandler(handle))
+	netStack.SetTransportProtocolHandler(tcp.ProtocolNumber, tcpForwarder.HandlePacket)
+	udpForwarder := udp.NewForwarder(netStack, udpForwarderHandler(handle))
+	netStack.SetTransportProtocolHandler(udp.ProtocolNumber, udpForwarder.HandlePacket)
+
 	go handle.reclaimMemoryPeriodically()
 	go handle.evictUnderMemoryPressurePeriodically()
+	go handle.reconnectPeriodically()
 	return handle, nil
 }
 
-// evictMemoryThreshold — если os_proc_available_memory() (см.
-// memory_ios.go) показывает запас МЕНЬШЕ этого порога, закрываем самое
-// старое активное соединение (handler.go::evictOldestConn), а не ждём,
-// пока за нас это сделает jetsam убийством всего расширения. 5 МиБ —
-// отправная точка, не результат профилирования: это сигнал от самой
-// iOS о реальном запасе (в отличие от наших собственных догадок про
-// абсолютный потолок ~50МБ), но конкретное число порога подбирается
-// эмпирически.
-const evictMemoryThreshold = 5 << 20
-
-// evictUnderMemoryPressurePeriodically — на macOS availableMemoryBytes
-// всегда возвращает "бесконечность" (см. memory_other.go), эвикшен там
-// никогда не сработает — жёсткого потолка NE на macOS нет, эвикшен
-// нужен только под реальным iOS-лимитом.
+// evictUnderMemoryPressurePeriodically — при давлении памяти эвиктит
+// все соединения и форсит полный QUIC-реконнект (сбрасывает ВСЁ
+// накопленное состояние quic-go). Порог 15 МиБ запаса — достаточно
+// рано, чтобы реконнект успел отработать до того, как jetsam убьёт
+// процесс. На macOS availableMemoryBytes возвращает "бесконечность"
+// (см. memory_other.go), поэтому там это никогда не сработает.
 func (h *TunnelHandle) evictUnderMemoryPressurePeriodically() {
 	ticker := time.NewTicker(2 * time.Second)
 	defer ticker.Stop()
 	for {
 		select {
 		case <-ticker.C:
-			if availableMemoryBytes() < evictMemoryThreshold {
-				evictOldestConn()
+			if availableMemoryBytes() < 15<<20 {
+				_ = h.reconnectClient()
 			}
+		case <-h.stopMemoryReclaim:
+			return
+		}
+	}
+}
+
+// reconnectPeriodically — основной рычаг против накопления памяти:
+// QUIC-соединение (quic-go) трекает ВСЕ streams за свою жизнь и не
+// освобождает их state — это архитектурное свойство QUIC, не баг.
+// При просмотре Reels за 5 минут создаётся 300-500+ streams, и
+// внутренний state quic-go растёт на ~50-100 байт на каждый stream
+// навсегда. Единственный способ сбросить — пересоздать клиент.
+// 3 минуты — достаточно, чтобы память не дошла до 50 МиБ.
+func (h *TunnelHandle) reconnectPeriodically() {
+	ticker := time.NewTicker(3 * time.Minute)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ticker.C:
+			_ = h.reconnectClient()
 		case <-h.stopMemoryReclaim:
 			return
 		}
@@ -528,12 +638,31 @@ func (h *TunnelHandle) ReadPacket() ([]byte, error) {
 func (h *TunnelHandle) GetStats() string {
 	tx := atomic.LoadUint64(&h.txBytes)
 	rx := atomic.LoadUint64(&h.rxBytes)
-	return fmt.Sprintf(`{"txBytes":%d,"rxBytes":%d}`, tx, rx)
+
+	var m runtime.MemStats
+	runtime.ReadMemStats(&m)
+
+	connRegistryMu.Lock()
+	registrySize := len(connRegistry)
+	connRegistryMu.Unlock()
+
+	return fmt.Sprintf(
+		`{"txBytes":%d,"rxBytes":%d,"heapInUse":%d,"heapSys":%d,"goroutines":%d,"tcpRelays":%d,"udpRelays":%d,"registrySize":%d,"availMem":%d}`,
+		tx, rx,
+		m.HeapInuse, m.Sys,
+		runtime.NumGoroutine(),
+		activeTCPRelays.Load(), activeUDPRelays.Load(),
+		registrySize,
+		availableMemoryBytes(),
+	)
 }
 
 func (h *TunnelHandle) Stop() error {
 	close(h.stopMemoryReclaim)
 	h.stack.Close()
 	_ = h.vtun.Close()
-	return h.client.Close()
+	h.clientMu.RLock()
+	c := h.client
+	h.clientMu.RUnlock()
+	return c.Close()
 }

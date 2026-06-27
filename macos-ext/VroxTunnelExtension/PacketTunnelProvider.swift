@@ -183,11 +183,19 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
         guard tunnelHandle != nil else { return }
         packetFlow.readPackets { [weak self] packets, _ in
             guard let self, self.tunnelHandle != nil else { return }
-            for packet in packets {
-                do {
-                    try self.tunnelHandle?.writePacket(packet)
-                } catch {
-                    os_log("WritePacket ошибка: %{public}@", log: self.log, type: .error, error.localizedDescription)
+            // autoreleasepool вокруг пачки — при высоком upload один
+            // callback может нести сотни пакетов, каждый writePacket
+            // через gomobile-границу плодит autoreleased-объекты; без
+            // пула они дренируются только по выходу из callback, что под
+            // нагрузкой даёт пиковый всплеск RSS (см. pumpOutbound про ту
+            // же проблему, там она хроническая — здесь разовая на пачку).
+            autoreleasepool {
+                for packet in packets {
+                    do {
+                        try self.tunnelHandle?.writePacket(packet)
+                    } catch {
+                        os_log("WritePacket ошибка: %{public}@", log: self.log, type: .error, error.localizedDescription)
+                    }
                 }
             }
             self.pumpInbound()
@@ -197,25 +205,41 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
     /// ReadPacket — блокирующий Go-вызов, поэтому крутим его в отдельном
     /// фоновом потоке (а не на потоке packetFlow.readPackets'а выше),
     /// иначе один цикл заблокировал бы другой.
+    ///
+    /// ⚠ autoreleasepool на КАЖДОЙ итерации — критично. Это бесконечный
+    /// `while` на dispatch-потоке, который НИКОГДА не возвращается в свой
+    /// run loop, пока жив тоннель. Без явного пула autoreleased-объекты,
+    /// порождаемые каждой итерацией (Data от gomobile readPacket(),
+    /// NSNumber/NSArray для writePackets), копятся в thread-local
+    /// autorelease pool и не освобождаются НИКОГДА до выхода из цикла.
+    /// Под высоким download-трафиком (видео/Reels — это именно outbound,
+    /// "из тоннеля к ОС") это тысячи объектов/сек — поймано вживую через
+    /// диагностику памяти (Go-куча 1.8МБ, relay 0, но RSS рос до 50МБ в
+    /// "не-Go" части до OOM-kill). Пул вокруг тела цикла дренируется на
+    /// каждой итерации — RSS перестаёт накапливать Swift-объекты.
     private func pumpOutbound() {
         DispatchQueue.global(qos: .userInitiated).async { [weak self] in
             guard let self else { return }
             while let handle = self.tunnelHandle {
-                do {
-                    let pkt = try handle.readPacket()
-                    // Версия IP — верхний нибл первого байта (4 или 6),
-                    // стандартный способ отличить v4/v6 без парсинга
-                    // всего заголовка. packetFlow.writePackets требует
-                    // явный протокол на КАЖДЫЙ пакет — нельзя просто
-                    // считать, что весь трафик IPv4 (gVisor-стек у нас
-                    // настроен на оба address family, см. netunnel.go
-                    // StartTunnel: inet6Prefixes).
-                    let proto: Int32 = (pkt.first.map { $0 >> 4 } == 6) ? AF_INET6 : AF_INET
-                    self.packetFlow.writePackets([pkt], withProtocols: [proto as NSNumber])
-                } catch {
-                    os_log("ReadPacket завершился: %{public}@", log: self.log, type: .info, error.localizedDescription)
-                    return // Stop() закрыл vtun (EOF) — выходим из цикла
+                let shouldContinue = autoreleasepool { () -> Bool in
+                    do {
+                        let pkt = try handle.readPacket()
+                        // Версия IP — верхний нибл первого байта (4 или 6),
+                        // стандартный способ отличить v4/v6 без парсинга
+                        // всего заголовка. packetFlow.writePackets требует
+                        // явный протокол на КАЖДЫЙ пакет — нельзя просто
+                        // считать, что весь трафик IPv4 (gVisor-стек у нас
+                        // настроен на оба address family, см. netunnel.go
+                        // StartTunnel: inet6Prefixes).
+                        let proto: Int32 = (pkt.first.map { $0 >> 4 } == 6) ? AF_INET6 : AF_INET
+                        self.packetFlow.writePackets([pkt], withProtocols: [proto as NSNumber])
+                        return true
+                    } catch {
+                        os_log("ReadPacket завершился: %{public}@", log: self.log, type: .info, error.localizedDescription)
+                        return false // Stop() закрыл vtun (EOF) — выходим из цикла
+                    }
                 }
+                if !shouldContinue { return }
             }
         }
     }
