@@ -249,16 +249,16 @@ pub fn generate_config(
 /// которая не имеет этой проблемы.
 ///
 /// Используется только `engine::macos::spawn_client` — на Linux этот код
-/// не компилируется (`#[cfg(target_os = "macos")]`, не `#[allow
+/// не компилируется (`#[cfg(any(target_os = "macos", target_os = "ios"))]`, не `#[allow
 /// (dead_code)]`: это не временно неподключённый код, а архитектурно
 /// платформо-специфичная концепция, у Linux-пути своего эквивалента нет).
-#[cfg(target_os = "macos")]
+#[cfg(any(target_os = "macos", target_os = "ios"))]
 pub struct ExcludedRoutes {
     pub ipv4: Vec<String>,
     pub ipv6: Vec<String>,
 }
 
-#[cfg(target_os = "macos")]
+#[cfg(any(target_os = "macos", target_os = "ios"))]
 pub fn generate_excluded_routes(
     app: &AppHandle,
     server: &Server,
@@ -298,9 +298,9 @@ pub fn generate_excluded_routes(
 /// Не пишет на диск — под NE конфиг уходит в `NETunnelProviderProtocol.
 /// providerConfiguration` в памяти, не файлом.
 ///
-/// `#[cfg(target_os = "macos")]` — см. комментарий у
+/// `#[cfg(any(target_os = "macos", target_os = "ios"))]` — см. комментарий у
 /// `generate_excluded_routes` выше, та же причина.
-#[cfg(target_os = "macos")]
+#[cfg(any(target_os = "macos", target_os = "ios"))]
 pub fn generate_provider_config_json(server: &Server) -> serde_json::Value {
     let sni = if server.sni.is_empty() {
         server.host.clone()
@@ -363,7 +363,7 @@ mod tests {
     /// `netunnel.Config` (packaging/hysteria2-patch/netunnel/netunnel.go)
     /// — несовпадение здесь не поймает ни одна из сторон по отдельности
     /// (Go и Rust компилируются и тестируются независимо).
-    #[cfg(target_os = "macos")]
+    #[cfg(any(target_os = "macos", target_os = "ios"))]
     #[test]
     fn provider_config_json_matches_netunnel_config_shape() {
         let server = test_server();

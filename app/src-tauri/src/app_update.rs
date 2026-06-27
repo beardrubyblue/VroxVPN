@@ -2,18 +2,18 @@
 //! из core/updater.py (ветка main), тот же version.json и тот же контракт
 //! (основной URL + GitHub-фоллбек, если net.vroxory.com недоступен).
 
-#[cfg(not(target_os = "macos"))]
+#[cfg(not(any(target_os = "macos", target_os = "ios")))]
 use serde::Deserialize;
 use serde::Serialize;
 
-#[cfg(not(target_os = "macos"))]
+#[cfg(not(any(target_os = "macos", target_os = "ios")))]
 const VERSION_URL: &str = "https://net.vroxory.com/vpn/version.json";
-#[cfg(not(target_os = "macos"))]
+#[cfg(not(any(target_os = "macos", target_os = "ios")))]
 const VERSION_URL_FALLBACK: &str =
     "https://raw.githubusercontent.com/beardrubyblue/VroxVPN/main/version.json";
 const CURRENT_VERSION: &str = "4.0.0";
 
-#[cfg(not(target_os = "macos"))]
+#[cfg(not(any(target_os = "macos", target_os = "ios")))]
 #[derive(Deserialize)]
 struct VersionJson {
     version: String,
@@ -41,7 +41,7 @@ pub struct UpdateCheck {
     pub auto_installable: bool,
 }
 
-#[cfg(not(target_os = "macos"))]
+#[cfg(not(any(target_os = "macos", target_os = "ios")))]
 fn version_tuple(v: &str) -> Vec<u32> {
     v.trim()
         .trim_start_matches('v')
@@ -61,7 +61,7 @@ fn version_tuple(v: &str) -> Vec<u32> {
 /// константы) без какой-либо связи с `version.json`, и сравнение с ним
 /// показало бы либо ложное "доступно обновление", либо ложное "у вас
 /// последняя версия" — ни то, ни другое не отражает реальность.
-#[cfg(target_os = "macos")]
+#[cfg(any(target_os = "macos", target_os = "ios"))]
 pub async fn check_update(_timeout_secs: u64) -> Result<UpdateCheck, String> {
     Ok(UpdateCheck {
         current: CURRENT_VERSION.to_string(),
@@ -74,7 +74,7 @@ pub async fn check_update(_timeout_secs: u64) -> Result<UpdateCheck, String> {
     })
 }
 
-#[cfg(not(target_os = "macos"))]
+#[cfg(not(any(target_os = "macos", target_os = "ios")))]
 pub async fn check_update(timeout_secs: u64) -> Result<UpdateCheck, String> {
     let client = reqwest::Client::builder()
         .timeout(std::time::Duration::from_secs(timeout_secs))

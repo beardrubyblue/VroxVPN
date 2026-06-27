@@ -96,7 +96,11 @@ targets:
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.vroxory.vpn
-        PRODUCT_NAME: VroxVPNHost
+        # "vrox.vpn", не "VroxVPNHost" — чтобы в Xcode Organizer архив
+        # назывался так же, как macOS-архив (там имя берётся из
+        # реального Tauri-бандла, см. build-testflight.sh), а не как
+        # внутреннее имя Xcode-таргета тест-харнесса.
+        PRODUCT_NAME: vrox.vpn
         GENERATE_INFOPLIST_FILE: YES
         MARKETING_VERSION: "4.0.0"
         CODE_SIGN_ENTITLEMENTS: VroxVPNHost-iOS/VroxVPNHost-iOS.entitlements

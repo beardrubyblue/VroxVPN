@@ -43,7 +43,12 @@ BUILD_NUMBER="$(git -C "$REPO_ROOT" rev-list --count HEAD)"
 echo "→ build-номер (CFBundleVersion): $BUILD_NUMBER"
 
 echo "==> [1/5] Go-фреймворк (GoNetunnel.xcframework)"
-"$SCRIPT_DIR/build-go-framework.sh" macos
+# Без аргумента — оба слайса (macos,ios), один и тот же .xcframework
+# используют и macOS-, и iOS-таргеты (project.yml). Раньше тут было
+# жёстко "macos" — каждый прогон этого скрипта тихо стирал ios-слайс
+# (gomobile bind пересобирает .xcframework с нуля), и следующая
+# iOS-архивация падала с "no library for this platform was found".
+"$SCRIPT_DIR/build-go-framework.sh"
 
 echo "==> [2/5] Xcode .appex (Release — теперь Apple Distribution + App Store профиль)"
 xcodebuild -project "$SCRIPT_DIR/VroxVPNNetworkExtension.xcodeproj" \

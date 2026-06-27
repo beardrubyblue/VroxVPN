@@ -1,23 +1,25 @@
 //! Общие типы состояния соединения + диспетчер платформ. Сама логика
 //! привилегированных операций (pkexec/polkit/nftables на Linux,
-//! osascript/pf на macOS) живёт в engine::linux / engine::macos —
-//! см. их доккомменты. Публичный API (`ensure_polkit_rule`,
-//! `loosen_rp_filter`, `cleanup_interface`, `cleanup_orphans`,
-//! `spawn_client`, `kill_client`, `enable_killswitch`,
-//! `disable_killswitch`) одинаковый на всех платформах, чтобы
-//! commands.rs/lib.rs не знали, на какой платформе они работают.
+//! NetworkExtension на macOS/iOS — API NETunnelProviderManager у них
+//! общий, поэтому это один и тот же модуль `engine::macos`, не два)
+//! живёт в engine::linux / engine::macos — см. их доккомменты.
+//! Публичный API (`ensure_polkit_rule`, `loosen_rp_filter`,
+//! `cleanup_interface`, `cleanup_orphans`, `spawn_client`,
+//! `kill_client`, `enable_killswitch`, `disable_killswitch`)
+//! одинаковый на всех платформах, чтобы commands.rs/lib.rs не знали,
+//! на какой платформе они работают.
 
 use std::sync::Mutex;
 
 /// Платформенно-специфичный "хвост" активного соединения, который нужно
 /// освободить при disconnect, но который commands.rs не интерпретирует
 /// сам (просто `drop`-ает) — на Linux это обёртка pkexec-процесса
-/// (`CommandChild`), на macOS под NetworkExtension отдельного процесса,
-/// который мы сами породили, не существует вообще (тоннель живёт в
-/// `.appex`-расширении, управляемом ОС), поэтому там это `()`.
+/// (`CommandChild`), на macOS/iOS под NetworkExtension отдельного
+/// процесса, который мы сами породили, не существует вообще (тоннель
+/// живёт в `.appex`-расширении, управляемом ОС), поэтому там это `()`.
 #[cfg(target_os = "linux")]
 pub type ConnectionHandle = tauri_plugin_shell::process::CommandChild;
-#[cfg(target_os = "macos")]
+#[cfg(any(target_os = "macos", target_os = "ios"))]
 pub type ConnectionHandle = ();
 
 pub struct ActiveConnection {
@@ -48,10 +50,10 @@ mod linux;
 #[cfg(target_os = "linux")]
 pub use linux::*;
 
-#[cfg(target_os = "macos")]
+#[cfg(any(target_os = "macos", target_os = "ios"))]
 mod macos;
-#[cfg(target_os = "macos")]
+#[cfg(any(target_os = "macos", target_os = "ios"))]
 pub use macos::*;
 
-#[cfg(not(any(target_os = "linux", target_os = "macos")))]
-compile_error!("engine.rs: поддерживаются только Linux и macOS — см. docs/MACOS_PORT.md");
+#[cfg(not(any(target_os = "linux", target_os = "macos", target_os = "ios")))]
+compile_error!("engine.rs: поддерживаются только Linux, macOS и iOS — см. docs/MACOS_PORT.md");

@@ -14,15 +14,20 @@ use tauri::Manager;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    tauri::Builder::default()
-        // должен идти первым в цепочке — иначе плагин не успевает
-        // перехватить повторный запуск до инициализации остального
-        .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
-            if let Some(window) = app.get_webview_window("main") {
-                let _ = window.show();
-                let _ = window.set_focus();
-            }
-        }))
+    let builder = tauri::Builder::default();
+    // single-instance — desktop-only концепция (на mobile несколько
+    // копий приложения и не может быть запущено одновременно ОС), сам
+    // tauri-plugin-single-instance не экспортирует `init` под mobile.
+    // Должен идти первым в цепочке — иначе плагин не успевает
+    // перехватить повторный запуск до инициализации остального.
+    #[cfg(desktop)]
+    let builder = builder.plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
+        if let Some(window) = app.get_webview_window("main") {
+            let _ = window.show();
+            let _ = window.set_focus();
+        }
+    }));
+    builder
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_clipboard_manager::init())

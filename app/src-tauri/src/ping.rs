@@ -21,9 +21,15 @@ async fn ping_host(host: &str, timeout_secs: u64) -> Result<u32, String> {
     // десятки-сотни мс), отсюда прочерки в UI у всех пользователей
     // macOS. На macOS используем `-t` — общий таймаут в секундах, тот
     // же смысл, что у Linux-варианта `-W`.
-    #[cfg(target_os = "macos")]
+    // iOS — тот же BSD ping, что и macOS (общее наследие Darwin), та же
+    // ошибка с -W грозила бы и тут. Но это не делает ping рабочим на
+    // iOS: App Sandbox не даёт спавнить системные бинарники вообще —
+    // `Command::new("ping")` там скорее всего просто провалится с
+    // permission denied в рантайме. Компилируется, не проверено вживую
+    // на реальном устройстве.
+    #[cfg(any(target_os = "macos", target_os = "ios"))]
     let timeout_flag = "-t";
-    #[cfg(not(target_os = "macos"))]
+    #[cfg(not(any(target_os = "macos", target_os = "ios")))]
     let timeout_flag = "-W";
     let output = Command::new("ping")
         .args(["-c", "1", timeout_flag, &wait, host])
