@@ -237,12 +237,16 @@ func buildClientConfig(cfg *Config) (*client.Config, error) {
 		// вживую: после разгона видео (Instagram Reels) пик 48МБ
 		// держался даже спустя >60с простоя — не падал, пока не
 		// переподключишь тоннель целиком. 4МБ/1МБ (первый проход) явно
-		// недостаточно тесно для видео-throughput.
+		// недостаточно тесно для видео-throughput. Третий проход: пик
+		// 26.5МБ (видео) всё ещё не падал без полного переподключения
+		// тоннеля — ожидаемо, окно живёт, пока жив сам QUIC-коннект к
+		// серверу (один на весь тоннель). Дальнейшее ужимание снижает
+		// потолок ценой риска подвисаний при быстрой прокрутке видео.
 		QUICConfig: client.QUICConfig{
-			InitialStreamReceiveWindow:     128 << 10,  // 128 КиБ
-			MaxStreamReceiveWindow:         384 << 10,  // 384 КиБ (было 1 МиБ)
-			InitialConnectionReceiveWindow: 256 << 10,  // 256 КиБ
-			MaxConnectionReceiveWindow:     1536 << 10, // 1.5 МиБ (было 4 МиБ)
+			InitialStreamReceiveWindow:     64 << 10,  // 64 КиБ
+			MaxStreamReceiveWindow:         256 << 10, // 256 КиБ (было 384 КиБ)
+			InitialConnectionReceiveWindow: 128 << 10, // 128 КиБ
+			MaxConnectionReceiveWindow:     1 << 20,   // 1 МиБ (было 1.5 МиБ)
 		},
 		CongestionConfig: client.CongestionConfig{
 			Type:       cfg.Congestion.Type,
