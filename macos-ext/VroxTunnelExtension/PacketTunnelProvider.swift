@@ -134,20 +134,14 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
         let ipv4Exclude = (providerConfig["ipv4Exclude"] as? [String]) ?? []
         settings.ipv4Settings?.excludedRoutes = parseIPv4ExcludedRoutes(ipv4Exclude)
         settings.mtu = (providerConfig["mtu"] as? NSNumber) ?? 1500
-        // Системный/APNs/локальная сеть трафик не должен идти через
-        // тоннель — у Apple для этого штатные флаги (введены вместе с
-        // includeAllNetworks, но применимы и без него). excludeAPNs —
-        // прямой ответ на жалобу "фоновый системный трафик копится в
-        // тоннеле и держит память" (push-уведомления других приложений
-        // иначе тоже считаются нашими relay-соединениями). iOS-only —
-        // на macOS таких полей у NEPacketTunnelNetworkSettings нет
-        // вообще (APNs/cellular — мобильные понятия), этот файл общий
-        // для обеих платформ.
-        #if os(iOS)
-        settings.excludeLocalNetworks = true
-        settings.excludeAPNs = true
-        settings.excludeCellularServices = true
-        #endif
+        // excludeLocalNetworks/excludeAPNs/excludeCellularServices —
+        // НЕ здесь: это свойства NEVPNProtocol (родителя
+        // NETunnelProviderProtocol), настраиваются один раз при
+        // создании профиля на Rust-стороне (engine/macos/connect/
+        // mod.rs), а не на NEPacketTunnelNetworkSettings при каждом
+        // старте тоннеля — проверено вживую (компилятор: "has no
+        // member", не "недоступно до версии X" — это были не gating
+        // по версии, а просто неправильный объект).
         // Без dnsSettings DNS-запросы продолжают идти на оригинальный
         // (обычно приватный, типа 192.168.x.x) резолвер системы — он
         // недостижим через тоннель, и резолвинг по имени просто не

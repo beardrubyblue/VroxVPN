@@ -58,6 +58,20 @@ fn spawn_client_blocking(
         // пересмотреть отдельно, когда relay подтверждён рабочим.
         let config_dict = build_provider_configuration(config_json, excluded, inet4_addr, mtu);
         proto.setProviderConfiguration(Some(&config_dict));
+        // excludeLocalNetworks/excludeAPNs/excludeCellularServices —
+        // свойства NEVPNProtocol (родителя NETunnelProviderProtocol),
+        // настраиваются ОДИН РАЗ здесь при создании профиля, НЕ в
+        // Swift::startTunnel на NEPacketTunnelNetworkSettings (там их
+        // нет вообще — поймано вживую: "has no member", не gating по
+        // версии). Прямой ответ на наблюдение "память сама растёт даже
+        // без активного использования" — фоновый системный/APNs-
+        // трафик других приложений при системном VPN иначе тоже
+        // считается нашими relay-соединениями в Go-коде. Требуют iOS
+        // 16.4/macOS 13.3 (см. project.yml::deploymentTarget) — ниже
+        // этих версий вызов был бы "unrecognized selector" в рантайме.
+        proto.setExcludeLocalNetworks(true);
+        proto.setExcludeAPNs(true);
+        proto.setExcludeCellularServices(true);
     }
 
     unsafe {

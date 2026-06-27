@@ -2,15 +2,19 @@ name: VroxVPNNetworkExtension
 options:
   bundleIdPrefix: com.vroxory.vpn
   deploymentTarget:
-    macOS: "12.0"
-    iOS: "16.0"
+    # 13.3/16.4 (не 12.0/16.0) — минимум для excludeAPNs/
+    # excludeCellularServices (NEVPNProtocol), которые мы теперь
+    # реально используем (engine/macos/connect/mod.rs) — иначе
+    # "unrecognized selector" на старых системах в рантайме.
+    macOS: "13.3"
+    iOS: "16.4"
   createIntermediateGroups: true
 
 settings:
   base:
     DEVELOPMENT_TEAM: QRZT5R3Q28
     CODE_SIGN_STYLE: Automatic
-    MACOSX_DEPLOYMENT_TARGET: "12.0"
+    MACOSX_DEPLOYMENT_TARGET: "13.3"
     SWIFT_VERSION: "5.0"
     # Дефолт, чтобы $(CURRENT_PROJECT_VERSION) в Info.plist никогда не
     # подставлялся пустым ("null" в логе сборки) — реальный build-номер
