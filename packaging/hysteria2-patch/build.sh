@@ -71,22 +71,24 @@ go mod tidy
 echo "→ проверяю netunnel (go vet, кросс-проверка типов под NE-путь)..."
 go vet ./netunnel/...
 
+# --skip-cli — используется macos-ext/build-go-framework.sh: ему нужно
+# только подготовленное выше исходное дерево (клон+патч+netunnel/+
+# go.sum) для `gomobile bind`, сами CLI-бинарники этого скрипта он не
+# запускает. Раньше здесь же собирались ещё и darwin-amd64/darwin-
+# arm64 — удалены: macOS/iOS перешли на NetworkExtension (sidecar+
+# osascript+pf удалены целиком из engine/macos/mod.rs), эти бинарники
+# не используются ничем в продукте, только занимали время сборки.
+# linux-amd64/linux-arm64 остаются — это и есть `vroxcore`,
+# externalBin-sidecar для Linux-сборки (tauri.conf.json).
+if [[ "$1" == "--skip-cli" ]]; then
+    cd "$SCRIPT_DIR"
+    echo "✓ Исходное дерево подготовлено (--skip-cli, без сборки бинарников)"
+    exit 0
+fi
+
 rm -f "$BUILD_DIR/hashes.txt"
 ASSETS=()
-# os:arch — darwin-бинарники здесь УЖЕ НЕ часть продукта: macOS перешёл
-# на NetworkExtension (см. docs/ARCHITECTURE.md), где hysteria2-логика
-# встраивается в .appex через netunnel+gomobile, а не запускается
-# отдельным sidecar-процессом, как раньше планировалось. hysteria2-vroxory-
-# darwin-{amd64,arm64} оставлены только как диагностический CLI для
-# ручной проверки "коннектится ли hysteria2 до сервера с этого Mac"
-# отдельно от NE/gomobile-обвязки — реальный продукт их не использует.
-# TUN-код форка (directmatch.go/dnssniff.go) использовал Linux-специфичные
-# syscall (AF_PACKET, SO_BINDTODEVICE, /proc/net/route) и не собирался под
-# darwin — вынесено в directmatch_linux.go/directmatch_darwin.go и
-# dnssniff_linux.go/dnssniff_darwin.go через `//go:build`. На macOS фича
-# directDomains в этом CLI отключена (defaultInterfaceName возвращает ошибку),
-# остальное собирается и работает одинаково на обеих платформах.
-for target in linux:amd64 linux:arm64 darwin:amd64 darwin:arm64; do
+for target in linux:amd64 linux:arm64; do
     os="${target%%:*}"
     arch="${target##*:}"
     asset_name="hysteria2-vroxory-${os}-${arch}"

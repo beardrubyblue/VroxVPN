@@ -14,8 +14,11 @@ mkdir -p "$OUT_DIR"
 
 # build.sh самого hysteria2-форка уже умеет копировать netunnel/*.go в
 # app/netunnel/ — переиспользуем тот же клон, чтобы не дублировать логику
-# патча/cp здесь
-"$REPO_ROOT/packaging/hysteria2-patch/build.sh"
+# патча/cp здесь. --skip-cli — нам не нужны linux/darwin CLI-бинарники
+# этого скрипта (это отдельный sidecar-артефакт для Linux-сборки), только
+# подготовленное дерево для gomobile bind ниже — раньше это съедало
+# время на сборку 4 ненужных тут бинарников при каждом запуске.
+"$REPO_ROOT/packaging/hysteria2-patch/build.sh" --skip-cli
 
 cd "$REPO_ROOT/packaging/hysteria2-patch/build/hysteria/app"
 go get -tool golang.org/x/mobile/cmd/gobind
