@@ -13,14 +13,14 @@ export function DeleteConfirmSheet({ open, visible, targetName, onCancel, onConf
     <div className={`sheet-backdrop ${visible ? "visible" : ""}`} onClick={onCancel}>
       <div className={`sheet ${visible ? "visible" : ""}`} onClick={(e) => e.stopPropagation()}>
         <div className="sheet-handle" />
-        <h3>Удалить подписку?</h3>
+        <h3>Delete subscription?</h3>
         <p className="sheet-text">{targetName}</p>
-        <div className="bottom-action-row">
-          <button className="connect-button outline" onClick={onCancel}>
-            Отмена
+        <div style={{ display: "flex", gap: 10 }}>
+          <button className="btn-secondary" style={{ flex: 1 }} onClick={onCancel}>
+            Cancel
           </button>
-          <button className="connect-button destructive" onClick={onConfirm}>
-            Удалить
+          <button className="btn-danger" style={{ flex: 1 }} onClick={onConfirm}>
+            Delete
           </button>
         </div>
       </div>

@@ -1,15 +1,13 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { readText } from "@tauri-apps/plugin-clipboard-manager";
 import { AddSubscriptionSheet } from "@/components/AddSubscriptionSheet";
-import { BottomAction } from "@/components/BottomAction";
-import { DeleteConfirmSheet } from "@/components/DeleteConfirmSheet";
-import { MemoryCard } from "@/components/MemoryCard";
-import { SettingsPage } from "@/components/SettingsPage";
-import { SubscriptionList } from "@/components/subscriptions";
+import { ShieldScreen } from "@/components/screens/ShieldScreen";
+import { NodesScreen } from "@/components/screens/NodesScreen";
+import { StatsScreen } from "@/components/screens/StatsScreen";
+import { SettingsScreen, type Theme } from "@/components/screens/SettingsScreen";
 import { ToastBanner } from "@/components/ToastBanner";
-import { TrafficCard } from "@/components/TrafficCard";
-import { ViewSwitcher } from "@/components/ViewSwitcher";
+import { ViewSwitcher, type Page } from "@/components/ViewSwitcher";
 import {
   useAppUpdate,
   useConnection,
@@ -21,10 +19,12 @@ import {
   useTrafficStats,
   useAppBootstrap,
 } from "@/hooks";
+import type { PingResult } from "@/types";
 import "./App.css";
 
 function App() {
-  const [page, setPage] = useState<"home" | "settings">("home");
+  const [page, setPage] = useState<Page>("shield");
+  const [theme, setTheme] = useState<Theme>("dark");
 
   const { toast, pushToast } = useToast();
   const subs = useSubscriptions(pushToast);
@@ -40,15 +40,19 @@ function App() {
   const update = useAppUpdate(pushToast);
   const geo = useGeoUpdates(pushToast);
   const addSheet = useSheet();
-  const deleteSheet = useSheet();
 
   const [newUrl, setNewUrl] = useState("");
   const [addError, setAddError] = useState("");
-  const [confirmTarget, setConfirmTarget] = useState<{ url: string; name: string } | null>(null);
 
-  // подгрузка сохранённых настроек/подписок при старте — тот же
-  // settings.json, что у старого Python-приложения (core/settings.py)
   useAppBootstrap({ settings, subs, setSelectedServer: connection.setSelectedServer });
+
+  // Плоский список серверов со всех подписок + объединённая карта пингов
+  const allServers = useMemo(() => subs.subscriptions.flatMap((s) => s.servers), [subs.subscriptions]);
+  const allPings = useMemo(() => {
+    const m: Record<string, PingResult> = {};
+    for (const s of subs.subscriptions) Object.assign(m, s.pings);
+    return m;
+  }, [subs.subscriptions]);
 
   function openAddSheet() {
     setNewUrl("");
@@ -58,7 +62,7 @@ function App() {
 
   async function confirmAddSubscription() {
     if (!newUrl.trim()) {
-      setAddError("введи URL подписки");
+      setAddError("Enter a subscription URL");
       return;
     }
     setAddError("");
@@ -67,71 +71,75 @@ function App() {
     }
   }
 
-  async function pasteFromClipboard() {
+  async function pasteAndAdd() {
     let text: string | null;
     try {
       text = await readText();
     } catch {
-      pushToast("нет доступа к буферу обмена", "error");
+      pushToast("No clipboard access", "error");
       return;
     }
     if (!text || !text.trim()) {
-      pushToast("буфер обмена пуст", "error");
+      pushToast("Clipboard is empty", "error");
       return;
     }
     await subs.addFromUrl(text.trim());
   }
 
-  function openDeleteConfirm(url: string, name: string) {
-    setConfirmTarget({ url, name });
-    deleteSheet.show();
-  }
-
-  async function confirmDeleteSubscription() {
-    if (confirmTarget) {
-      const next = await subs.remove(confirmTarget.url);
-      const selected = connection.selectedServer;
-      if (selected && !next.some((s) => s.servers.some((srv) => srv.name === selected.name))) {
-        connection.setSelectedServer(null);
-      }
-    }
-    deleteSheet.hide();
-  }
+  const showTabs = page !== "nodes";
 
   return (
-    <div className="window">
+    <div className={`window vrox-${theme}`}>
       <ToastBanner toast={toast} />
 
-      {page === "home" ? (
-        <main className="page">
-          <MemoryCard
-            memoryBytes={connection.status.connected ? memoryBytes : 0}
-            memoryDebug={connection.status.connected ? memoryDebug : null}
-          />
-          {connection.status.connected && traffic && <TrafficCard traffic={traffic} />}
-          <SubscriptionList
-            subscriptions={subs.subscriptions}
-            selectedServerName={connection.selectedServer?.name}
-            selectable={!connection.status.connected}
-            onRefresh={subs.refresh}
-            onPing={subs.ping}
-            onDeleteRequest={openDeleteConfirm}
-            onSelectServer={connection.setSelectedServer}
-            onPingError={(error) => pushToast(error, "error")}
-          />
-        </main>
-      ) : (
-        <SettingsPage
+      {page === "shield" && (
+        <ShieldScreen
+          connected={connection.status.connected}
+          busy={connection.busy}
+          server={connection.selectedServer}
+          onToggle={connection.toggleConnection}
+          onOpenLocations={() => setPage("nodes")}
+        />
+      )}
+
+      {page === "nodes" && (
+        <NodesScreen
+          servers={allServers}
+          pings={allPings}
+          activeName={connection.selectedServer?.name}
+          onPick={(server) => {
+            connection.setSelectedServer(server);
+            setPage("shield");
+          }}
+          onBack={() => setPage("shield")}
+          onAdd={openAddSheet}
+          onPaste={pasteAndAdd}
+        />
+      )}
+
+      {page === "stats" && (
+        <StatsScreen
+          connected={connection.status.connected}
+          traffic={traffic}
+          memoryBytes={connection.status.connected ? memoryBytes : 0}
+          memoryDebug={connection.status.connected ? memoryDebug : null}
+        />
+      )}
+
+      {page === "settings" && (
+        <SettingsScreen
+          theme={theme}
+          setTheme={setTheme}
           ruBypass={settings.ruBypass}
           onRuBypassChange={settings.onRuBypassChange}
+          killSwitch={settings.killSwitch}
+          onKillSwitchChange={settings.onKillSwitchChange}
           connected={connection.status.connected}
           geoipLoading={geo.geoipLoading}
           onUpdateGeoip={geo.updateGeoip}
           geositeLoading={geo.geositeLoading}
           onUpdateGeosite={geo.updateGeosite}
           bypassStatus={geo.bypassStatus}
-          killSwitch={settings.killSwitch}
-          onKillSwitchChange={settings.onKillSwitchChange}
           idleTimeoutSeconds={settings.idleTimeoutSeconds}
           onIdleTimeoutSecondsChange={settings.onIdleTimeoutSecondsChange}
           maxTcpConnections={settings.maxTcpConnections}
@@ -147,20 +155,7 @@ function App() {
         />
       )}
 
-      {page === "home" && (
-        <BottomAction
-          hasSubscriptions={subs.subscriptions.length > 0}
-          onAdd={openAddSheet}
-          onPaste={pasteFromClipboard}
-          connected={connection.status.connected}
-          busy={connection.busy}
-          serverName={connection.status.server_name}
-          selectedServerName={connection.selectedServer?.name}
-          onToggle={connection.toggleConnection}
-        />
-      )}
-
-      <ViewSwitcher page={page} onChange={setPage} />
+      {showTabs && <ViewSwitcher page={page} onChange={setPage} />}
 
       <AddSubscriptionSheet
         open={addSheet.open}
@@ -170,14 +165,6 @@ function App() {
         error={addError}
         onConfirm={confirmAddSubscription}
         onClose={addSheet.hide}
-      />
-
-      <DeleteConfirmSheet
-        open={deleteSheet.open}
-        visible={deleteSheet.visible}
-        targetName={confirmTarget?.name}
-        onCancel={deleteSheet.hide}
-        onConfirm={confirmDeleteSubscription}
       />
     </div>
   );

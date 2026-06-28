@@ -23,17 +23,17 @@ export function AddSubscriptionSheet({
     <div className={`sheet-backdrop ${visible ? "visible" : ""}`} onClick={onClose}>
       <div className={`sheet ${visible ? "visible" : ""}`} onClick={(e) => e.stopPropagation()}>
         <div className="sheet-handle" />
-        <h3>Добавить подписку</h3>
+        <h3>Add subscription</h3>
         <input
           className="text-input"
           value={url}
           onChange={(e) => onUrlChange(e.currentTarget.value)}
-          placeholder="URL подписки"
+          placeholder="Subscription URL"
           autoFocus
         />
         {error && <div className="banner error">{error}</div>}
-        <button className="connect-button suggested" onClick={onConfirm}>
-          Добавить
+        <button className="btn-primary" onClick={onConfirm}>
+          Add
         </button>
       </div>
     </div>
