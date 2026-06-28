@@ -36,7 +36,7 @@ export function useSubscriptions(pushToast: (text: string, kind?: "error" | "inf
 
   async function addFromUrl(url: string): Promise<boolean> {
     if (subscriptions.some((s) => s.url === url)) {
-      pushToast("такая подписка уже добавлена", "error");
+      pushToast("This subscription is already added", "error");
       return false;
     }
     const meta: SubscriptionMeta = { url, name: subscriptionNameFromUrl(url) };
@@ -48,7 +48,7 @@ export function useSubscriptions(pushToast: (text: string, kind?: "error" | "inf
     const next = [...subscriptions, loaded];
     setSubscriptions(next);
     await persistSubscriptionMetas(next);
-    pushToast(`Подписка ${loaded.name} добавлена — ${loaded.servers.length} серверов`);
+    pushToast(`Subscription ${loaded.name} added — ${loaded.servers.length} servers`);
     return true;
   }
 

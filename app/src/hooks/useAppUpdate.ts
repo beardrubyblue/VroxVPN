@@ -25,9 +25,9 @@ export function useAppUpdate(pushToast: (text: string, kind?: "error" | "info") 
           sha256: r.sha256,
           autoInstallable: r.auto_installable,
         });
-        pushToast(`Доступна версия ${r.latest} — ${r.changelog}`);
+        pushToast(`Version ${r.latest} available — ${r.changelog}`);
       } else {
-        pushToast(`У вас последняя версия (${r.current})`);
+        pushToast(`You have the latest version (${r.current})`);
       }
     } catch (err) {
       pushToast(String(err), "error");

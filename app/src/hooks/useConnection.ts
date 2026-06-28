@@ -49,7 +49,7 @@ export function useConnection({ subscriptions, subscriptionsRef, ruBypass, killS
     let unlisten: (() => void) | undefined;
     (async () => {
       unlisten = await listen("vpn-disconnected-unexpectedly", () => {
-        pushToast("Соединение разорвано", "error");
+        pushToast("Connection lost", "error");
         refreshStatus();
       });
     })();

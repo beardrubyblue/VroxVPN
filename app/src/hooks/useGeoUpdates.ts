@@ -10,7 +10,7 @@ export function useGeoUpdates(pushToast: (text: string, kind?: "error" | "info")
     setGeoipLoading(true);
     try {
       const r = await invoke<{ count: number; bytes: number }>("update_geoip");
-      setBypassStatus(`geoip: ${r.count} диапазонов, ${(r.bytes / 1024).toFixed(0)} КБ`);
+      setBypassStatus(`geoip: ${r.count} ranges, ${(r.bytes / 1024).toFixed(0)} KB`);
     } catch (err) {
       pushToast(String(err), "error");
     }
@@ -21,7 +21,7 @@ export function useGeoUpdates(pushToast: (text: string, kind?: "error" | "info")
     setGeositeLoading(true);
     try {
       const r = await invoke<{ count: number; bytes: number }>("update_geosite");
-      setBypassStatus(`geosite: ${r.count} доменов, ${(r.bytes / 1024).toFixed(0)} КБ`);
+      setBypassStatus(`geosite: ${r.count} domains, ${(r.bytes / 1024).toFixed(0)} KB`);
     } catch (err) {
       pushToast(String(err), "error");
     }
