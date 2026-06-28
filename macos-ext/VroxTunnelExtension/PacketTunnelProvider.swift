@@ -250,6 +250,21 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
         completionHandler()
     }
 
+    /// iOS будит расширение после сна устройства (разблокировка экрана и
+    /// т.п.). За время заморозки процесса QUIC-тоннель почти наверняка
+    /// умер: NAT-маппинг UDP на стороне оператора/роутера истекает за
+    /// 30–120с, keepalive всё это время не слался (процесс был заморожен).
+    /// Без этого пользователь видел "интернет пропал после блокировки" —
+    /// приложения (Telegram и пр.) бились в мёртвый тоннель, пока не
+    /// сработает периодический реконнект (до 3 мин) или ручное
+    /// переподключение. forceReconnect пересоздаёт QUIC немедленно.
+    /// Дополнительно тот же реконнект триггерит сам netunnel при серии
+    /// неудачных дозвонов (handler.go::noteDialResult) — на случай, если
+    /// iOS wake() не вызвала (она не гарантирована для always-on VPN).
+    override func wake() {
+        tunnelHandle?.forceReconnect()
+    }
+
     /// Единственная поддерживаемая команда — "getStats" (см. engine/macos.rs::
     /// get_traffic_totals_blocking, который шлёт её через sendProviderMessage
     /// по запросу фронтенда). Ответ — JSON от NetunnelTunnelHandle.getStats()

@@ -158,7 +158,16 @@ type TunnelHandle struct {
 	clientMu sync.RWMutex
 	client   client.Client
 
-	reconnectMu sync.Mutex // сериализует вызовы reconnectClient
+	reconnectMu  sync.Mutex  // сериализует вызовы reconnectClient
+	reconnecting atomic.Bool // дедупликация триггеров maybeReconnect (не плодить горутины)
+
+	// dialFailStreak — сколько подряд hyClient.TCP/UDP() вернули ошибку.
+	// Главный детектор "тоннель умер, пока телефон спал": после
+	// разблокировки приложения шлют пакеты в мёртвый QUIC, дозвон
+	// фейлит пачкой — при превышении порога форсим реконнект НЕ дожидаясь
+	// периодического таймера (тот к тому же не идёт, пока процесс
+	// заморожен iOS). Сбрасывается в 0 на первый же успешный дозвон.
+	dialFailStreak atomic.Int32
 
 	txBytes uint64 // WritePacket: пакеты ОТ ОС, "наружу" через тоннель — upload
 	rxBytes uint64 // ReadPacket: пакеты К ОС, "из" тоннеля — download
@@ -229,10 +238,54 @@ func (h *TunnelHandle) reconnectClient() error {
 	}
 
 	_ = oldClient.Close()
+	h.dialFailStreak.Store(0)
 
 	runtime.GC()
 	debug.FreeOSMemory()
 	return nil
+}
+
+// maybeReconnect запускает реконнект в фоне, но не больше одного за раз
+// (reconnecting-флаг) — много forwarder-горутин могут разом обнаружить
+// мёртвый тоннель и все позвать сюда; без дедупликации это сотни горутин
+// на reconnectMu. Неблокирующий: вызывается из горячих путей (forwarder,
+// тикеры, wake).
+func (h *TunnelHandle) maybeReconnect() {
+	if h.reconnecting.CompareAndSwap(false, true) {
+		go func() {
+			defer h.reconnecting.Store(false)
+			_ = h.reconnectClient()
+		}()
+	}
+}
+
+// ForceReconnect — точка входа для Swift (PacketTunnelProvider.wake()):
+// iOS будит расширение после сна устройства, и тоннель почти наверняка
+// мёртв (NAT-маппинг UDP истёк за время заморозки процесса) — форсим
+// пересоздание QUIC немедленно, не дожидаясь, пока приложения
+// натолкнутся на мёртвый дозвон. gomobile экспортирует как
+// forceReconnect().
+func (h *TunnelHandle) ForceReconnect() {
+	h.maybeReconnect()
+}
+
+// reconnectFailThreshold — сколько подряд неудачных дозвонов считаем
+// признаком мёртвого тоннеля. 3 — достаточно мало для быстрого
+// восстановления после сна, но не реагирует на одиночный отказ сервера
+// по конкретному соединению (нормальный сетевой шум).
+const reconnectFailThreshold = 3
+
+// noteDialResult вызывается forwarder'ами (handler.go) после каждой
+// попытки hyClient.TCP/UDP(): успех сбрасывает streak, ошибка копит его
+// и при достижении порога форсит реконнект.
+func (h *TunnelHandle) noteDialResult(ok bool) {
+	if ok {
+		h.dialFailStreak.Store(0)
+		return
+	}
+	if h.dialFailStreak.Add(1) >= reconnectFailThreshold {
+		h.maybeReconnect()
+	}
 }
 
 // normalizeCertHash — копия app/cmd/client.go::normalizeCertHash (не
@@ -561,7 +614,7 @@ func (h *TunnelHandle) evictUnderMemoryPressurePeriodically() {
 		select {
 		case <-ticker.C:
 			if availableMemoryBytes() < 15<<20 {
-				_ = h.reconnectClient()
+				h.maybeReconnect()
 			}
 		case <-h.stopMemoryReclaim:
 			return
@@ -582,7 +635,7 @@ func (h *TunnelHandle) reconnectPeriodically() {
 	for {
 		select {
 		case <-ticker.C:
-			_ = h.reconnectClient()
+			h.maybeReconnect()
 		case <-h.stopMemoryReclaim:
 			return
 		}

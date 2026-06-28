@@ -177,9 +177,11 @@ func tcpForwarderHandler(h *TunnelHandle) func(*tcp.ForwarderRequest) {
 
 		hyConn, err := h.getClient().TCP(reqAddr)
 		if err != nil {
+			h.noteDialResult(false) // мёртвый тоннель? копим streak, форсим реконнект
 			r.Complete(true)
 			return
 		}
+		h.noteDialResult(true)
 
 		var wq waiter.Queue
 		ep, tcpErr := r.CreateEndpoint(&wq)
@@ -280,9 +282,11 @@ func udpForwarderHandler(h *TunnelHandle) func(*udp.ForwarderRequest) bool {
 
 		rc, err := h.getClient().UDP()
 		if err != nil {
+			h.noteDialResult(false)
 			_ = local.Close()
 			return false
 		}
+		h.noteDialResult(true)
 
 		activeUDPRelays.Add(1)
 		connID := registerConn(func() { _ = local.Close() })
