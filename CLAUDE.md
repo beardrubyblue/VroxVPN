@@ -402,6 +402,10 @@ jetsam at ~50 MB (`phys_footprint`). Any change in `netunnel/*.go` or
 per-packet allocations; relay limits (idle timeout / max TCP / max UDP)
 and QUIC receive windows were tuned on-device — don't raise them without
 a live test. The Stats screen shows the memory breakdown for this.
+The memory mode is decided **at runtime** by the extension
+(`isiOSAppOnMac` → `memoryConstrained` in the Go config), never by
+`#[cfg]`/build tags: the iOS TestFlight build also runs on Apple Silicon
+Macs, where there is no jetsam limit.
 
 **Doc-comments carry history, not just behavior.** This codebase has
 repeatedly hit subtle platform bugs (entitlement conflicts, signature

@@ -49,6 +49,16 @@ var udpBufPool = sync.Pool{
 const (
 	defaultMaxTCPRelays = 64
 	defaultMaxUDPRelays = 32
+	defaultIdleTimeout  = 30 * time.Second
+)
+
+// Лимиты без jetsam (macOS и iOS-сборка на Mac, см.
+// Config.MemoryConstrained): 300с — дефолт Happ, долгие соединения не
+// рвутся; потолки с запасом на браузер с десятками вкладок и на DNS
+// (каждый запрос — отдельный UDP-поток до idle timeout).
+const (
+	unconstrainedMaxRelays   = 2048
+	unconstrainedIdleTimeout = 300 * time.Second
 )
 
 var (
@@ -65,6 +75,13 @@ var (
 // значения в JSON (поле не задано на Rust-стороне) — фоллбек на дефолт,
 // а не "лимит = 0" (что заблокировало бы вообще все соединения).
 func applyRelayLimits(cfg *Config) {
+	if !cfg.MemoryConstrained {
+		maxTCPRelays, maxUDPRelays = unconstrainedMaxRelays, unconstrainedMaxRelays
+		tcpIdleTimeout, udpIdleTimeout = unconstrainedIdleTimeout, unconstrainedIdleTimeout
+		return
+	}
+	maxTCPRelays, maxUDPRelays = defaultMaxTCPRelays, defaultMaxUDPRelays
+	tcpIdleTimeout, udpIdleTimeout = defaultIdleTimeout, defaultIdleTimeout
 	if cfg.MaxTCPConnections > 0 {
 		maxTCPRelays = int32(cfg.MaxTCPConnections)
 	}
@@ -144,7 +161,7 @@ func evictOldestConn() bool {
 // forget (ответ за <1с), другие UDP-потоки (QUIC-inside-tunnel) имеют
 // свой keepalive. Было 300с (дефолт Happ), что копило десятки мёртвых
 // UDP-сессий при долгом браузинге. Настраивается из UI (applyRelayLimits).
-var udpIdleTimeout = 30 * time.Second
+var udpIdleTimeout = defaultIdleTimeout
 
 // tcpForwarderHandler и udpForwarderHandler — обработчики для
 // tcp.Forwarder/udp.Forwarder gVisor-стека (см. netunnel.go::StartTunnel,
@@ -206,7 +223,7 @@ func tcpForwarderHandler(h *TunnelHandle) func(*tcp.ForwarderRequest) {
 // копилось 50-150 соединений × ~100 КиБ = 5-15 МиБ только в relay-
 // overhead. 30с — соединения от видео 30-секундной давности уже мертвы,
 // базовый RSS остаётся низким. Настраивается из UI (applyRelayLimits).
-var tcpIdleTimeout = 30 * time.Second
+var tcpIdleTimeout = defaultIdleTimeout
 
 // activityReader оборачивает io.Reader и отмечает время последнего
 // успешного чтения — используется для отслеживания активности в обе

@@ -72,11 +72,10 @@ import (
 // относительному приросту, а не абсолютному потолку, дополняет, не
 // дублирует SetMemoryLimit (GC сработает от того лимита, который
 // сработает раньше).
-func init() {
-	// Только iOS — см. isMemoryConstrained (memory_ios.go/memory_other.go).
-	if !isMemoryConstrained {
-		return
-	}
+//
+// Применяется только при Config.MemoryConstrained (см. там) — поэтому
+// это не init(), а вызов из StartTunnel.
+func applyMemoryTuning() {
 	// Каждый Go-поток (M в терминологии рантайма) — это отдельный OS-
 	// тред со своим стеком плюс per-P аллокаторские кеши (mcache).
 	// Расширению не нужен параллелизм между ядрами — вся работа уже
@@ -123,6 +122,19 @@ type Config struct {
 	IdleTimeoutSeconds uint32 `json:"idleTimeoutSeconds,omitempty"`
 	MaxTCPConnections  uint32 `json:"maxTcpConnections,omitempty"`
 	MaxUDPConnections  uint32 `json:"maxUdpConnections,omitempty"`
+	// MemoryConstrained — работаем ли под iOS jetsam (~50МБ). Выставляет
+	// Swift-расширение по окружению (PacketTunnelProvider.swift::
+	// isMemoryConstrained), не Rust: iOS-сборка из TestFlight ставится и
+	// на Apple Silicon Mac (isiOSAppOnMac) — компилируется как iOS, но
+	// jetsam-потолка там нет. Раньше это решалось build-тегом, и на Mac
+	// работали iOS-механизмы: reconnectPeriodically каждые 3 мин эвиктил
+	// ВСЕ relay-соединения (приложение Claude бесконечно
+	// переподключалось), лимиты 30с/64/32 давали RST новым соединениям
+	// (ERR_CONNECTION_CLOSED в браузере). false → GOMAXPROCS/лимит кучи
+	// не трогаем, фоновые механизмы не запускаем, relay-лимиты
+	// десктопные (applyRelayLimits). Нет поля в JSON → true (StartTunnel):
+	// безопаснее перестраховаться памятью, чем получить jetsam на iPhone.
+	MemoryConstrained bool `json:"memoryConstrained"`
 }
 
 type ObfsConfig struct {
@@ -455,9 +467,12 @@ func buildClientConfig(cfg *Config) (*client.Config, error) {
 // не блокирует (запускает свой цикл в фоне), в отличие от Run(), который
 // использует app/internal/tun/server.go для sidecar-пути.
 func StartTunnel(configJSON string) (*TunnelHandle, error) {
-	var cfg Config
+	cfg := Config{MemoryConstrained: true}
 	if err := json.Unmarshal([]byte(configJSON), &cfg); err != nil {
 		return nil, fmt.Errorf("netunnel: bad config json: %w", err)
+	}
+	if cfg.MemoryConstrained {
+		applyMemoryTuning()
 	}
 	applyRelayLimits(&cfg)
 
@@ -599,9 +614,9 @@ func StartTunnel(configJSON string) (*TunnelHandle, error) {
 	udpForwarder := udp.NewForwarder(netStack, udpForwarderHandler(handle))
 	netStack.SetTransportProtocolHandler(udp.ProtocolNumber, udpForwarder.HandlePacket)
 
-	// Механизмы экономии памяти — только под iOS jetsam; на macOS они
-	// рвали живые соединения (см. isMemoryConstrained в memory_other.go).
-	if isMemoryConstrained {
+	// Механизмы экономии памяти — только под iOS jetsam; без него они
+	// рвали живые соединения (см. Config.MemoryConstrained).
+	if cfg.MemoryConstrained {
 		go handle.reclaimMemoryPeriodically()
 		go handle.evictUnderMemoryPressurePeriodically()
 		go handle.reconnectPeriodically()

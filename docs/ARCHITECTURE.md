@@ -1164,3 +1164,21 @@ iOS; Rust на macOS передаёт `RelayLimits::MACOS` (300с / 2048 / 2048)
 только для `target_os = "macos"`. Linux стрипается как раньше, iOS
 (staticlib) не затронут. Перед загрузкой macOS-сборки проверять
 `xcrun dyld_info -platform <.app>/Contents/MacOS/app`.
+
+### Поправка: iOS-сборка на Mac — режим памяти определяется во время работы
+
+Исправление выше (build-тег `isMemoryConstrained` + `RelayLimits::MACOS`
+под `target_os = "macos"`) не помогло на практике: на Mac ставится
+**iOS-сборка из TestFlight** (Apple Silicon, `isiOSAppOnMac`,
+`/Applications/vrox.vpn.app/Wrapper/…`). Она компилируется как iOS, так
+что проверки при компиляции считали её iPhone, и iOS-механизмы продолжали
+рвать соединения.
+
+Теперь окружение определяет расширение во время работы:
+`PacketTunnelProvider.swift::isMemoryConstrained` (`#if os(iOS)` +
+`!ProcessInfo.isiOSAppOnMac`) добавляет в JSON-конфиг
+`memoryConstrained`, Go (`netunnel.Config.MemoryConstrained`) по нему
+включает или нет GOMAXPROCS/лимит кучи, фоновые механизмы и iOS-лимиты
+relay (иначе — 300с / 2048 / 2048). Нет поля → ограниченный режим
+(безопасно для iPhone). Rust снова всегда отдаёт лимиты из настроек —
+они применяются только на настоящем iPhone/iPad.

@@ -102,10 +102,7 @@ pub async fn spawn_client(
     // config_gen-вызовам нужен &AppHandle (geoip/geosite) — считаем их
     // ДО перехода на blocking-поток, не внутри него.
     let excluded = config_gen::generate_excluded_routes(app, server, ru_bypass)?;
-    #[cfg(target_os = "ios")]
     let relay_limits = config_gen::RelayLimits::from_settings(&crate::settings::load(app));
-    #[cfg(target_os = "macos")]
-    let relay_limits = config_gen::RelayLimits::MACOS;
     let provider_config = config_gen::generate_provider_config_json(server, relay_limits);
     let config_json = serde_json::to_string(&provider_config).map_err(|e| e.to_string())?;
     let inet4_addr = provider_config["inet4Addr"]

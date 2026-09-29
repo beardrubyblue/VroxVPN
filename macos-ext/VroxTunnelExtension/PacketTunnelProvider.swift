@@ -64,6 +64,34 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
     private var tunnelHandle: NetunnelTunnelHandle?
     private let log = OSLog(subsystem: "com.vroxory.vpn.tunnel", category: "PacketTunnelProvider")
 
+    /// Работаем ли под iOS jetsam (~50МБ) — только на настоящем
+    /// iPhone/iPad. iOS-сборка из TestFlight ставится и на Apple Silicon
+    /// Mac (`isiOSAppOnMac`): код там компилируется как iOS, но потолка
+    /// памяти нет. Решать это при компиляции (build-тег в Go,
+    /// `target_os` в Rust) было ошибкой — на Mac работали iOS-механизмы
+    /// экономии памяти и рвали соединения (Claude бесконечно
+    /// переподключался). Решаем здесь, во время работы, и передаём в Go
+    /// (`netunnel.Config.MemoryConstrained`).
+    private static var isMemoryConstrained: Bool {
+        #if os(iOS)
+        return !ProcessInfo.processInfo.isiOSAppOnMac
+        #else
+        return false
+        #endif
+    }
+
+    /// Добавляет `memoryConstrained` в JSON-конфиг от Rust. Если JSON не
+    /// разобрался — отдаём как есть: Go без поля считает режим
+    /// ограниченным (безопасный вариант для iPhone).
+    private static func withMemoryMode(_ configJSON: String) -> String {
+        guard var config = (try? JSONSerialization.jsonObject(with: Data(configJSON.utf8))) as? [String: Any] else {
+            return configJSON
+        }
+        config["memoryConstrained"] = isMemoryConstrained
+        guard let data = try? JSONSerialization.data(withJSONObject: config) else { return configJSON }
+        return String(decoding: data, as: UTF8.self)
+    }
+
     override func startTunnel(
         options: [String: NSObject]?,
         completionHandler: @escaping (Error?) -> Void
@@ -86,7 +114,8 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
         // readPacket/stop ниже — методы, поэтому там `try` работает),
         // для свободных функций нужен явный NSErrorPointer.
         var startErr: NSError?
-        guard let handle = NetunnelStartTunnel(configJSON, &startErr) else {
+        let tunnelConfigJSON = Self.withMemoryMode(configJSON)
+        guard let handle = NetunnelStartTunnel(tunnelConfigJSON, &startErr) else {
             let error = startErr ?? NSError(
                 domain: "com.vroxory.vpn.tunnel",
                 code: 2,
