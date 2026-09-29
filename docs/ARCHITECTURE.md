@@ -1134,3 +1134,21 @@ Swift-часть Tauri (`tauri/mobile/ios-api`) собирается через 
    ([swift-rs#81](https://github.com/Brendonovich/swift-rs/issues/81)).
    Временно: `[patch.crates-io]` в `Cargo.toml` на коммит из PR #82,
    **убрать, когда фикс выйдет в релизе swift-rs**.
+
+## macOS: iOS-механизмы экономии памяти рвали соединения
+
+Симптом: на Mac через VPN приложение Claude бесконечно переподключалось,
+в браузере сыпались `ERR_CONNECTION_CLOSED`. Причина — всё, что делалось
+под ~50МБ jetsam iOS (разделы про память NE выше), работало и на macOS:
+
+- `reconnectPeriodically` каждые 3 мин пересоздавал QUIC-клиент и
+  эвиктил **все** relay-соединения — любое долгое соединение рвалось;
+- relay-лимиты 30с простоя / 64 TCP / 32 UDP — браузер с вкладками
+  упирался в 64, новые соединения получали RST; настройки этих лимитов
+  в UI показываются только на iOS, на Mac их нельзя было поменять;
+- `GOMAXPROCS(1)` и `SetMemoryLimit(30МиБ)` зря ограничивали Mac.
+
+Исправлено: `isMemoryConstrained` (build-тег, `memory_ios.go` /
+`memory_other.go`) включает runtime-тюнинг и фоновые механизмы только на
+iOS; Rust на macOS передаёт `RelayLimits::MACOS` (300с / 2048 / 2048)
+вместо значений из настроек. На iOS поведение не изменилось.

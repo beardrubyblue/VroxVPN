@@ -314,6 +314,24 @@ pub struct RelayLimits {
 
 #[cfg(any(target_os = "macos", target_os = "ios"))]
 impl RelayLimits {
+    /// macOS: iOS-лимиты (30с простоя / 64 TCP / 32 UDP) подобраны под
+    /// ~50МБ jetsam iOS и на Mac только вредили: 30с простоя рвали
+    /// долгие соединения (приложение Claude бесконечно переподключалось),
+    /// 64 TCP — браузер с десятком вкладок упирался в потолок, и новые
+    /// соединения получали RST (ERR_CONNECTION_CLOSED в DevTools). В UI
+    /// эти поля на macOS скрыты (SettingsScreen — только isIOS), так что
+    /// пользователь не мог их и поменять. 300с — дефолт Happ; UDP-потолок
+    /// с запасом под DNS (каждый запрос — отдельный UDP-поток, живёт до
+    /// idle timeout).
+    #[cfg(target_os = "macos")]
+    pub const MACOS: Self = Self {
+        idle_timeout_seconds: 300,
+        max_tcp_connections: 2048,
+        max_udp_connections: 2048,
+    };
+
+    /// iOS: из настроек (Settings → Performance), дефолты — settings.rs.
+    #[cfg(target_os = "ios")]
     pub fn from_settings(settings: &serde_json::Map<String, serde_json::Value>) -> Self {
         Self {
             idle_timeout_seconds: settings

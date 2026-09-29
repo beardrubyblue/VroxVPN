@@ -73,6 +73,10 @@ import (
 // дублирует SetMemoryLimit (GC сработает от того лимита, который
 // сработает раньше).
 func init() {
+	// Только iOS — см. isMemoryConstrained (memory_ios.go/memory_other.go).
+	if !isMemoryConstrained {
+		return
+	}
 	// Каждый Go-поток (M в терминологии рантайма) — это отдельный OS-
 	// тред со своим стеком плюс per-P аллокаторские кеши (mcache).
 	// Расширению не нужен параллелизм между ядрами — вся работа уже
@@ -595,9 +599,13 @@ func StartTunnel(configJSON string) (*TunnelHandle, error) {
 	udpForwarder := udp.NewForwarder(netStack, udpForwarderHandler(handle))
 	netStack.SetTransportProtocolHandler(udp.ProtocolNumber, udpForwarder.HandlePacket)
 
-	go handle.reclaimMemoryPeriodically()
-	go handle.evictUnderMemoryPressurePeriodically()
-	go handle.reconnectPeriodically()
+	// Механизмы экономии памяти — только под iOS jetsam; на macOS они
+	// рвали живые соединения (см. isMemoryConstrained в memory_other.go).
+	if isMemoryConstrained {
+		go handle.reclaimMemoryPeriodically()
+		go handle.evictUnderMemoryPressurePeriodically()
+		go handle.reconnectPeriodically()
+	}
 	return handle, nil
 }
 
