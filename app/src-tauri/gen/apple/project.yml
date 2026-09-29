@@ -63,6 +63,18 @@ targets:
           - UIInterfaceOrientationLandscapeRight
         CFBundleShortVersionString: 4.0.0
         CFBundleVersion: "4.0.0"
+        # Жизненный цикл UIScene обязателен для приложений, собранных с
+        # SDK iOS 27: без манифеста iOS 27 убивает процесс при запуске
+        # (_UIApplicationEvaluateRuntimeIssueForNoSceneLifecycleAdoption,
+        # EXC_BREAKPOINT) — сборка 4.0.0.124 падала на iPhone, на Mac
+        # (isiOSAppOnMac) при этом работала. tao включает сцены по наличию
+        # этого ключа; на tao 0.35 (Tauri 2.11) с ним release падал из-за
+        # tao#1245 — поэтому вместе с манифестом Tauri поднята до 2.12
+        # (tao 0.37). Делегат сцены tao отдаёт сам
+        # (configurationForConnectingSceneSession), UISceneConfigurations
+        # не нужны. Несколько окон не поддерживаем.
+        UIApplicationSceneManifest:
+          UIApplicationSupportsMultipleScenes: false
     scheme:
       environmentVariables:
         RUST_BACKTRACE: full

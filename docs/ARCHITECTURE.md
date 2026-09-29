@@ -1248,3 +1248,21 @@ Idle timeout / Max TCP / Max UDP в Settings (только iOS) убраны в�
 
 App Group требует capability в Apple Developer на обоих App ID и
 перевыпуска App Store-профилей — без этого подпись Release не пройдёт.
+
+## iOS 27: обязательный жизненный цикл UIScene
+
+Сборка 4.0.0.124 падала на iPhone (iOS 27) сразу при запуске —
+`EXC_BREAKPOINT` в `_UIApplicationEvaluateRuntimeIssueForNoSceneLifecycleAdoption`:
+приложения, собранные с SDK iOS 27 (Xcode 27), обязаны использовать
+UIScene, иначе UIKit останавливает процесс. На Mac (iOS-сборка через
+`isiOSAppOnMac`) та же сборка работала — проверка там не срабатывает.
+
+`tao` включает сцены по наличию `UIApplicationSceneManifest` в
+Info.plist. На `tao 0.35` (Tauri 2.11) одного манифеста мало: release-
+сборка падает из-за tao#1245 (см. tao#1340). Поэтому:
+- Tauri 2.11 → 2.12 (`tao 0.37`, `wry 0.57`, плагины и JS-пакеты — на
+  совместимые версии);
+- в `gen/apple/project.yml` → `info.properties` добавлен
+  `UIApplicationSceneManifest` с `UIApplicationSupportsMultipleScenes:
+  false` (делегат сцены `tao` отдаёт сам через
+  `configurationForConnectingSceneSession`).

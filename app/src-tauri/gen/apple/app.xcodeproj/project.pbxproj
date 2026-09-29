@@ -77,11 +77,13 @@
 		682535EEFE1DA20BE07B123C /* main.mm */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.objcpp; path = main.mm; sourceTree = "<group>"; };
 		6C1BAA8B1131D4098CFBEAAB /* engine.rs */ = {isa = PBXFileReference; path = engine.rs; sourceTree = "<group>"; };
 		81E326B61ED92E1D1EECF952 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
+		85EEA3982806E79B9B7FDB19 /* mod.rs */ = {isa = PBXFileReference; path = mod.rs; sourceTree = "<group>"; };
 		91AA6714F8A08377810182D4 /* disconnect_watcher.rs */ = {isa = PBXFileReference; path = disconnect_watcher.rs; sourceTree = "<group>"; };
 		92B03E5F47F5BC0AB27EA81A /* mod.rs */ = {isa = PBXFileReference; path = mod.rs; sourceTree = "<group>"; };
 		95282FD90006440FA82835AA /* update.rs */ = {isa = PBXFileReference; path = update.rs; sourceTree = "<group>"; };
 		9FACFFCB6E3743955F72464C /* Security.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Security.framework; path = System/Library/Frameworks/Security.framework; sourceTree = SDKROOT; };
 		A316EEA69C47F4F7861D337D /* disconnect.rs */ = {isa = PBXFileReference; path = disconnect.rs; sourceTree = "<group>"; };
+		AA00F08301989A0EEC1A9506 /* recorder.rs */ = {isa = PBXFileReference; path = recorder.rs; sourceTree = "<group>"; };
 		AEE1E7A9BA1D8271EF0FA5FB /* stats.rs */ = {isa = PBXFileReference; path = stats.rs; sourceTree = "<group>"; };
 		AF1DE57E7D9CF13BB2E0E038 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		B156D50861B260AF2FC718A7 /* GoNetunnel.xcframework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.xcframework; name = GoNetunnel.xcframework; path = ../../../../ios/Frameworks/GoNetunnel.xcframework; sourceTree = "<group>"; };
@@ -251,6 +253,7 @@
 				DCD5C1A8AD1AEC801B9F6A5C /* subscription.rs */,
 				DE944FFD75F4654FD2221833 /* tray.rs */,
 				A4F9CDE4BB67EF2B3FFCA1EC /* engine */,
+				9EAC652416AB4D6E9D38A57B /* traffic_history */,
 			);
 			name = src;
 			path = ../../src;
@@ -270,6 +273,15 @@
 				1BBF8C620E54F8C028CA130C /* Frameworks */,
 				EE72B6AC647386A11F795E44 /* Products */,
 			);
+			sourceTree = "<group>";
+		};
+		9EAC652416AB4D6E9D38A57B /* traffic_history */ = {
+			isa = PBXGroup;
+			children = (
+				85EEA3982806E79B9B7FDB19 /* mod.rs */,
+				AA00F08301989A0EEC1A9506 /* recorder.rs */,
+			);
+			path = traffic_history;
 			sourceTree = "<group>";
 		};
 		A4F9CDE4BB67EF2B3FFCA1EC /* engine */ = {
@@ -315,7 +327,7 @@
 			path = app;
 			sourceTree = "<group>";
 		};
-		"TEMP_A304F6C5-B87F-4432-BAB6-0BD8BFA30629" /* x86_64 */ = {
+		"TEMP_F05AA8A6-9965-45C7-8277-E49F7B19E7C2" /* x86_64 */ = {
 			isa = PBXGroup;
 			children = (
 			);
