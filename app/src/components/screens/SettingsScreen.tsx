@@ -18,12 +18,6 @@ interface SettingsScreenProps {
   geositeLoading: boolean;
   onUpdateGeosite: () => void;
   bypassStatus: string;
-  idleTimeoutSeconds: number;
-  onIdleTimeoutSecondsChange: (v: number) => void;
-  maxTcpConnections: number;
-  onMaxTcpConnectionsChange: (v: number) => void;
-  maxUdpConnections: number;
-  onMaxUdpConnectionsChange: (v: number) => void;
   updateChecking: boolean;
   onCheckUpdate: () => void;
   updateInfo: UpdateInfo | null;
@@ -139,30 +133,6 @@ function UpdateButton({ label = "UPDATE", solid, loading, onClick }: { label?: s
   );
 }
 
-function NumInput({ value, onChange, disabled }: { value: number; onChange: (v: number) => void; disabled?: boolean }) {
-  return (
-    <input
-      type="number"
-      className="mono"
-      value={value}
-      disabled={disabled}
-      onChange={(e) => onChange(Number(e.target.value))}
-      style={{
-        width: 72,
-        flexShrink: 0,
-        textAlign: "right",
-        padding: "8px 10px",
-        borderRadius: 12,
-        border: "1px solid var(--line-strong)",
-        background: "var(--bg-elev-2)",
-        color: "var(--fg)",
-        fontSize: 14,
-        opacity: disabled ? 0.5 : 1,
-      }}
-    />
-  );
-}
-
 export function SettingsScreen(p: SettingsScreenProps) {
   return (
     <div className="vrox-screen">
@@ -241,25 +211,6 @@ export function SettingsScreen(p: SettingsScreenProps) {
             last
           />
         </SetGroup>
-
-        {isIOS && (
-          <SetGroup title="PERFORMANCE">
-            <SetRow
-              title="Idle timeout"
-              sub="Seconds idle before close"
-              right={<NumInput value={p.idleTimeoutSeconds} onChange={p.onIdleTimeoutSecondsChange} disabled={p.connected} />}
-            />
-            <SetRow
-              title="Max TCP connections"
-              right={<NumInput value={p.maxTcpConnections} onChange={p.onMaxTcpConnectionsChange} disabled={p.connected} />}
-            />
-            <SetRow
-              title="Max UDP connections"
-              right={<NumInput value={p.maxUdpConnections} onChange={p.onMaxUdpConnectionsChange} disabled={p.connected} />}
-              last
-            />
-          </SetGroup>
-        )}
 
         <SetGroup title="APP VERSION">
           <SetRow

@@ -363,8 +363,8 @@ abstraction — drop the React-Native-specific tooling rules.
   follows the Claude Design mockup (section 03 — Dock).
 - `app/src-tauri/src/` — Rust: `commands.rs` (all `invoke` commands),
   `subscription.rs`, `config_gen.rs` (YAML for Linux, JSON
-  `providerConfiguration` + `excludedRoutes` for NE), `settings.rs`
-  (incl. `migrate()` for changed defaults), `geoip.rs`/`geosite.rs`
+  `providerConfiguration` + `excludedRoutes` for NE), `settings.rs`,
+  `geoip.rs`/`geosite.rs`
   (RU bypass), `ping.rs`, `tray.rs` (desktop-only, no-op on mobile),
   `app_update.rs` (Linux only).
 - `app/src-tauri/gen/apple/` — Tauri iOS project (xcodegen `project.yml`,
@@ -395,9 +395,10 @@ drops the Linux `vroxcore` sidecar from the iOS bundle.
 **iOS memory budget is a hard constraint.** The NE extension is killed by
 jetsam at ~50 MB (`phys_footprint`). Any change in `netunnel/*.go` or
 `PacketTunnelProvider.swift` on the packet hot path must not add
-per-packet allocations; relay limits (idle timeout / max TCP / max UDP)
-and QUIC receive windows were tuned on-device — don't raise them without
-a live test. The Stats screen shows the memory breakdown for this.
+per-packet allocations; relay limits (idle timeout / max TCP / max UDP,
+`netunnel/handler.go` — the only source, not user-configurable) and QUIC
+receive windows were tuned on-device — don't raise them without a live
+test. The Stats screen shows the memory breakdown for this.
 The memory mode is decided **at runtime** by the extension
 (`isiOSAppOnMac` → `memoryConstrained` in the Go config), never by
 `#[cfg]`/build tags: the iOS TestFlight build also runs on Apple Silicon

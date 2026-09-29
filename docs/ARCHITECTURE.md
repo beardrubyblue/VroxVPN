@@ -48,8 +48,7 @@ GTK4/libadwaita-приложение на Python и ветка `tauri-rewrite` �
 3. **Rust-бэкенд** (`app/src-tauri/src/`) — control-plane: подписки
    (`subscription.rs`), генерация конфига (`config_gen.rs`: YAML для
    Linux, JSON `providerConfiguration` + `excludedRoutes` для NE),
-   настройки (`settings.rs`, с `migrate()` для смены дефолтов у
-   установленных пользователей), geoip/geosite, пинг, трей (только
+   настройки (`settings.rs`), geoip/geosite, пинг, трей (только
    desktop), самообновление (только Linux). `engine.rs` через `#[cfg]`
    ре-экспортирует `engine::linux` либо `engine::macos` (последний — для
    `any(target_os = "macos", target_os = "ios")`; macOS-таргет Rust
@@ -1208,3 +1207,15 @@ Mac без `--target`; `memory_other.go` — заглушка для `go vet` н
 darwin-хосте. Старые macOS-сборки в App Store Connect нужно истечь
 вручную (TestFlight → macOS → Expire), иначе TestFlight на Mac может
 предлагать их вместо iOS-сборки.
+
+## Настройка Performance убрана
+
+Idle timeout / Max TCP / Max UDP в Settings (только iOS) убраны вместе со
+всей цепочкой: `settings.json` → `RelayLimits` (Rust) → поля
+`idleTimeoutSeconds`/`maxTcpConnections`/`maxUdpConnections` в
+`netunnel.Config`. Значения подобраны на устройстве, крутить их руками
+смысла нет, а на Mac они вообще не действовали. Единственный источник
+лимитов — `netunnel/handler.go::applyRelayLimits` (iPhone: 30с / 64 / 32,
+без jetsam: 300с / 2048 / 2048). `settings.rs::migrate()` (переводил
+старые дефолты Happ на новые) удалён за ненадобностью; старые ключи в
+`settings.json` у пользователей просто игнорируются.

@@ -38,8 +38,8 @@ var udpBufPool = sync.Pool{
 	},
 }
 
-// maxTCPRelays/maxUDPRelays — раздельные потолки, настраиваемые из UI
-// через applyRelayLimits (см. netunnel.go::Config). Дефолты 64/32 —
+// maxTCPRelays/maxUDPRelays — раздельные потолки, выставляются
+// applyRelayLimits по режиму памяти. Дефолты 64/32 —
 // агрессивно низкие для iOS NE (~50 МиБ jetsam): каждый TCP relay
 // стоит ~50–100 КиБ живой памяти (gVisor-буфера + goroutine stacks +
 // io.CopyBuffer). Сверх лимита — TCP получает RST (клиент сам
@@ -69,11 +69,12 @@ var (
 	activeUDPRelays atomic.Int32
 )
 
-// applyRelayLimits переносит настраиваемые из UI лимиты (см.
-// netunnel.go::Config) в переменные, которые реально читают
-// tcpForwarderHandler/udpForwarderHandler/relayTCP/relayUDP. Нулевые
-// значения в JSON (поле не задано на Rust-стороне) — фоллбек на дефолт,
-// а не "лимит = 0" (что заблокировало бы вообще все соединения).
+// applyRelayLimits выставляет лимиты, которые реально читают
+// tcpForwarderHandler/udpForwarderHandler/relayTCP/relayUDP, по режиму
+// памяти (Config.MemoryConstrained). Раньше лимиты iPhone настраивались
+// из UI (Settings → Performance) и приезжали из Rust; настройку убрали —
+// значения подобраны на устройстве, менять их руками нет смысла, так что
+// единственный источник теперь здесь.
 func applyRelayLimits(cfg *Config) {
 	if !cfg.MemoryConstrained {
 		maxTCPRelays, maxUDPRelays = unconstrainedMaxRelays, unconstrainedMaxRelays
@@ -82,17 +83,6 @@ func applyRelayLimits(cfg *Config) {
 	}
 	maxTCPRelays, maxUDPRelays = defaultMaxTCPRelays, defaultMaxUDPRelays
 	tcpIdleTimeout, udpIdleTimeout = defaultIdleTimeout, defaultIdleTimeout
-	if cfg.MaxTCPConnections > 0 {
-		maxTCPRelays = int32(cfg.MaxTCPConnections)
-	}
-	if cfg.MaxUDPConnections > 0 {
-		maxUDPRelays = int32(cfg.MaxUDPConnections)
-	}
-	if cfg.IdleTimeoutSeconds > 0 {
-		idleTimeout := time.Duration(cfg.IdleTimeoutSeconds) * time.Second
-		tcpIdleTimeout = idleTimeout
-		udpIdleTimeout = idleTimeout
-	}
 }
 
 // Реестр активных relay-соединений с временем создания — нужен, чтобы
