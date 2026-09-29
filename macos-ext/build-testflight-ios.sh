@@ -1,87 +1,82 @@
 #!/bin/bash
-# Сборка для TestFlight (iOS/iPadOS): Go-фреймворк → archive (.xcarchive,
-# Apple Distribution + "iOS App Store" профили) → export (.ipa) →
-# загрузка в App Store Connect через `xcrun altool`.
+# Сборка настоящего iOS-приложения (Tauri, app/src-tauri/gen/apple/) для
+# TestFlight: Go-фреймворк → `tauri ios build --archive-only` → ручной
+# export (.ipa) → инструкция по загрузке через `xcrun altool`.
 #
-# Проще macOS-варианта (build-testflight.sh) — здесь нет отдельного
-# Tauri-слоя: VroxVPNHost-iOS встраивает VroxTunnelExtension-iOS сам
-# (xcodegen `dependencies: embed: true`), archive/export уже отдают
-# готовый подписанный .ipa, не нужно вручную codesign/productbuild.
+# Раньше этот скрипт собирал VroxVPNHost-iOS из macos-ext/ — голый
+# SwiftUI-харнесс со спайка NE (две кнопки, тестовый конфиг 127.0.0.1:1)
+# с ТЕМ ЖЕ bundle id com.vroxory.vpn: App Store Connect его принимал, и
+# тестировщики получили бы заглушку вместо VPN-клиента. Переписан на
+# Tauri-сборку (см. docs/ARCHITECTURE.md, «iOS: настоящее Tauri-приложение»).
 #
-# Предпосылки (см. docs/ARCHITECTURE.md, раздел TestFlight):
-#   1. Capability Network Extensions включена для iOS-платформы на App
-#      ID com.vroxory.vpn и com.vroxory.vpn.tunnel (developer.apple.com
-#      → Identifiers).
-#   2. Два provisioning-профиля типа "App Store Connect" (iOS) —
-#      developer.apple.com → Profiles → "+" — имена "vrox.vpn iOS App
-#      Store" и "vrox.vpn tunnel iOS App Store", установлены.
-#   3. Сертификат "Apple Distribution: ..." — тот же, что и для macOS
-#      (см. build-testflight.sh), он общий для iOS+macOS.
-#   4. iOS-платформа добавлена в запись приложения в App Store Connect
-#      (My Apps → vrox.vpn → "+" платформа, либо отдельная запись с тем
-#      же bundle id com.vroxory.vpn) — без этого altool не примет
-#      загрузку.
-#   5. App-specific password для Apple ID (см. build-testflight.sh).
-#   6. Xcode → Settings → Components → iOS Platform скачана.
+# Почему export вручную, а не `tauri ios build --export-method`: Tauri
+# генерирует ExportOptions с Automatic-подписью, игнорируя Manual-конфиг
+# проекта, и падает на «requires a provisioning profile with the Network
+# Extensions feature». Поэтому --archive-only + xcodebuild -exportArchive
+# с gen/apple/ExportOptionsManual.plist.
+#
+# Почему бэкап Info.plist/pbxproj: `--build-number` внутри вызывает
+# `agvtool new-version -all` (cargo-mobile2), который переписывает
+# CFBundleVersion во ВСЕХ Info.plist проекта и CURRENT_PROJECT_VERSION в
+# pbxproj — в т.ч. заменяет `$(CURRENT_PROJECT_VERSION)` в Info.plist
+# расширения на литерал. Это и была регрессия «CFBundleVersion
+# перезатёрся хардкодом», которую уже дважды чинили руками. Файлы
+# возвращаются в исходное состояние после сборки (trap на EXIT).
+#
+# Предпосылки:
+#   1. Профили «vrox.vpn iOS App Store» / «vrox.vpn tunnel iOS App Store»
+#      (App Store Connect, iOS, capability Network Extensions) и
+#      сертификат «Apple Distribution» установлены локально.
+#   2. `pnpm install` в app/, Rust-таргет aarch64-apple-ios, gomobile.
+#   3. App-specific password для загрузки (appleid.apple.com).
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
-ARCHIVE_PATH="$SCRIPT_DIR/build-ios/VroxVPNHost-iOS.xcarchive"
-EXPORT_PATH="$SCRIPT_DIR/build-ios/export"
-EXPORT_OPTIONS_PLIST="$SCRIPT_DIR/build-ios/ExportOptions.plist"
-
-APP_PROFILE_NAME="${APP_PROFILE_NAME:-vrox.vpn iOS App Store}"
-TUNNEL_PROFILE_NAME="${TUNNEL_PROFILE_NAME:-vrox.vpn tunnel iOS App Store}"
+APP_DIR="$REPO_ROOT/app"
+APPLE_DIR="$APP_DIR/src-tauri/gen/apple"
+ARCHIVE_PATH="$APPLE_DIR/build/app_iOS.xcarchive"
+EXPORT_PATH="$APPLE_DIR/build/export-appstore"
 TEAM_ID="${TEAM_ID:-QRZT5R3Q28}"
 
-# Тот же приём, что и в build-testflight.sh — монотонный build-номер без
-# отдельного счётчика на ведение руками, растёт сам с каждым коммитом.
+# Файлы, которые трогает agvtool (см. шапку) — пути от корня репозитория.
+VERSIONED_FILES=(
+    "app/src-tauri/gen/apple/app.xcodeproj/project.pbxproj"
+    "app/src-tauri/gen/apple/app_iOS/Info.plist"
+    "macos-ext/VroxTunnelExtension-iOS/Info.plist"
+)
+
+# Монотонный build-номер без ручного счётчика — тот же приём, что в
+# build-testflight.sh. Tauri допишет его к версии: 4.0.0 → 4.0.0.<N>.
 BUILD_NUMBER="$(git -C "$REPO_ROOT" rev-list --count HEAD)"
-echo "→ build-номер (CFBundleVersion): $BUILD_NUMBER"
+echo "→ build-номер: $BUILD_NUMBER"
+
+BACKUP_DIR="$(mktemp -d)"
+restore_versioned_files() {
+    for file in "${VERSIONED_FILES[@]}"; do
+        cp "$BACKUP_DIR/$(basename "$(dirname "$file")")-$(basename "$file")" "$REPO_ROOT/$file"
+    done
+    rm -rf "$BACKUP_DIR"
+}
+for file in "${VERSIONED_FILES[@]}"; do
+    cp "$REPO_ROOT/$file" "$BACKUP_DIR/$(basename "$(dirname "$file")")-$(basename "$file")"
+done
+trap restore_versioned_files EXIT
 
 echo "==> [1/4] Go-фреймворк (GoNetunnel.xcframework, слайс ios)"
-"$SCRIPT_DIR/build-go-framework.sh" ios,macos
+"$SCRIPT_DIR/build-go-framework.sh" ios
 
-mkdir -p "$SCRIPT_DIR/build-ios"
 rm -rf "$ARCHIVE_PATH" "$EXPORT_PATH"
 
-echo "==> [2/4] Archive (Release — Apple Distribution + iOS App Store профили)"
-xcodebuild -project "$SCRIPT_DIR/VroxVPNNetworkExtension.xcodeproj" \
-    -scheme VroxVPNHost-iOS -configuration Release -allowProvisioningUpdates \
-    -archivePath "$ARCHIVE_PATH" \
-    -destination "generic/platform=iOS" \
-    CURRENT_PROJECT_VERSION="$BUILD_NUMBER" \
-    archive | tail -10
+echo "==> [2/4] Archive (tauri ios build, Release — Apple Distribution)"
+(cd "$APP_DIR" && APPLE_DEVELOPMENT_TEAM="$TEAM_ID" \
+    pnpm tauri ios build --archive-only --build-number "$BUILD_NUMBER")
 
-cat > "$EXPORT_OPTIONS_PLIST" <<PLIST
-<?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-<plist version="1.0">
-<dict>
-    <key>method</key>
-    <string>app-store-connect</string>
-    <key>teamID</key>
-    <string>$TEAM_ID</string>
-    <key>signingStyle</key>
-    <string>manual</string>
-    <key>provisioningProfiles</key>
-    <dict>
-        <key>com.vroxory.vpn</key>
-        <string>$APP_PROFILE_NAME</string>
-        <key>com.vroxory.vpn.tunnel</key>
-        <string>$TUNNEL_PROFILE_NAME</string>
-    </dict>
-</dict>
-</plist>
-PLIST
-
-echo "==> [3/4] Export (.ipa)"
+echo "==> [3/4] Export (.ipa, Manual-подпись)"
 xcodebuild -exportArchive \
     -archivePath "$ARCHIVE_PATH" \
     -exportPath "$EXPORT_PATH" \
-    -exportOptionsPlist "$EXPORT_OPTIONS_PLIST" \
-    -allowProvisioningUpdates | tail -10
+    -exportOptionsPlist "$APPLE_DIR/ExportOptionsManual.plist" | tail -10
 
 IPA_PATH="$(find "$EXPORT_PATH" -maxdepth 1 -name '*.ipa' | head -1)"
 if [[ -z "$IPA_PATH" ]]; then
@@ -89,14 +84,23 @@ if [[ -z "$IPA_PATH" ]]; then
     exit 1
 fi
 
+# App Store Connect требует одинаковый CFBundleVersion у приложения и
+# встроенного расширения — проверяем по архиву, а не верим на слово.
+APP_BUNDLE="$ARCHIVE_PATH/Products/Applications/vrox.vpn.app"
+APP_VERSION="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' "$APP_BUNDLE/Info.plist")"
+EXT_VERSION="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' \
+    "$APP_BUNDLE/PlugIns/VroxTunnelExtension.appex/Info.plist")"
+if [[ "$APP_VERSION" != "$EXT_VERSION" ]]; then
+    echo "✗ CFBundleVersion не совпадает: app=$APP_VERSION, extension=$EXT_VERSION" >&2
+    exit 1
+fi
+
 echo ""
-echo "✓ Готово: $IPA_PATH"
+echo "✓ Готово: $IPA_PATH (CFBundleVersion $APP_VERSION)"
 echo ""
-echo "==> [4/4] Загрузка в App Store Connect (нужен app-specific password —"
-echo "appleid.apple.com → Sign-In and Security → App-Specific Passwords):"
+echo "==> [4/4] Загрузка в App Store Connect:"
 echo "  xcrun altool --upload-app -f \"$IPA_PATH\" -t ios \\"
-echo "    -u <твой Apple ID email> -p <app-specific-password>"
+echo "    -u <Apple ID email> -p <app-specific-password>"
 echo ""
-echo "После загрузки билд появится в App Store Connect → TestFlight"
-echo "обычно через несколько минут (для внутренних тестеров — сразу"
-echo "доступен, без Beta App Review)."
+echo "Билд появится в App Store Connect → TestFlight через несколько минут"
+echo "(внутренним тестировщикам — сразу, без Beta App Review)."

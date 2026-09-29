@@ -88,6 +88,7 @@
 		B2FC15BBAA85337765CD9515 /* connect.rs */ = {isa = PBXFileReference; path = connect.rs; sourceTree = "<group>"; };
 		CCDDF75F2877AEB57AB11B85 /* wait_result.rs */ = {isa = PBXFileReference; path = wait_result.rs; sourceTree = "<group>"; };
 		CE1209BFDECB28E00189B168 /* Metal.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Metal.framework; path = System/Library/Frameworks/Metal.framework; sourceTree = SDKROOT; };
+		CF674524E34966183631754E /* libapp.a */ = {isa = PBXFileReference; lastKnownFileType = archive.ar; path = libapp.a; sourceTree = "<group>"; };
 		D047DEEBAEDBFEFD1943D4CF /* libapp.a */ = {isa = PBXFileReference; lastKnownFileType = archive.ar; path = libapp.a; sourceTree = "<group>"; };
 		D050017F49FC313D9DA6FD5D /* killswitch.rs */ = {isa = PBXFileReference; path = killswitch.rs; sourceTree = "<group>"; };
 		D46D076375DC851CAB3360A1 /* VroxTunnelExtension.appex */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = "wrapper.app-extension"; path = VroxTunnelExtension.appex; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -186,6 +187,14 @@
 			path = bindings;
 			sourceTree = "<group>";
 		};
+		5F72359403FB561BE1489F63 /* debug */ = {
+			isa = PBXGroup;
+			children = (
+				CF674524E34966183631754E /* libapp.a */,
+			);
+			path = debug;
+			sourceTree = "<group>";
+		};
 		6B64570062A9695C6EBF78A5 /* connect */ = {
 			isa = PBXGroup;
 			children = (
@@ -199,6 +208,7 @@
 		70DD658F1D4B0FED51A79854 /* arm64 */ = {
 			isa = PBXGroup;
 			children = (
+				5F72359403FB561BE1489F63 /* debug */,
 				0C32539E578BFA0B4E3C6CD1 /* release */,
 			);
 			path = arm64;
@@ -305,7 +315,7 @@
 			path = app;
 			sourceTree = "<group>";
 		};
-		"TEMP_8BC32D7E-074F-4DA2-8048-FF3732FC4021" /* x86_64 */ = {
+		"TEMP_FB083258-FCCC-495F-9EFD-3C1BFEA351D2" /* x86_64 */ = {
 			isa = PBXGroup;
 			children = (
 			);
@@ -366,10 +376,6 @@
 				TargetAttributes = {
 					E569FCEB94ACB3D96A2120D4 = {
 						DevelopmentTeam = QRZT5R3Q28;
-						ProvisioningStyle = Manual;
-					};
-					E86255CB8A1836C0BF0C0E14 = {
-						ProvisioningStyle = Manual;
 					};
 				};
 			};
@@ -387,8 +393,8 @@
 			projectDirPath = "";
 			projectRoot = "";
 			targets = (
-				E569FCEB94ACB3D96A2120D4 /* VroxTunnelExtension */,
 				E86255CB8A1836C0BF0C0E14 /* app_iOS */,
+				E569FCEB94ACB3D96A2120D4 /* VroxTunnelExtension */,
 			);
 		};
 /* End PBXProject section */
@@ -483,12 +489,11 @@
 				"LIBRARY_SEARCH_PATHS[arch=arm64]" = "$(inherited) $(PROJECT_DIR)/Externals/arm64/$(CONFIGURATION) $(SDKROOT)/usr/lib/swift $(DEVELOPER_DIR)/Toolchains/XcodeDefault.xctoolchain/usr/lib/swift/$(PLATFORM_NAME) $(DEVELOPER_DIR)/Toolchains/XcodeDefault.xctoolchain/usr/lib/swift-5.0/$(PLATFORM_NAME)";
 				"LIBRARY_SEARCH_PATHS[arch=x86_64]" = "$(inherited) $(PROJECT_DIR)/Externals/x86_64/$(CONFIGURATION) $(SDKROOT)/usr/lib/swift $(DEVELOPER_DIR)/Toolchains/XcodeDefault.xctoolchain/usr/lib/swift/$(PLATFORM_NAME) $(DEVELOPER_DIR)/Toolchains/XcodeDefault.xctoolchain/usr/lib/swift-5.0/$(PLATFORM_NAME)";
 				PRODUCT_BUNDLE_IDENTIFIER = com.vroxory.vpn;
-				PRODUCT_NAME = "vrox.vpn";
+				PRODUCT_NAME = vrox.vpn;
 				PROVISIONING_PROFILE_SPECIFIER = "vrox.vpn iOS App Store";
 				SDKROOT = iphoneos;
 				TARGETED_DEVICE_FAMILY = "1,2";
 				VALID_ARCHS = arm64;
-				DEVELOPMENT_TEAM = "QRZT5R3Q28";
 			};
 			name = release;
 		};
@@ -509,7 +514,7 @@
 					"\"../../../../macos-ext/Frameworks\"",
 				);
 				INFOPLIST_FILE = "../../../../macos-ext/VroxTunnelExtension-iOS/Info.plist";
-				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
+				IPHONEOS_DEPLOYMENT_TARGET = 16.4;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
@@ -541,7 +546,7 @@
 					"\"../../../../macos-ext/Frameworks\"",
 				);
 				INFOPLIST_FILE = "../../../../macos-ext/VroxTunnelExtension-iOS/Info.plist";
-				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
+				IPHONEOS_DEPLOYMENT_TARGET = 16.4;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
@@ -602,7 +607,7 @@
 				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
-				IPHONEOS_DEPLOYMENT_TARGET = 14.0;
+				IPHONEOS_DEPLOYMENT_TARGET = 16.4;
 				MTL_ENABLE_DEBUG_INFO = NO;
 				MTL_FAST_MATH = YES;
 				PRODUCT_NAME = "$(TARGET_NAME)";
@@ -638,11 +643,10 @@
 				"LIBRARY_SEARCH_PATHS[arch=arm64]" = "$(inherited) $(PROJECT_DIR)/Externals/arm64/$(CONFIGURATION) $(SDKROOT)/usr/lib/swift $(DEVELOPER_DIR)/Toolchains/XcodeDefault.xctoolchain/usr/lib/swift/$(PLATFORM_NAME) $(DEVELOPER_DIR)/Toolchains/XcodeDefault.xctoolchain/usr/lib/swift-5.0/$(PLATFORM_NAME)";
 				"LIBRARY_SEARCH_PATHS[arch=x86_64]" = "$(inherited) $(PROJECT_DIR)/Externals/x86_64/$(CONFIGURATION) $(SDKROOT)/usr/lib/swift $(DEVELOPER_DIR)/Toolchains/XcodeDefault.xctoolchain/usr/lib/swift/$(PLATFORM_NAME) $(DEVELOPER_DIR)/Toolchains/XcodeDefault.xctoolchain/usr/lib/swift-5.0/$(PLATFORM_NAME)";
 				PRODUCT_BUNDLE_IDENTIFIER = com.vroxory.vpn;
-				PRODUCT_NAME = "vrox.vpn";
+				PRODUCT_NAME = vrox.vpn;
 				SDKROOT = iphoneos;
 				TARGETED_DEVICE_FAMILY = "1,2";
 				VALID_ARCHS = arm64;
-				DEVELOPMENT_TEAM = "QRZT5R3Q28";
 			};
 			name = debug;
 		};
@@ -697,7 +701,7 @@
 				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
-				IPHONEOS_DEPLOYMENT_TARGET = 14.0;
+				IPHONEOS_DEPLOYMENT_TARGET = 16.4;
 				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
 				MTL_FAST_MATH = YES;
 				ONLY_ACTIVE_ARCH = YES;
