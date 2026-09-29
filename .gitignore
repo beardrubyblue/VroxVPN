@@ -20,7 +20,7 @@ app/src-tauri/target/
 # в репозитории, регенерируются при сборке
 app/src-tauri/gen/schemas/
 # Бинарник vroxcore (наш форк hysteria2) — не коммитим, берётся из
-# GitHub Release hysteria2-fork-v2.9.2-1 (см. core/installer.py в main)
+# GitHub Release hysteria2-fork-v2.12.3-1 или пересобрать packaging/hysteria2-patch/build.sh
 app/src-tauri/binaries/
 
 # --- macOS (macos-ext/) ---

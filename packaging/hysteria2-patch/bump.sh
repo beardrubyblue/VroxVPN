@@ -66,8 +66,11 @@ cd "$SCRIPT_DIR"
 echo "✓ Патч применяется без конфликтов"
 
 # ── 2. Правим build.sh ──
-sed -i "s|^UPSTREAM_TAG=.*|UPSTREAM_TAG=\"${NEW_TAG}\"|" "$BUILD_SH"
-sed -i "s|^PATCH_REVISION=.*|PATCH_REVISION=\"${NEW_REVISION}\"|" "$BUILD_SH"
+# `-i.bak` + rm, а не голый `-i`: BSD sed на macOS требует аргумент-
+# суффикс у -i и иначе принимает само выражение за суффикс и падает.
+sed -i.bak "s|^UPSTREAM_TAG=.*|UPSTREAM_TAG=\"${NEW_TAG}\"|" "$BUILD_SH"
+sed -i.bak "s|^PATCH_REVISION=.*|PATCH_REVISION=\"${NEW_REVISION}\"|" "$BUILD_SH"
+rm -f "$BUILD_SH.bak"
 
 echo ""
 echo "✓ Обновлено:"

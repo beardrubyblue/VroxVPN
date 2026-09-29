@@ -6,7 +6,7 @@
 set -e
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-UPSTREAM_TAG="app/v2.9.2"
+UPSTREAM_TAG="app/v2.12.3"
 PATCH_REVISION="1"
 VERSION="${UPSTREAM_TAG#app/}-vroxory${PATCH_REVISION}"
 TAG="hysteria2-fork-${UPSTREAM_TAG#app/}-${PATCH_REVISION}"
@@ -50,14 +50,17 @@ cp "$SCRIPT_DIR/directmatch.go" "$SCRIPT_DIR/directmatch_linux.go" \
 mkdir -p app/netunnel
 cp "$SCRIPT_DIR/netunnel/"*.go app/netunnel/
 
-# go.work корня апстрима фиксирует `go 1.24.0` — gvisor.dev/gvisor
-# требует >= 1.26.3 (проверено вживую). go.work — не наш файл (часть
+# go.work корня апстрима фиксирует `go 1.26.0` (на v2.12.3; на v2.9.2 было
+# 1.24.0) — gvisor.dev/gvisor требует >= 1.26.3 (проверено вживую). go.work — не наш файл (часть
 # upstream-репозитория hysteria, regenerируется при каждом git clone
 # заново), поэтому правим его тут же, а не один раз руками.
 go work edit -go=1.26.4 "$BUILD_DIR/hysteria/go.work"
 
 cd app
-go get github.com/miekg/dns@v1.1.59
+# miekg/dns (нужен directmatch.go) раньше пинился здесь на v1.1.59 — на
+# v2.9.2 апстрим его не тянул. С v2.11 апстрим сам зависит от v1.1.72
+# (через обновлённый ACME-стек), и старый пин при переходе на v2.12.3
+# ОТКАТЫВАЛ certmagic 0.25→0.21 и acmez — убран, берём версию апстрима.
 # gvisor.dev/gvisor@latest — НЕНАДЁЖНО: на момент проверки резолвился в
 # снэпшот с реальным конфликтом package-имён в pkg/tcpip/stack
 # (bridge_test.go объявлен как `package bridge_test`, не `stack_test` —
