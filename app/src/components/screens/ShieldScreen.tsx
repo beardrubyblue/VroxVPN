@@ -4,6 +4,9 @@ import { VroxWordmark, FlagDot } from "@/design/brand";
 import { countryCodeFromName } from "@/design/country";
 import type { Server } from "@/types";
 
+// Расстояние от верха капсулы до верха стрелки-подсказки над ней.
+const ARROW_GAP = 48;
+
 interface ShieldScreenProps {
   connected: boolean;
   busy: boolean;
@@ -89,6 +92,8 @@ export function ShieldScreen({ connected, busy, server, onToggle, onOpenLocation
   // морфинг: широкая pill → круглый disc
   const W = 320 - (320 - 80) * p; // 320 → 80
   const H = 66 + (80 - 66) * p; // 66 → 80
+  // верх стрелки-подсказки над центром капсулы — до него же доходит пунктир
+  const arrowOffset = H / 2 + ARROW_GAP;
   const pillOp = clamp(1 - p / 0.42, 0, 1);
   const discOp = clamp((p - 0.45) / 0.4, 0, 1);
 
@@ -126,13 +131,15 @@ export function ShieldScreen({ connected, busy, server, onToggle, onOpenLocation
 
       {/* Полноэкранная сцена перетаскивания — слот ровно по центру экрана */}
       <div ref={stageRef} style={{ position: "absolute", inset: 0, zIndex: 1 }}>
-        {/* направляющая (пунктир) */}
+        {/* направляющая (пунктир) — от слота до верха стрелки-подсказки
+            (arrowOffset), а не до самой капсулы: отрезок под стрелкой
+            визуально упирался в карточку сервера и выглядел лишним */}
         <div
           style={{
             position: "absolute",
             left: "50%",
             top: slotRel * 100 + "%",
-            height: (homeRel - slotRel) * 100 + "%",
+            height: `calc(${(homeRel - slotRel) * 100}% - ${arrowOffset}px)`,
             width: 0,
             transform: "translateX(-50%)",
             borderLeft: "1.5px dashed var(--line-strong)",
@@ -324,7 +331,7 @@ export function ShieldScreen({ connected, busy, server, onToggle, onOpenLocation
               left: "50%",
               top: capRel * 100 + "%",
               transform: "translate(-50%, 0)",
-              marginTop: -(H / 2 + 48),
+              marginTop: -arrowOffset,
               color: "var(--fg-dim)",
               animation: "vrox-hint 1.6s ease-in-out infinite",
               pointerEvents: "none",
