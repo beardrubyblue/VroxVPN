@@ -3,7 +3,7 @@
 # TestFlight. `tauri ios dev` сам по себе не работает (тот же сломанный
 # auto-export, что и у `tauri ios build --export-method`, см. git log
 # этого файла) — собираем debug-архив сами и экспортируем с Development-
-# подписью вручную, как и Release-путь в ../../../macos-ext/build-
+# подписью вручную, как и Release-путь в ../../../ios/build-
 # testflight-ios.sh.
 #
 # Предпосылки: профили "Dev vrox.vpn Apple Store" / "Dev vrox.vpn tunnel

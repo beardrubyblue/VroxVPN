@@ -14,8 +14,9 @@ use objc2_network_extension::NETunnelProviderManager;
 
 use crate::config_gen::ExcludedRoutes;
 
-/// Bundle identifier `.appex` из `macos-ext/VroxTunnelExtension` — должен
-/// совпадать с `PRODUCT_BUNDLE_IDENTIFIER` в `macos-ext/project.yml`.
+/// Bundle identifier `.appex` (ios/TunnelExtension) — должен совпадать с
+/// `PRODUCT_BUNDLE_IDENTIFIER` таргета VroxTunnelExtension в
+/// `app/src-tauri/gen/apple/project.yml`.
 pub(super) const PROVIDER_BUNDLE_ID: &str = "com.vroxory.vpn.tunnel";
 
 pub(super) fn nserror_to_string(err: &NSError) -> String {
@@ -95,7 +96,7 @@ fn nsstring_array(items: &[String]) -> Retained<NSArray<NSString>> {
 
 /// Собирает `providerConfiguration` — то, что `.appex` получит в
 /// `protocolConfiguration.providerConfiguration` при старте тоннеля (см.
-/// `macos-ext/VroxTunnelExtension/PacketTunnelProvider.swift::startTunnel`).
+/// `ios/TunnelExtension/PacketTunnelProvider.swift::startTunnel`).
 /// `configJSON` — формат `netunnel.Config`
 /// (`packaging/hysteria2-patch/netunnel/netunnel.go`), строится
 /// `config_gen::generate_provider_config_json`. `ipv4Exclude`/

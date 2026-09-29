@@ -51,8 +51,8 @@ fn version_tuple(v: &str) -> Vec<u32> {
 }
 
 /// `version.json` в этом репозитории отдаёт `download_url` на `.deb` —
-/// он описывает версию ТОЛЬКО Linux-сборки, не macOS (та версионируется
-/// отдельно build-номерами в App Store Connect, см. `macos-ext/
+/// он описывает версию ТОЛЬКО Linux-сборки, не iOS (та версионируется
+/// отдельно build-номерами в App Store Connect, см. `ios/
 /// build-testflight.sh::BUILD_NUMBER`). `CURRENT_VERSION` ниже — одна
 /// Rust-константа, общая для обоих бинарников (компилируется из одного
 /// исходника), поэтому сверять её с `version.json` имеет смысл только

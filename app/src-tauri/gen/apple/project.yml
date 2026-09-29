@@ -87,7 +87,7 @@ targets:
       # время настоящего archive-action в Xcode — `tauri ios build`
       # гонит plain `xcodebuild build`, поэтому без явного Manual здесь
       # подпись тихо остаётся Development (см. doc-комментарий в
-      # macos-ext/project.yml — та же грабля, что и на macOS).
+      # раньше жила и в macOS-сборке, та же грабля).
       configs:
         release:
           CODE_SIGN_STYLE: Manual
@@ -129,16 +129,16 @@ targets:
   # manager.rs::PROVIDER_BUNDLE_ID), но реального расширения с этим bundle
   # id не существует — Connect доходил бы до Rust-кода, но тоннель
   # никогда бы не поднялся. Переиспользует ОДИН И ТОТ ЖЕ Swift-файл, что
-  # и macos-ext/VroxTunnelExtension-iOS (PacketTunnelProvider.swift уже
+  # и ios/TunnelExtension (PacketTunnelProvider.swift уже
   # платформонезависимый — Darwin/NetworkExtension/os.log, без AppKit/
   # UIKit), и тот же GoNetunnel.xcframework (ios-arm64 слайс, собран
-  # macos-ext/build-go-framework.sh).
+  # ios/build-go-framework.sh).
   VroxTunnelExtension:
     type: app-extension
     platform: iOS
     deploymentTarget: "16.4"
     sources:
-      - path: ../../../../macos-ext/VroxTunnelExtension/PacketTunnelProvider.swift
+      - path: ../../../../ios/TunnelExtension/PacketTunnelProvider.swift
         group: VroxTunnelExtension
     settings:
       base:
@@ -155,9 +155,9 @@ targets:
         # затирая существующий (проверено на собственном опыте: стёрло
         # NSExtension-блок из этого самого Info.plist). INFOPLIST_FILE/
         # CODE_SIGN_ENTITLEMENTS просто передают путь как есть, файл не
-        # трогают — тот же приём, что в macos-ext/project.yml.
-        INFOPLIST_FILE: ../../../../macos-ext/VroxTunnelExtension-iOS/Info.plist
-        CODE_SIGN_ENTITLEMENTS: ../../../../macos-ext/VroxTunnelExtension-iOS/VroxTunnelExtension-iOS.entitlements
+        # трогают.
+        INFOPLIST_FILE: ../../../../ios/TunnelExtension/Info.plist
+        CODE_SIGN_ENTITLEMENTS: ../../../../ios/TunnelExtension/VroxTunnelExtension.entitlements
         # Info.plist расширения ссылается на $(CURRENT_PROJECT_VERSION) —
         # без явного значения подставилась бы пустота (никто его здесь
         # не задаёт иначе). app_iOS использует литерал "4.0.0" для
@@ -176,5 +176,5 @@ targets:
           CODE_SIGN_STYLE: Automatic
           CODE_SIGN_IDENTITY: "Apple Development"
     dependencies:
-      - framework: ../../../../macos-ext/Frameworks/GoNetunnel.xcframework
+      - framework: ../../../../ios/Frameworks/GoNetunnel.xcframework
         embed: false

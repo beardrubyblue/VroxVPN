@@ -23,15 +23,9 @@ app/src-tauri/gen/schemas/
 # GitHub Release hysteria2-fork-v2.12.3-1 или пересобрать packaging/hysteria2-patch/build.sh
 app/src-tauri/binaries/
 
-# --- macOS (macos-ext/) ---
-# .xcodeproj регенерируется из project.yml через `xcodegen generate` —
-# не коммитим сам сгенерированный проект (Release manual-signing теперь
-# в project.yml, см. там — переживает регенерацию).
-macos-ext/*.xcodeproj/
-# GoNetunnel.xcframework — build-артефакт build-go-framework.sh
-macos-ext/Frameworks/
-# .xcarchive/.ipa/ExportOptions.plist — build-testflight-ios.sh
-macos-ext/build-ios/
+# --- iOS (ios/) ---
+# GoNetunnel.xcframework — build-артефакт ios/build-go-framework.sh
+ios/Frameworks/
 
 # --- packaging/hysteria2-patch/ ---
 # Клон apernet/hysteria + сборочные артефакты — пересобирается build.sh

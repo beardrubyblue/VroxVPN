@@ -29,8 +29,10 @@
 //! поток в это время свободен крутить свой run loop как обычно.
 //!
 //! Сам `.appex` (NEPacketTunnelProvider, хост для `netunnel` через
-//! gomobile) — отдельный Xcode-проект `macos-ext/` (Swift, не Rust) —
-//! см. `docs/ARCHITECTURE.md`, раздел "Фаза 2".
+//! gomobile) — Swift, `ios/TunnelExtension/`, таргет VroxTunnelExtension в
+//! `app/src-tauri/gen/apple/project.yml`. Модуль общий для iOS и macOS-
+//! таргета Rust (последний — только для `cargo check` на Mac: отдельной
+//! macOS-сборки больше нет, на Mac ставится iOS-сборка из TestFlight).
 //!
 //! Разбито на подмодули по фазе жизненного цикла соединения:
 //! `manager` (NETunnelProviderManager — общая инфраструктура),

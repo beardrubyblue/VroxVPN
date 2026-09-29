@@ -74,7 +74,7 @@ go mod tidy
 echo "→ проверяю netunnel (go vet, кросс-проверка типов под NE-путь)..."
 go vet ./netunnel/...
 
-# --skip-cli — используется macos-ext/build-go-framework.sh: ему нужно
+# --skip-cli — используется ios/build-go-framework.sh: ему нужно
 # только подготовленное выше исходное дерево (клон+патч+netunnel/+
 # go.sum) для `gomobile bind`, сами CLI-бинарники этого скрипта он не
 # запускает. Раньше здесь же собирались ещё и darwin-amd64/darwin-

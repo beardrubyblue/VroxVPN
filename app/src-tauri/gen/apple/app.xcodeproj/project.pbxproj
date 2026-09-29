@@ -84,7 +84,7 @@
 		A316EEA69C47F4F7861D337D /* disconnect.rs */ = {isa = PBXFileReference; path = disconnect.rs; sourceTree = "<group>"; };
 		AEE1E7A9BA1D8271EF0FA5FB /* stats.rs */ = {isa = PBXFileReference; path = stats.rs; sourceTree = "<group>"; };
 		AF1DE57E7D9CF13BB2E0E038 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
-		B156D50861B260AF2FC718A7 /* GoNetunnel.xcframework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.xcframework; name = GoNetunnel.xcframework; path = "../../../../macos-ext/Frameworks/GoNetunnel.xcframework"; sourceTree = "<group>"; };
+		B156D50861B260AF2FC718A7 /* GoNetunnel.xcframework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.xcframework; name = GoNetunnel.xcframework; path = ../../../../ios/Frameworks/GoNetunnel.xcframework; sourceTree = "<group>"; };
 		B2FC15BBAA85337765CD9515 /* connect.rs */ = {isa = PBXFileReference; path = connect.rs; sourceTree = "<group>"; };
 		CCDDF75F2877AEB57AB11B85 /* wait_result.rs */ = {isa = PBXFileReference; path = wait_result.rs; sourceTree = "<group>"; };
 		CE1209BFDECB28E00189B168 /* Metal.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Metal.framework; path = System/Library/Frameworks/Metal.framework; sourceTree = SDKROOT; };
@@ -97,7 +97,7 @@
 		DE944FFD75F4654FD2221833 /* tray.rs */ = {isa = PBXFileReference; path = tray.rs; sourceTree = "<group>"; };
 		E2D0499FF55F132C1E563FD9 /* resources.rs */ = {isa = PBXFileReference; path = resources.rs; sourceTree = "<group>"; };
 		F3673D372C5ABDD1AD6E7067 /* QuartzCore.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = QuartzCore.framework; path = System/Library/Frameworks/QuartzCore.framework; sourceTree = SDKROOT; };
-		F43854A0A79C2EA2645DA35E /* PacketTunnelProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = PacketTunnelProvider.swift; path = "../../../../macos-ext/VroxTunnelExtension/PacketTunnelProvider.swift"; sourceTree = "<group>"; };
+		F43854A0A79C2EA2645DA35E /* PacketTunnelProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = PacketTunnelProvider.swift; path = ../../../../ios/TunnelExtension/PacketTunnelProvider.swift; sourceTree = "<group>"; };
 		FBC720DFA1D01F55B0A32344 /* app_iOS.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = app_iOS.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		FDE7C471486E90794996E443 /* manager.rs */ = {isa = PBXFileReference; path = manager.rs; sourceTree = "<group>"; };
 /* End PBXFileReference section */
@@ -315,7 +315,7 @@
 			path = app;
 			sourceTree = "<group>";
 		};
-		"TEMP_FB083258-FCCC-495F-9EFD-3C1BFEA351D2" /* x86_64 */ = {
+		"TEMP_A304F6C5-B87F-4432-BAB6-0BD8BFA30629" /* x86_64 */ = {
 			isa = PBXGroup;
 			children = (
 			);
@@ -503,7 +503,7 @@
 				ARCHS = (
 					arm64,
 				);
-				CODE_SIGN_ENTITLEMENTS = "../../../../macos-ext/VroxTunnelExtension-iOS/VroxTunnelExtension-iOS.entitlements";
+				CODE_SIGN_ENTITLEMENTS = ../../../../ios/TunnelExtension/VroxTunnelExtension.entitlements;
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 4.0.0;
@@ -511,9 +511,9 @@
 				"EXCLUDED_ARCHS[sdk=iphoneos*]" = x86_64;
 				FRAMEWORK_SEARCH_PATHS = (
 					"$(inherited)",
-					"\"../../../../macos-ext/Frameworks\"",
+					"\"../../../../ios/Frameworks\"",
 				);
-				INFOPLIST_FILE = "../../../../macos-ext/VroxTunnelExtension-iOS/Info.plist";
+				INFOPLIST_FILE = ../../../../ios/TunnelExtension/Info.plist;
 				IPHONEOS_DEPLOYMENT_TARGET = 16.4;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
@@ -535,7 +535,7 @@
 				ARCHS = (
 					arm64,
 				);
-				CODE_SIGN_ENTITLEMENTS = "../../../../macos-ext/VroxTunnelExtension-iOS/VroxTunnelExtension-iOS.entitlements";
+				CODE_SIGN_ENTITLEMENTS = ../../../../ios/TunnelExtension/VroxTunnelExtension.entitlements;
 				CODE_SIGN_IDENTITY = "Apple Distribution";
 				CODE_SIGN_STYLE = Manual;
 				CURRENT_PROJECT_VERSION = 4.0.0;
@@ -543,9 +543,9 @@
 				"EXCLUDED_ARCHS[sdk=iphoneos*]" = x86_64;
 				FRAMEWORK_SEARCH_PATHS = (
 					"$(inherited)",
-					"\"../../../../macos-ext/Frameworks\"",
+					"\"../../../../ios/Frameworks\"",
 				);
-				INFOPLIST_FILE = "../../../../macos-ext/VroxTunnelExtension-iOS/Info.plist";
+				INFOPLIST_FILE = ../../../../ios/TunnelExtension/Info.plist;
 				IPHONEOS_DEPLOYMENT_TARGET = 16.4;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",

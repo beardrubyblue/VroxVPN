@@ -4,10 +4,9 @@ package netunnel
 
 import "math"
 
-// availableMemoryBytes — на macOS NE такого жёсткого потолка нет (см.
-// API_UNAVAILABLE(macos) у os_proc_available_memory, memory_ios.go) —
-// возвращаем "практически бесконечность", чтобы эвикшен-логика,
-// завязанная на этот сигнал, на macOS никогда не срабатывала.
+// availableMemoryBytes — заглушка для не-iOS сборки (go vet на darwin-
+// хосте в build.sh): os_proc_available_memory — API_UNAVAILABLE(macos),
+// см. memory_ios.go. "Практически бесконечность" — эвикшен не сработает.
 func availableMemoryBytes() uint64 {
 	return math.MaxUint64
 }

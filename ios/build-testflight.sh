@@ -3,7 +3,7 @@
 # TestFlight: Go-фреймворк → `tauri ios build --archive-only` → ручной
 # export (.ipa) → инструкция по загрузке через `xcrun altool`.
 #
-# Раньше этот скрипт собирал VroxVPNHost-iOS из macos-ext/ — голый
+# Раньше этот скрипт собирал VroxVPNHost-iOS из macos-ext/ (удалён) — голый
 # SwiftUI-харнесс со спайка NE (две кнопки, тестовый конфиг 127.0.0.1:1)
 # с ТЕМ ЖЕ bundle id com.vroxory.vpn: App Store Connect его принимал, и
 # тестировщики получили бы заглушку вместо VPN-клиента. Переписан на
@@ -43,7 +43,7 @@ TEAM_ID="${TEAM_ID:-QRZT5R3Q28}"
 VERSIONED_FILES=(
     "app/src-tauri/gen/apple/app.xcodeproj/project.pbxproj"
     "app/src-tauri/gen/apple/app_iOS/Info.plist"
-    "macos-ext/VroxTunnelExtension-iOS/Info.plist"
+    "ios/TunnelExtension/Info.plist"
 )
 
 # Монотонный build-номер без ручного счётчика — тот же приём, что в
@@ -64,7 +64,7 @@ done
 trap restore_versioned_files EXIT
 
 echo "==> [1/4] Go-фреймворк (GoNetunnel.xcframework, слайс ios)"
-"$SCRIPT_DIR/build-go-framework.sh" ios
+"$SCRIPT_DIR/build-go-framework.sh"
 
 rm -rf "$ARCHIVE_PATH" "$EXPORT_PATH"
 

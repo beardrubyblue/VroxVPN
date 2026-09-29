@@ -8,7 +8,6 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 OUT_DIR="$SCRIPT_DIR/Frameworks"
-TARGETS="${1:-macos,ios}" # передать "macos" или "ios", чтобы собрать только одну платформу
 
 mkdir -p "$OUT_DIR"
 
@@ -23,20 +22,17 @@ mkdir -p "$OUT_DIR"
 cd "$REPO_ROOT/packaging/hysteria2-patch/build/hysteria/app"
 go get -tool golang.org/x/mobile/cmd/gobind
 
-# Минимальные версии ОС — те же, что deploymentTarget в project.yml
-# (macos-ext/ и app/src-tauri/gen/apple/) и minimumSystemVersion в
-# tauri.conf.json. Без явного -macosversion gomobile подставляет версию
-# macOS САМОЙ машины сборки: собрав на macOS 27, линкер расширения
-# (таргет 13.3) выдал «object file was built for newer 'macOS' version
-# (27.0) than being linked (13.3)» — такой .appex мог не загрузиться у
-# пользователей на более старой macOS. -iosversion по умолчанию 13.0 —
-# задаём явно для симметрии.
-MACOS_MIN_VERSION="13.3"
+# Только iOS: нативная macOS-сборка убрана — на Mac ставится iOS-сборка
+# из TestFlight (Apple Silicon), ей нужен только ios-слайс.
+#
+# -iosversion — тот же deploymentTarget, что в app/src-tauri/gen/apple/
+# project.yml. Без явной минимальной версии gomobile подставляет свою
+# (для macOS — вообще версию машины сборки: на macOS 27 линкер выдавал
+# «object file was built for newer version»), поэтому задаём явно.
 IOS_MIN_VERSION="16.4"
 
 rm -rf "$OUT_DIR/GoNetunnel.xcframework"
-gomobile bind -target "$TARGETS" \
-    -macosversion "$MACOS_MIN_VERSION" -iosversion "$IOS_MIN_VERSION" \
+gomobile bind -target ios -iosversion "$IOS_MIN_VERSION" \
     -o "$OUT_DIR/GoNetunnel.xcframework" ./netunnel
 
 echo "✓ $OUT_DIR/GoNetunnel.xcframework собран"

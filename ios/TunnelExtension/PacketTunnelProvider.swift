@@ -73,11 +73,7 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
     /// переподключался). Решаем здесь, во время работы, и передаём в Go
     /// (`netunnel.Config.MemoryConstrained`).
     private static var isMemoryConstrained: Bool {
-        #if os(iOS)
-        return !ProcessInfo.processInfo.isiOSAppOnMac
-        #else
-        return false
-        #endif
+        !ProcessInfo.processInfo.isiOSAppOnMac
     }
 
     /// Добавляет `memoryConstrained` в JSON-конфиг от Rust. Если JSON не
@@ -294,7 +290,7 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
         tunnelHandle?.forceReconnect()
     }
 
-    /// Единственная поддерживаемая команда — "getStats" (см. engine/macos.rs::
+    /// Единственная поддерживаемая команда — "getStats" (см. engine/macos/stats.rs::
     /// get_traffic_totals_blocking, который шлёт её через sendProviderMessage
     /// по запросу фронтенда). Ответ — JSON от NetunnelTunnelHandle.getStats()
     /// (txBytes/rxBytes, см. netunnel.go) + rssBytes — память ВСЕГО этого

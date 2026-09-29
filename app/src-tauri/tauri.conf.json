@@ -54,12 +54,6 @@
         "replaces": ["vroxory-vpn"],
         "provides": ["vroxory-vpn"]
       }
-    },
-    "macOS": {
-      "minimumSystemVersion": "13.3",
-      "hardenedRuntime": true,
-      "entitlements": "macos/entitlements.plist",
-      "signingIdentity": null
     }
   }
 }

@@ -9,18 +9,21 @@
 
 ## Обзор: текущее состояние
 
-Один UI-кодбейс (Tauri 2: Rust + React 19) на трёх платформах. Старое
+Один UI-кодбейс (Tauri 2: Rust + React 19) на Linux и iOS/iPadOS. На
+Mac (Apple Silicon) ставится та же iOS-сборка из TestFlight —
+отдельной macOS-сборки нет (убрана, см. конец журнала). Старое
 GTK4/libadwaita-приложение на Python и ветка `tauri-rewrite` — история,
 всё живёт в `main`.
 
-| | Linux | macOS | iOS |
-|---|---|---|---|
-| Тоннель | sidecar `vroxcore` (форк hysteria2), TUN `tun-vroxory` | `NEPacketTunnelProvider` + Go `netunnel` (gomobile) | то же, что macOS |
-| Управление из Rust | `engine/linux/` — `pkexec` + `privileged_helper.sh` | `engine/macos/` — `NETunnelProviderManager` через `objc2-network-extension` | тот же `engine/macos/` |
-| Kill switch | nftables | `includeAllNetworks` | `includeAllNetworks` |
-| RU-bypass | geoip в `ipv4Exclude` + directDomains (DNS-сниффер) | geoip в `excludedRoutes`, доменов нет | как macOS |
-| Статистика/память | `/proc/net/dev`, RSS через helper | `sendProviderMessage` → `GetStats` из Go + `phys_footprint` | как macOS |
-| Дистрибуция | `.deb` + самообновление (`version.json`) | TestFlight | TestFlight |
+| | Linux | iOS / iPadOS / Mac (iOS-сборка) |
+|---|---|---|
+| Тоннель | sidecar `vroxcore` (форк hysteria2), TUN `tun-vroxory` | `NEPacketTunnelProvider` + Go `netunnel` (gomobile) |
+| Управление из Rust | `engine/linux/` — `pkexec` + `privileged_helper.sh` | `engine/macos/` — `NETunnelProviderManager` через `objc2-network-extension` |
+| Kill switch | nftables | `includeAllNetworks` |
+| RU-bypass | geoip в `ipv4Exclude` + directDomains (DNS-сниффер) | geoip в `excludedRoutes`, доменов нет |
+| Статистика/память | `/proc/net/dev`, RSS через helper | `sendProviderMessage` → `GetStats` из Go + `phys_footprint` |
+| Экономия памяти | — | только на iPhone/iPad (`memoryConstrained`, на Mac выключена) |
+| Дистрибуция | `.deb` + самообновление (`version.json`) | TestFlight |
 
 ### Слои
 
@@ -33,12 +36,12 @@ GTK4/libadwaita-приложение на Python и ветка `tauri-rewrite` �
      настоящий gVisor-стек, relay TCP/UDP через `hysteria/core/client`,
      лимиты relay-соединений, эвикшен при нехватке памяти (iOS),
      периодический и вызванный ошибками QUIC-реконнект. Биндится через
-     `gomobile bind` в `macos-ext/Frameworks/GoNetunnel.xcframework`
-     (`macos-ext/build-go-framework.sh`, слайсы macOS + iOS).
-2. **NE-расширение** (`macos-ext/VroxTunnelExtension/PacketTunnelProvider.swift`)
-   — ОДИН Swift-файл на macOS и iOS, без платформенных веток
-   (`excludeAPNs`/`excludeLocalNetworks`/… выставляет Rust на
-   `NEVPNProtocol`, не расширение).
+     `gomobile bind` в `ios/Frameworks/GoNetunnel.xcframework`
+     (`ios/build-go-framework.sh`, ios-слайс).
+2. **NE-расширение** (`ios/TunnelExtension/PacketTunnelProvider.swift`)
+   — `excludeAPNs`/`excludeLocalNetworks`/… выставляет Rust на
+   `NEVPNProtocol`, не расширение. Расширение определяет, запущено ли
+   оно на Mac (`isiOSAppOnMac`), и передаёт Go `memoryConstrained`.
    Качает пакеты `packetFlow` ↔ Go, применяет `excludedRoutes`, отвечает
    на `handleAppMessage` (трафик + разбивка памяти), на `wake()` форсит
    реконнект.
@@ -49,7 +52,8 @@ GTK4/libadwaita-приложение на Python и ветка `tauri-rewrite` �
    установленных пользователей), geoip/geosite, пинг, трей (только
    desktop), самообновление (только Linux). `engine.rs` через `#[cfg]`
    ре-экспортирует `engine::linux` либо `engine::macos` (последний — для
-   `any(target_os = "macos", target_os = "ios")`). Все команды для
+   `any(target_os = "macos", target_os = "ios")`; macOS-таргет Rust
+   оставлен только для `cargo check` на Mac, не поставляется). Все команды для
    фронтенда — в `commands.rs`.
 4. **Фронтенд** (`app/src/`) — `App.tsx` собирает четыре экрана
    (`components/screens/`: Shield / Nodes / Stats / Settings) с нижним
@@ -59,21 +63,14 @@ GTK4/libadwaita-приложение на Python и ветка `tauri-rewrite` �
 ### Где что собирается
 
 - **Linux**: `cd app && pnpm tauri build` → `.deb`.
-- **macOS**: `macos-ext/project.yml` (xcodegen) собирает `.appex`,
-  `embed-into-tauri-app.sh` встраивает его в Tauri `.app` и
-  переподписывает. `build-release.sh` — DMG для локального теста,
-  `build-testflight.sh` — `.pkg` для App Store Connect.
-  `tauri.macos.conf.json` убирает `vroxcore` из бандла.
-- **iOS**: Tauri mobile, проект в `app/src-tauri/gen/apple/`
+- **iOS (iPhone, iPad, Mac)**: Tauri mobile, проект в `app/src-tauri/gen/apple/`
   (коммитится). Его `project.yml` добавляет таргет
   `VroxTunnelExtension` на тот же `PacketTunnelProvider.swift` +
   iOS-слайс фреймворка. `tauri.ios.conf.json` убирает `vroxcore`.
   Подробности и грабли — раздел «iOS: настоящее Tauri-приложение» в
   конце журнала.
-  Сборка для TestFlight — `macos-ext/build-testflight-ios.sh`.
-- `macos-ext/VroxVPNHost` и `macos-ext/VroxVPNHost-iOS` — голые
-  тест-харнессы со спайка NE (кнопки Connect/Disconnect с тестовым
-  конфигом), не продукт.
+  Сборка для TestFlight — `ios/build-testflight.sh`, загрузка — через
+  Transporter.
 
 ### Известные открытые вопросы
 
@@ -81,7 +78,7 @@ GTK4/libadwaita-приложение на Python и ветка `tauri-rewrite` �
   geoip-диапазоны (см. «Фаза 3» в журнале).
 - `ping.rs` спавнит системный `ping` — в песочнице iOS, скорее всего, не
   работает.
-- `privileged_helper.sh` (Linux-only) попадает в macOS/iOS-бандлы —
+- `privileged_helper.sh` (Linux-only) попадает в iOS-бандл —
   Tauri копирует `bundle.resources` без фильтра по платформе.
 - Исходящая очередь gVisor `channel.Endpoint` молча роняет пакеты при
   переполнении (см. «Код-ревью … три реальные находки»).
@@ -92,7 +89,8 @@ GTK4/libadwaita-приложение на Python и ветка `tauri-rewrite` �
 
 > Разделы ниже написаны по ходу работы. Упоминания `engine/linux.rs` /
 > `engine/macos.rs` — сейчас это папки `engine/linux/` и
-> `engine/macos/`; «ветка `main` с Python-версией» — старое приложение,
+> `engine/macos/`; `macos-ext/` — удалён (iOS-часть переехала в `ios/`,
+> нативная macOS-сборка убрана); «ветка `main` с Python-версией» — старое приложение,
 > больше не поддерживается; `App.tsx` с тех пор разбит на экраны и хуки.
 
 ## Исходный план (устарел — см. обзор выше)
@@ -1182,3 +1180,31 @@ iOS; Rust на macOS передаёт `RelayLimits::MACOS` (300с / 2048 / 2048)
 relay (иначе — 300с / 2048 / 2048). Нет поля → ограниченный режим
 (безопасно для iPhone). Rust снова всегда отдаёт лимиты из настроек —
 они применяются только на настоящем iPhone/iPad.
+
+## Отдельная macOS-сборка убрана — на Mac ставится iOS-сборка
+
+Фактически на Mac уже работала iOS-сборка из TestFlight (Apple Silicon,
+«Designed for iPad»), а нативная macOS-сборка была вторым продуктом с
+собственным конвейером: xcodegen-проект в `macos-ext/`, встраивание
+`.appex` в Tauri `.app` с переподписью, `.pkg`, отдельные профили,
+обходы `strip` из Xcode 27. Решено держать один продукт.
+
+Удалено: `macos-ext/` (macOS-таргеты, SwiftUI/AppKit тест-харнессы
+`VroxVPNHost*`, `project.yml`, `build-release.sh`, `build-testflight.sh`,
+`embed-into-tauri-app.sh`), `tauri.macos.conf.json`,
+`app/src-tauri/macos/entitlements.plist`, `bundle.macOS` в
+`tauri.conf.json`, `.cargo/config.toml` (обход strip был нужен только
+macOS-бинарнику). Go-фреймворк собирается только с ios-слайсом.
+
+Переехало в `ios/`: `TunnelExtension/` (`PacketTunnelProvider.swift`,
+`Info.plist`, entitlements), `build-go-framework.sh`,
+`build-testflight.sh` (бывший `build-testflight-ios.sh`), выход
+`Frameworks/`. Пути в `gen/apple/project.yml` обновлены, проект
+перегенерирован.
+
+Оставлено сознательно: `engine::macos` и `#[cfg(any(macos, ios))]` в
+Rust — модуль общий с iOS, а macOS-ветка cfg позволяет `cargo check` на
+Mac без `--target`; `memory_other.go` — заглушка для `go vet` на
+darwin-хосте. Старые macOS-сборки в App Store Connect нужно истечь
+вручную (TestFlight → macOS → Expire), иначе TestFlight на Mac может
+предлагать их вместо iOS-сборки.
