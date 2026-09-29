@@ -6,5 +6,11 @@
     <array>
         <string>packet-tunnel-provider</string>
     </array>
+    <!-- Общая папка приложения и расширения — история трафика по дням
+         (netunnel/history.go пишет, traffic_history.rs читает). -->
+    <key>com.apple.security.application-groups</key>
+    <array>
+        <string>group.com.vroxory.vpn</string>
+    </array>
 </dict>
 </plist>

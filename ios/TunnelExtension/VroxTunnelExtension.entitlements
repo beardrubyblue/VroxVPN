@@ -6,12 +6,11 @@
     <array>
         <string>packet-tunnel-provider</string>
     </array>
-    <!--
-      В отличие от macOS-варианта (VroxTunnelExtension/VroxTunnelExtension.
-      entitlements) здесь нет app-sandbox/network.client/network.server —
-      это macOS App Sandbox entitlement-ключи, на iOS их нет: песочница
-      на iOS включена безусловно самой ОС, без отдельного opt-in ключа,
-      а исходящие/bind UDP-сокеты не требуют отдельного entitlement.
-    -->
+    <!-- Общая папка приложения и расширения — история трафика по дням
+         (netunnel/history.go пишет, traffic_history.rs читает). -->
+    <key>com.apple.security.application-groups</key>
+    <array>
+        <string>group.com.vroxory.vpn</string>
+    </array>
 </dict>
 </plist>

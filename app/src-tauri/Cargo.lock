@@ -53,6 +53,7 @@ version = "4.0.0"
 dependencies = [
  "base64 0.22.1",
  "block2",
+ "chrono",
  "dirs",
  "futures",
  "hex",

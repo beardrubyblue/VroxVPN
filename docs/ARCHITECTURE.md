@@ -23,6 +23,7 @@ GTK4/libadwaita-приложение на Python и ветка `tauri-rewrite` �
 | RU-bypass | geoip в `ipv4Exclude` + directDomains (DNS-сниффер) | geoip в `excludedRoutes`, доменов нет |
 | Статистика/память | `/proc/net/dev`, RSS через helper | `sendProviderMessage` → `GetStats` из Go + `phys_footprint` |
 | Экономия памяти | — | только на iPhone/iPad (`memoryConstrained`, на Mac выключена) |
+| История трафика (30 дней) | пишет Rust (`traffic_history/recorder.rs`) | пишет расширение (`netunnel/history.go`) в App Group |
 | Дистрибуция | `.deb` + самообновление (`version.json`) | TestFlight |
 
 ### Слои
@@ -1219,3 +1220,31 @@ Idle timeout / Max TCP / Max UDP в Settings (только iOS) убраны в�
 без jetsam: 300с / 2048 / 2048). `settings.rs::migrate()` (переводил
 старые дефолты Happ на новые) удалён за ненадобностью; старые ключи в
 `settings.json` у пользователей просто игнорируются.
+
+## История трафика по дням (экран Stats)
+
+Раньше бар-чарт на Stats был декоративным (синусоида), реальной истории
+не было — счётчики тоннеля живут только в пределах сессии. Требование:
+показывать **точно**, сколько трафика прошло, по дням за месяц.
+
+Поэтому пишет не приложение (на iOS оно не работает в фоне и пропускало
+бы трафик, пока свёрнуто), а тот, кто видит каждый байт:
+
+- **iOS/iPadOS/Mac** — Go в расширении (`netunnel/history.go`): раз в 5с,
+  при `sleep()` устройства (`FlushHistory` из Swift) и при `Stop()`
+  прибавляет дельту `txBytes`/`rxBytes` к текущему локальному дню в
+  `traffic_history.json` в App Group `group.com.vroxory.vpn` (путь передаёт
+  Swift полем `historyPath`). Потерять можно только хвост ≤5с, если iOS
+  убьёт процесс без `Stop()`.
+- **Linux** — Rust (`traffic_history/recorder.rs`): приложение живёт в
+  трее всё время подключения, раз в 5с и перед отключением прибавляет
+  дельту счётчиков `tun-vroxory`.
+
+Формат общий: массив `{date, upload, download}` по возрастанию даты,
+ровно 30 дней (по столбику на день), запись через tmp + rename. Rust
+читает (`get_traffic_history`), фронтенд строит окно 30 дней с нулями
+для пустых дней (`utils/traffic-history.ts`). На графике: зажать и вести
+— выбранный день с разбивкой ↑/↓, отпустить — сумма за месяц.
+
+App Group требует capability в Apple Developer на обоих App ID и
+перевыпуска App Store-профилей — без этого подпись Release не пройдёт.

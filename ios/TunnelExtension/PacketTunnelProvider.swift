@@ -76,14 +76,29 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
         !ProcessInfo.processInfo.isiOSAppOnMac
     }
 
-    /// Добавляет `memoryConstrained` в JSON-конфиг от Rust. Если JSON не
-    /// разобрался — отдаём как есть: Go без поля считает режим
-    /// ограниченным (безопасный вариант для iPhone).
-    private static func withMemoryMode(_ configJSON: String) -> String {
+    /// App Group, общая с приложением: сюда Go пишет историю трафика по
+    /// дням (netunnel/history.go), приложение читает её же
+    /// (traffic_history.rs). Должна совпадать с entitlements обоих
+    /// таргетов и с `APP_GROUP_ID` в Rust.
+    private static let appGroupID = "group.com.vroxory.vpn"
+
+    private static var historyPath: String? {
+        FileManager.default
+            .containerURL(forSecurityApplicationGroupIdentifier: appGroupID)?
+            .appendingPathComponent("traffic_history.json")
+            .path
+    }
+
+    /// Добавляет в JSON-конфиг от Rust то, что знает только расширение:
+    /// `memoryConstrained` и `historyPath`. Если JSON не разобрался —
+    /// отдаём как есть: Go без полей считает режим ограниченным
+    /// (безопасно для iPhone) и просто не пишет историю.
+    private static func withEnvironment(_ configJSON: String) -> String {
         guard var config = (try? JSONSerialization.jsonObject(with: Data(configJSON.utf8))) as? [String: Any] else {
             return configJSON
         }
         config["memoryConstrained"] = isMemoryConstrained
+        config["historyPath"] = historyPath
         guard let data = try? JSONSerialization.data(withJSONObject: config) else { return configJSON }
         return String(decoding: data, as: UTF8.self)
     }
@@ -110,7 +125,7 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
         // readPacket/stop ниже — методы, поэтому там `try` работает),
         // для свободных функций нужен явный NSErrorPointer.
         var startErr: NSError?
-        let tunnelConfigJSON = Self.withMemoryMode(configJSON)
+        let tunnelConfigJSON = Self.withEnvironment(configJSON)
         guard let handle = NetunnelStartTunnel(tunnelConfigJSON, &startErr) else {
             let error = startErr ?? NSError(
                 domain: "com.vroxory.vpn.tunnel",
@@ -288,6 +303,14 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
     /// iOS wake() не вызвала (она не гарантирована для always-on VPN).
     override func wake() {
         tunnelHandle?.forceReconnect()
+    }
+
+    /// Перед засыпанием устройства дописать накопленный трафик в историю:
+    /// замороженный процесс могут выгрузить, не вызвав stopTunnel, и
+    /// хвост до следующего 5-секундного сброса потерялся бы.
+    override func sleep(completionHandler: @escaping () -> Void) {
+        tunnelHandle?.flushHistory()
+        completionHandler()
     }
 
     /// Единственная поддерживаемая команда — "getStats" (см. engine/macos/stats.rs::

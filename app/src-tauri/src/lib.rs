@@ -8,6 +8,7 @@ mod ping;
 mod resources;
 mod settings;
 mod subscription;
+mod traffic_history;
 mod tray;
 
 use tauri::Manager;
@@ -41,6 +42,7 @@ pub fn run() {
             commands::connect,
             commands::disconnect,
             commands::get_traffic_totals,
+            commands::get_traffic_history,
             commands::fetch_subscription,
             commands::update_geoip,
             commands::update_geosite,

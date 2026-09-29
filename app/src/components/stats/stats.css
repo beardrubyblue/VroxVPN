@@ -1,0 +1,18 @@
+/* Карточка истории трафика на экране Stats. */
+.history-card { background: var(--bg-elev-1); border: 1px solid var(--line); border-radius: 22px; padding: 20px; }
+.history-head { display: flex; justify-content: space-between; align-items: flex-end; gap: 12px; }
+.history-label { font-size: 11px; color: var(--fg-dim); letter-spacing: 0.2em; }
+.history-value { font-size: 44px; font-weight: 600; letter-spacing: -0.03em; line-height: 1; margin-top: 4px; }
+.history-split { font-size: 12px; color: var(--fg-muted); margin-top: 8px; letter-spacing: 0.04em; min-height: 16px; }
+
+.history-chart {
+  display: flex; gap: 3px; margin-top: 20px; height: 80px; align-items: flex-end;
+  touch-action: pan-y; cursor: pointer; border-radius: 4px; user-select: none;
+}
+.history-chart:focus-visible { outline: 2px solid var(--fg); outline-offset: 4px; }
+.history-bar { flex: 1; min-height: 3px; border-radius: 2px; background: var(--fg-dim); opacity: 0.35; }
+.history-bar.today { background: var(--fg); opacity: 1; }
+.history-bar.selected { background: var(--fg); opacity: 1; }
+.history-chart.selecting .history-bar.today:not(.selected) { opacity: 0.35; background: var(--fg-dim); }
+.history-axis { display: flex; justify-content: space-between; margin-top: 8px; font-size: 11px; color: var(--fg-dim); letter-spacing: 0.1em; }
+.history-empty { margin: 12px 0 0; font-size: 14px; color: var(--fg-muted); text-align: center; }

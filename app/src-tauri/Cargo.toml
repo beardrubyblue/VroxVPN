@@ -49,6 +49,11 @@ strip = true
 lto = true
 codegen-units = 1
 
+# Linux пишет историю трафика сам (traffic_history/recorder.rs) — нужна
+# локальная дата; на iOS даты ставит расширение (Go).
+[target.'cfg(target_os = "linux")'.dependencies]
+chrono = { version = "0.4", default-features = false, features = ["clock"] }
+
 [target.'cfg(any(target_os = "macos", target_os = "ios"))'.dependencies]
 block2 = "0.6.2"
 objc2 = "0.6.4"

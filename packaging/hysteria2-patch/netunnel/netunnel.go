@@ -123,6 +123,9 @@ type Config struct {
 	// десктопные (applyRelayLimits). Нет поля в JSON → true (StartTunnel):
 	// безопаснее перестраховаться памятью, чем получить jetsam на iPhone.
 	MemoryConstrained bool `json:"memoryConstrained"`
+	// HistoryPath — файл истории трафика по дням в App Group (history.go);
+	// выставляет Swift. Пусто — история не пишется.
+	HistoryPath string `json:"historyPath,omitempty"`
 }
 
 type ObfsConfig struct {
@@ -177,6 +180,9 @@ type TunnelHandle struct {
 	rxBytes uint64 // ReadPacket: пакеты К ОС, "из" тоннеля — download
 
 	stopMemoryReclaim chan struct{}
+
+	history     *historyRecorder // nil, если Config.HistoryPath пуст
+	stopHistory chan struct{}
 }
 
 // getClient — потокобезопасный доступ к текущему hysteria-клиенту.
@@ -595,6 +601,11 @@ func StartTunnel(configJSON string) (*TunnelHandle, error) {
 		obfsPassword:      cfg.Obfs.Salamander.Password,
 		client:            hyClient,
 		stopMemoryReclaim: make(chan struct{}),
+		stopHistory:       make(chan struct{}),
+	}
+	if cfg.HistoryPath != "" {
+		handle.history = &historyRecorder{path: cfg.HistoryPath}
+		go handle.recordHistoryPeriodically()
 	}
 
 	tcpForwarder := tcp.NewForwarder(netStack, 0, 1024, tcpForwarderHandler(handle))
@@ -722,6 +733,10 @@ func (h *TunnelHandle) GetStats() string {
 }
 
 func (h *TunnelHandle) Stop() error {
+	// сначала дописать хвост трафика в историю — после Stop счётчики
+	// этой сессии больше никто не прочитает
+	close(h.stopHistory)
+	h.FlushHistory()
 	close(h.stopMemoryReclaim)
 	h.stack.Close()
 	_ = h.vtun.Close()

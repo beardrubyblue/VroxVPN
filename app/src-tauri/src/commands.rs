@@ -65,6 +65,8 @@ pub async fn connect(
                 server_name: server.name,
             });
             drop(guard);
+            #[cfg(target_os = "linux")]
+            crate::traffic_history::recorder::start(&app);
             if kill_switch {
                 // best-effort: неудача kill switch не должна рвать уже
                 // установленное VPN-соединение, только лишает доп. защиты
@@ -108,6 +110,11 @@ pub async fn disconnect(app: AppHandle, state: State<'_, EngineState>) -> Result
             }
         }
     };
+
+    // Linux: дописать хвост сессии в историю, пока tun-интерфейс жив
+    // (на iOS это делает само расширение в Stop()).
+    #[cfg(target_os = "linux")]
+    crate::traffic_history::recorder::flush(&app).await;
 
     match engine::kill_client(&app, &conn.config_path).await {
         Ok(()) => {
@@ -182,6 +189,12 @@ pub async fn get_traffic_totals(
         memory_bytes,
         debug,
     })
+}
+
+/// История трафика по дням за последний месяц (см. traffic_history).
+#[tauri::command]
+pub fn get_traffic_history(app: AppHandle) -> Vec<crate::traffic_history::DayTraffic> {
+    crate::traffic_history::read(&app)
 }
 
 #[tauri::command]

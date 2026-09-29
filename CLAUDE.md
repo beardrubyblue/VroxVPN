@@ -375,6 +375,10 @@ abstraction — drop the React-Native-specific tooling rules.
 - `ios/` — `TunnelExtension/` (Swift `NEPacketTunnelProvider`, its
   Info.plist and entitlements), `build-go-framework.sh`,
   `build-testflight.sh`; `Frameworks/` is a gitignored build output.
+  The app and the extension share the App Group `group.com.vroxory.vpn`
+  (traffic history file written by `netunnel/history.go`, read by
+  `traffic_history/`) — keep the ID in sync across both entitlements,
+  `PacketTunnelProvider.swift` and `traffic_history/mod.rs`.
 - `packaging/hysteria2-patch/` — Go: forked `apernet/hysteria`
   (directDomains patch + DNS sniffer for Linux) and the `netunnel`
   package (gVisor stack + hysteria2 relay, gomobile-bound into

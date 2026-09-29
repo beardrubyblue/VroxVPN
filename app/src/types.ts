@@ -86,6 +86,14 @@ export interface Settings {
   kill_switch_enabled: boolean;
 }
 
+// День истории трафика (Rust traffic_history::DayTraffic, файл пишет
+// расширение на iOS / Rust на Linux). date — локальная YYYY-MM-DD.
+export interface DayTraffic {
+  date: string;
+  upload: number;
+  download: number;
+}
+
 export interface UpdateCheck {
   current: string;
   latest: string;

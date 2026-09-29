@@ -1,4 +1,5 @@
-import { useMemo } from "react";
+import { TrafficHistoryCard } from "@/components/stats";
+import { useTrafficHistory } from "@/hooks/useTrafficHistory";
 import type { MemoryDebug, TrafficDisplay } from "@/types";
 import { formatBytes, formatSpeed, MEMORY_BUDGET_BYTES } from "@/utils/format";
 
@@ -9,15 +10,12 @@ interface StatsScreenProps {
   memoryDebug: MemoryDebug | null;
 }
 
-// ScreenStats (порт из дизайна, секция 03) — экран «Traffic.». Большая
-// карта суммарного трафика + декоративный бар-чарт, сетка метрик из
-// реальных счётчиков, плюс блок памяти тоннеля (диагностика iOS).
+// ScreenStats (порт из дизайна, секция 03) — экран «Traffic.». Карточка
+// истории трафика по дням за месяц (раньше тут был декоративный бар-чарт
+// из синусоиды — реальных данных за ним не было), сетка метрик текущей
+// сессии из реальных счётчиков, плюс блок памяти тоннеля.
 export function StatsScreen({ connected, traffic, memoryBytes, memoryDebug }: StatsScreenProps) {
-  // Декоративный бар-чарт (как в дизайне) — детерминированный, не
-  // ре-рендерится каждый кадр. Реального тайм-ряда у нас нет.
-  const bars = useMemo(() => Array.from({ length: 24 }).map((_, i) => 0.2 + Math.abs(Math.sin(i * 0.7)) * 0.6), []);
-
-  const total = traffic ? traffic.totalUp + traffic.totalDown : 0;
+  const history = useTrafficHistory();
   const memPct = Math.min(100, (memoryBytes / MEMORY_BUDGET_BYTES) * 100);
 
   const metrics: [string, string, string][] = [
@@ -39,34 +37,9 @@ export function StatsScreen({ connected, traffic, memoryBytes, memoryDebug }: St
       </div>
 
       <div className="scrollable" style={{ flex: 1, padding: "16px 20px 20px" }}>
-        {/* Большая карта суммарного трафика */}
-        <div style={{ background: "var(--bg-elev-1)", border: "1px solid var(--line)", borderRadius: 22, padding: 20 }}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end" }}>
-            <div>
-              <div className="mono" style={{ fontSize: 10, color: "var(--fg-dim)", letterSpacing: "0.2em" }}>TOTAL · SESSION</div>
-              <div className="display" style={{ fontSize: 44, fontWeight: 600, letterSpacing: "-0.03em", lineHeight: 1 }}>
-                {formatBytes(total)}
-              </div>
-            </div>
-            <div className="tag">{connected ? "▲ LIVE" : "IDLE"}</div>
-          </div>
-          <div style={{ display: "flex", gap: 3, marginTop: 24, alignItems: "flex-end", height: 80 }}>
-            {bars.map((v, i) => (
-              <div
-                key={i}
-                style={{
-                  flex: 1,
-                  height: `${v * 100}%`,
-                  borderRadius: 2,
-                  background: i === 18 ? "var(--fg)" : "var(--fg-dim)",
-                  opacity: connected ? (i === 18 ? 1 : 0.35) : 0.15,
-                }}
-              />
-            ))}
-          </div>
-        </div>
+        <TrafficHistoryCard days={history.days} isLoaded={history.isLoaded} isConnected={connected} />
 
-        {/* Сетка метрик 2×2 (реальные счётчики) */}
+        {/* Сетка метрик 2×2 — текущая сессия (реальные счётчики) */}
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginTop: 10 }}>
           {metrics.map(([k, v, s]) => (
             <div key={k} style={{ background: "var(--bg-elev-1)", border: "1px solid var(--line)", borderRadius: 16, padding: 14 }}>
