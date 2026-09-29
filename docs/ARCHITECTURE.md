@@ -1115,3 +1115,22 @@ TODO).
 правкой прямо в pbxproj и откатывалась при каждой регенерации —
 перенесена в `project.yml`. Правило: **любые правки проекта — только в
 `project.yml`, затем `xcodegen generate` внутри `gen/apple/`**.
+
+### iOS-сборка на Xcode 27: временный патч swift-rs
+
+Swift-часть Tauri (`tauri/mobile/ios-api`) собирается через `swift-rs`.
+На Xcode 27 (Swift 6.4, SwiftPM по умолчанию на движке `swiftbuild`) это
+ломалось дважды:
+
+1. `swift-rs 1.0.7` передавал `-Xswiftc -sdk <iPhoneOS>`, а новый SwiftPM
+   дописывал после них хостовые `-sdk MacOSX -target macos` — iOS-код
+   компилировался против macOS SDK («UIKit not found»). Исправлено в
+   `swift-rs 1.0.8` (`--triple`).
+2. SwiftPM делает `@_cdecl`-экспорты статических библиотек локальными.
+   1.0.8 возвращает им глобальность через `llvm-objcopy` (нужен
+   `rustup component add llvm-tools`), но только в объекте самого пакета,
+   не в общем шиме `SwiftRs.o` — линковка `libapp_lib.dylib` падала на
+   `_retain_object`/`_release_object`/`_string_from_bytes`
+   ([swift-rs#81](https://github.com/Brendonovich/swift-rs/issues/81)).
+   Временно: `[patch.crates-io]` в `Cargo.toml` на коммит из PR #82,
+   **убрать, когда фикс выйдет в релизе swift-rs**.

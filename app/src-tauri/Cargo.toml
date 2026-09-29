@@ -54,3 +54,14 @@ block2 = "0.6.2"
 objc2 = "0.6.4"
 objc2-foundation = "0.3.2"
 objc2-network-extension = "0.3.2"
+
+# ВРЕМЕННО: swift-rs с фиксом из PR Brendonovich/swift-rs#82 (issue #81).
+# На Xcode 27 SwiftPM делает @_cdecl-экспорты статических библиотек
+# локальными; swift-rs 1.0.8 возвращает им глобальность только в объекте
+# самого пакета (Tauri.o), но не в общем рантайм-шиме SwiftRs.o — iOS-
+# сборка падала на линковке libapp_lib.dylib: «Undefined symbols:
+# _retain_object, _release_object, _string_from_bytes». Rev закреплён.
+# Убрать, как только фикс выйдет в релизе swift-rs на crates.io.
+# Требует `rustup component add llvm-tools` (llvm-objcopy).
+[patch.crates-io]
+swift-rs = { git = "https://github.com/michakfromparis/swift-rs", rev = "3788d3d2bae8e7a863b3e281a59477438e12c632" }

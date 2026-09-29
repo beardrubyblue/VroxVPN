@@ -426,6 +426,8 @@ newest sections at the end; overview at the top).
 - Typecheck frontend: `cd app && npx tsc --noEmit -p .`
 - Lint frontend: `cd app && pnpm lint`
 - Rust compile check: `cd app/src-tauri && cargo build --no-default-features`
+  (iOS on Xcode 27 also needs `rustup component add llvm-tools` — see the
+  temporary `swift-rs` patch in `Cargo.toml`)
   (iOS: add `--target aarch64-apple-ios`)
 - Go: `go vet` inside the prepared tree after `packaging/hysteria2-patch/build.sh`
 
