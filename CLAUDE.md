@@ -1,4 +1,4 @@
-# AGENTS.md — Max's AI Assistant Principles
+# AGENTS.md
 
 > **My personal, stack-agnostic ruleset for AI coding assistants** (Claude Code,
 > Codex, Copilot, Cursor, …). This is the distilled common core I reuse across
@@ -343,48 +343,95 @@ export function cn(...inputs: ClassValue[]) {
 
 ## Project-specific: vrox.vpn
 
-Desktop VPN client on **Tauri v2** (Rust backend + React 19 frontend,
-no Next.js/React Native — most of the React-Native-flavored rules above
-don't apply literally here: no Zustand/TanStack Query, no Tailwind
-tokens/4-pt grid, no FlashList. Keep the *philosophy* — simple,
-readable, no needless abstraction — drop the React-Native-specific
-tooling rules).
+VPN client (hysteria2, TUN-only) on **Tauri v2** — Rust backend + React 19
+frontend, one UI codebase for **Linux, macOS and iOS**. No Next.js/React
+Native — most of the React-Native-flavored rules above don't apply
+literally here: no Zustand/TanStack Query, no Tailwind tokens/4-pt grid,
+no FlashList. Keep the *philosophy* — simple, readable, no needless
+abstraction — drop the React-Native-specific tooling rules.
 
 **Stack:**
-- `app/` — Tauri app. Rust backend (`app/src-tauri/src/`), plain React +
-  CSS frontend (`app/src/App.tsx` — intentionally a single file, not yet
-  split; CSS in `App.css`, no CSS framework).
-- `macos-ext/` — Swift `NEPacketTunnelProvider` extension (Xcode
-  project, generated via `xcodegen` from `project.yml` — the
-  `.xcodeproj` itself is gitignored, regenerate with `xcodegen generate`
-  if missing, then re-apply manual signing overrides in
-  `project.pbxproj` documented in `macos-ext/build-testflight.sh`).
-- `packaging/hysteria2-patch/` — Go: forked `apernet/hysteria` +
-  `netunnel` package (gomobile-bound for the macOS extension).
+- `app/src/` — plain React + CSS frontend (no CSS framework). `App.tsx`
+  composes four screens (`components/screens/` — Shield / Nodes / Stats /
+  Settings) switched by the bottom Dock (`ViewSwitcher.tsx`); logic lives
+  in `hooks/` (`useConnection`, `useSubscriptions`, `useTrafficStats`, …,
+  barrel `hooks/index.ts`), brand/icons/country helpers in `design/`,
+  shared types in `types.ts`. Styles in `App.css`, fonts self-hosted
+  (`fonts.css` + `assets/fonts/`, Inter / JetBrains Mono / Jura). The UI
+  follows the Claude Design mockup (section 03 — Dock).
+- `app/src-tauri/src/` — Rust: `commands.rs` (all `invoke` commands),
+  `subscription.rs`, `config_gen.rs` (YAML for Linux, JSON
+  `providerConfiguration` + `excludedRoutes` for NE), `settings.rs`
+  (incl. `migrate()` for changed defaults), `geoip.rs`/`geosite.rs`
+  (RU bypass), `ping.rs`, `tray.rs` (desktop-only, no-op on mobile),
+  `app_update.rs` (Linux only).
+- `app/src-tauri/gen/apple/` — Tauri iOS project (xcodegen `project.yml`,
+  **committed**). Adds the `VroxTunnelExtension` target that reuses
+  `macos-ext/VroxTunnelExtension/PacketTunnelProvider.swift` + the iOS
+  slice of `GoNetunnel.xcframework`. `tauri ios build` does NOT regenerate
+  the `.xcodeproj` — after editing `project.yml` run `xcodegen generate`
+  inside `gen/apple/`.
+- `macos-ext/` — Swift `NEPacketTunnelProvider` extension (shared by macOS
+  and iOS) + macOS build scripts. Xcode project generated via `xcodegen`
+  from `project.yml` (`.xcodeproj` is gitignored; Release manual signing
+  lives in `project.yml` and survives regeneration). `VroxVPNHost` /
+  `VroxVPNHost-iOS` are bare test harnesses from the NE spike, not the
+  product UI — the real macOS app is the Tauri `.app` with the extension
+  embedded (`embed-into-tauri-app.sh`), the real iOS app is `gen/apple/`.
+- `packaging/hysteria2-patch/` — Go: forked `apernet/hysteria`
+  (directDomains patch + DNS sniffer for Linux) and the `netunnel`
+  package (gVisor stack + hysteria2 relay, gomobile-bound into
+  `GoNetunnel.xcframework` for macOS/iOS via
+  `macos-ext/build-go-framework.sh`).
 
-**Platform split is real, not cosmetic:** `engine/linux.rs` and
-`engine/macos.rs` implement the same public API
-(`spawn_client`/`kill_client`/`enable_killswitch`/...) with completely
-different mechanisms (pkexec+nftables vs NetworkExtension) — `engine.rs`
-re-exports whichever matches `target_os` via `#[cfg]`. Don't unify them
-into shared abstractions just for symmetry; the platforms are genuinely
-different here.
+**Platform split is real, not cosmetic:** `engine/linux/` and
+`engine/macos/` implement the same public API
+(`spawn_client`/`kill_client`/`enable_killswitch`/`get_traffic_totals`/...)
+with completely different mechanisms (pkexec sidecar + nftables vs
+NetworkExtension via `objc2-network-extension`) — `engine.rs` re-exports
+whichever matches `target_os` via `#[cfg]`. iOS uses the **same**
+`engine::macos` module — NE-related cfgs are
+`any(target_os = "macos", target_os = "ios")`. Don't unify Linux and NE
+into shared abstractions just for symmetry. Platform config overrides:
+`tauri.macos.conf.json` / `tauri.ios.conf.json` (drop the Linux
+`vroxcore` sidecar from the bundle).
+
+**iOS memory budget is a hard constraint.** The NE extension is killed by
+jetsam at ~50 MB (`phys_footprint`). Any change in `netunnel/*.go` or
+`PacketTunnelProvider.swift` on the packet hot path must not add
+per-packet allocations; relay limits (idle timeout / max TCP / max UDP)
+and QUIC receive windows were tuned on-device — don't raise them without
+a live test. The Stats screen shows the memory breakdown for this.
 
 **Doc-comments carry history, not just behavior.** This codebase has
 repeatedly hit subtle platform bugs (entitlement conflicts, signature
-quirks, race conditions) that took real debugging to find. When you fix
-one, write the *why* (what failed, how it was diagnosed) in a comment
-at the fix site, in Russian, matching the existing style — not just
-*what* the code does. Future debugging sessions rely on this.
+quirks, race conditions, memory leaks) that took real debugging to find.
+When you fix one, write the *why* (what failed, how it was diagnosed) in
+a comment at the fix site, in Russian, matching the existing style — not
+just *what* the code does. Future debugging sessions rely on this.
+Architecture decisions go into `docs/ARCHITECTURE.md` (journal-style,
+newest sections at the end; overview at the top).
 
 **Commands:**
 - Linux build: `cd app && pnpm tauri build`
 - macOS local build (DMG, not for distribution): `./macos-ext/build-release.sh`
 - macOS TestFlight build: `./macos-ext/build-testflight.sh`
+- Go framework only (macOS + iOS slices): `./macos-ext/build-go-framework.sh`
+- iOS debug on a cable-connected iPhone: `./app/src-tauri/gen/apple/dev-install.sh <device-id>`
+- iOS TestFlight build: `./macos-ext/build-testflight-ios.sh` (Tauri
+  archive with build number from `git rev-list --count` → manual export
+  via `gen/apple/ExportOptionsManual.plist`; Tauri's own `--export-method`
+  ignores manual signing and fails). NE does not work in the iOS
+  Simulator — test on a real device.
 - Typecheck frontend: `cd app && npx tsc --noEmit -p .`
+- Lint frontend: `cd app && pnpm lint`
 - Rust compile check: `cd app/src-tauri && cargo build --no-default-features`
+  (iOS: add `--target aarch64-apple-ios`)
+- Go: `go vet` inside the prepared tree after `packaging/hysteria2-patch/build.sh`
 
 **Distribution/updates:** Linux ships `.deb`, self-updates via
-`version.json` in this repo + a privileged helper script. macOS ships
-via **TestFlight only** (no App Store, no custom updater) — see
-`docs/ARCHITECTURE.md`.
+`version.json` in this repo + a privileged helper script. macOS and iOS
+ship via **TestFlight only** (internal testing, no App Store review, no
+custom updater) — see `docs/ARCHITECTURE.md`. Version lives in
+`tauri.conf.json`, `app/package.json`, `version.json` and
+`gen/apple/project.yml` (`CFBundleVersion`) — keep them in sync.

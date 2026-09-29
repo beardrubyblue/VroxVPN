@@ -1,10 +1,107 @@
-# Архитектура переезда на Tauri (ветка tauri-rewrite)
+# Архитектура vrox.vpn
 
-Цель: один UI-кодбейс (Tauri 2 = Rust-backend + веб-фронтенд) на Linux,
-Windows, macOS, Android, iOS вместо текущего GTK4/libadwaita-приложения
-(оно остаётся в ветке `main`, не трогаем).
+Документ из двух частей. **Сначала — обзор текущего состояния** (что где
+лежит и как работает сейчас). **Дальше — журнал решений** в
+хронологическом порядке: почему сделано именно так, какие баги нашли и
+как их диагностировали. Журнал не переписывается задним числом — ранние
+разделы описывают план/состояние на момент написания и местами устарели
+(это отмечено); актуальная картина — в обзоре.
 
-## Три слоя
+## Обзор: текущее состояние
+
+Один UI-кодбейс (Tauri 2: Rust + React 19) на трёх платформах. Старое
+GTK4/libadwaita-приложение на Python и ветка `tauri-rewrite` — история,
+всё живёт в `main`.
+
+| | Linux | macOS | iOS |
+|---|---|---|---|
+| Тоннель | sidecar `vroxcore` (форк hysteria2), TUN `tun-vroxory` | `NEPacketTunnelProvider` + Go `netunnel` (gomobile) | то же, что macOS |
+| Управление из Rust | `engine/linux/` — `pkexec` + `privileged_helper.sh` | `engine/macos/` — `NETunnelProviderManager` через `objc2-network-extension` | тот же `engine/macos/` |
+| Kill switch | nftables | `includeAllNetworks` | `includeAllNetworks` |
+| RU-bypass | geoip в `ipv4Exclude` + directDomains (DNS-сниффер) | geoip в `excludedRoutes`, доменов нет | как macOS |
+| Статистика/память | `/proc/net/dev`, RSS через helper | `sendProviderMessage` → `GetStats` из Go + `phys_footprint` | как macOS |
+| Дистрибуция | `.deb` + самообновление (`version.json`) | TestFlight | TestFlight |
+
+### Слои
+
+1. **Go-ядро** (`packaging/hysteria2-patch/`). `build.sh` клонирует
+   upstream `apernet/hysteria`, накладывает патч directDomains и
+   копирует наши файлы. Из этого дерева собираются:
+   - `vroxcore` — CLI-клиент для Linux (linux-amd64/arm64), кладётся в
+     `app/src-tauri/binaries/` (не коммитится);
+   - `netunnel` — пакет для NE-расширения: виртуальный TUN без fd,
+     настоящий gVisor-стек, relay TCP/UDP через `hysteria/core/client`,
+     лимиты relay-соединений, эвикшен при нехватке памяти (iOS),
+     периодический и вызванный ошибками QUIC-реконнект. Биндится через
+     `gomobile bind` в `macos-ext/Frameworks/GoNetunnel.xcframework`
+     (`macos-ext/build-go-framework.sh`, слайсы macOS + iOS).
+2. **NE-расширение** (`macos-ext/VroxTunnelExtension/PacketTunnelProvider.swift`)
+   — ОДИН Swift-файл на macOS и iOS, без платформенных веток
+   (`excludeAPNs`/`excludeLocalNetworks`/… выставляет Rust на
+   `NEVPNProtocol`, не расширение).
+   Качает пакеты `packetFlow` ↔ Go, применяет `excludedRoutes`, отвечает
+   на `handleAppMessage` (трафик + разбивка памяти), на `wake()` форсит
+   реконнект.
+3. **Rust-бэкенд** (`app/src-tauri/src/`) — control-plane: подписки
+   (`subscription.rs`), генерация конфига (`config_gen.rs`: YAML для
+   Linux, JSON `providerConfiguration` + `excludedRoutes` для NE),
+   настройки (`settings.rs`, с `migrate()` для смены дефолтов у
+   установленных пользователей), geoip/geosite, пинг, трей (только
+   desktop), самообновление (только Linux). `engine.rs` через `#[cfg]`
+   ре-экспортирует `engine::linux` либо `engine::macos` (последний — для
+   `any(target_os = "macos", target_os = "ios")`). Все команды для
+   фронтенда — в `commands.rs`.
+4. **Фронтенд** (`app/src/`) — `App.tsx` собирает четыре экрана
+   (`components/screens/`: Shield / Nodes / Stats / Settings) с нижним
+   Dock (`ViewSwitcher.tsx`), логика в `hooks/`, дизайн по макету Claude
+   Design (секция 03 — Dock), шрифты свои (`fonts.css`).
+
+### Где что собирается
+
+- **Linux**: `cd app && pnpm tauri build` → `.deb`.
+- **macOS**: `macos-ext/project.yml` (xcodegen) собирает `.appex`,
+  `embed-into-tauri-app.sh` встраивает его в Tauri `.app` и
+  переподписывает. `build-release.sh` — DMG для локального теста,
+  `build-testflight.sh` — `.pkg` для App Store Connect.
+  `tauri.macos.conf.json` убирает `vroxcore` из бандла.
+- **iOS**: Tauri mobile, проект в `app/src-tauri/gen/apple/`
+  (коммитится). Его `project.yml` добавляет таргет
+  `VroxTunnelExtension` на тот же `PacketTunnelProvider.swift` +
+  iOS-слайс фреймворка. `tauri.ios.conf.json` убирает `vroxcore`.
+  Подробности и грабли — раздел «iOS: настоящее Tauri-приложение» в
+  конце журнала.
+  Сборка для TestFlight — `macos-ext/build-testflight-ios.sh`.
+- `macos-ext/VroxVPNHost` и `macos-ext/VroxVPNHost-iOS` — голые
+  тест-харнессы со спайка NE (кнопки Connect/Disconnect с тестовым
+  конфигом), не продукт.
+
+### Известные открытые вопросы
+
+- RU-bypass по доменам (directDomains) на NE не реализован — только
+  geoip-диапазоны (см. «Фаза 3» в журнале).
+- `ping.rs` спавнит системный `ping` — в песочнице iOS, скорее всего, не
+  работает.
+- `privileged_helper.sh` (Linux-only) попадает в macOS/iOS-бандлы —
+  Tauri копирует `bundle.resources` без фильтра по платформе.
+- Исходящая очередь gVisor `channel.Endpoint` молча роняет пакеты при
+  переполнении (см. «Код-ревью … три реальные находки»).
+
+---
+
+# Журнал решений
+
+> Разделы ниже написаны по ходу работы. Упоминания `engine/linux.rs` /
+> `engine/macos.rs` — сейчас это папки `engine/linux/` и
+> `engine/macos/`; «ветка `main` с Python-версией» — старое приложение,
+> больше не поддерживается; `App.tsx` с тех пор разбит на экраны и хуки.
+
+## Исходный план (устарел — см. обзор выше)
+
+Цель на старте: один UI-кодбейс (Tauri 2 = Rust-backend + веб-фронтенд)
+на Linux, Windows, macOS, Android, iOS вместо GTK4/libadwaita-приложения.
+Windows и Android пока не начаты.
+
+### Три слоя (исходный план)
 
 1. **vroxcore (Go)** — протокольное ядро hysteria2 + TUN-обработка +
    directDomains-bypass. Источник: наш форк apernet/hysteria,
@@ -48,20 +145,20 @@ Windows, macOS, Android, iOS вместо текущего GTK4/libadwaita-пр�
    commands.rs`) через `invoke()` — это только control-plane
    (старт/стоп/статус), не сам трафик.
 
-## Что НЕ становится общим из-за выбора Tauri
+### Что НЕ становится общим из-за выбора Tauri
 
 Kill switch, DNS-защита, эскалация привилегий и мобильная VPN-обвязка
 (VpnService/NetworkExtension) платформо-специфичны независимо от UI-
 фреймворка — это требование самой ОС. Общий UI закрывает только слой 3.
 
-## Порядок платформ
+### Порядок платформ (исходный план; фактически: Linux → macOS → iOS)
 
 Linux (этот скаффолд) → Windows → Android (первая платформа с настоящим
 нативным VPN-плагином) → macOS → iOS (сложнее и менее обкатано — у Tauri
 нет известного прецедента VPN-клиента на mobile, в отличие от Flutter/
 Hiddify).
 
-## Текущий статус скаффолда
+## Linux: статус скаффолда (на момент написания)
 
 - `app/` — создан через `create-tauri-app` (React + TypeScript + pnpm),
   productName/identifier/version подогнаны под проект.
@@ -145,7 +242,7 @@ Hiddify).
   подходит — он сам спавнит процесс, а нам нужно сначала обернуть его
   в `pkexec`.
 
-## Следующие шаги (не сделаны)
+### Следующие шаги скаффолда (Windows не начат)
 
 1. Windows — новый слой платформенной интеграции (sidecar остаётся, но
    привилегии через UAC вместо pkexec, kill switch через WFP вместо
@@ -856,3 +953,165 @@ PKI/хостинг обновлений параллельно с TestFlight —
 `macos-ext/build-release.sh` (DMG) остался для быстрого локального
 теста без полного TestFlight-цикла — `macos-ext/build-testflight.sh`
 делает то же самое плюс Distribution-подпись и `.pkg`-упаковку.
+
+## iOS: настоящее Tauri-приложение вместо SwiftUI-харнесса (июнь 2026)
+
+Сначала считали, что у Tauri нет iOS-таргета, и добавили в `macos-ext/`
+SwiftUI-хост `VroxVPNHost-iOS` (две кнопки, тестовый конфиг) — это
+неверно: у Tauri v2 есть штатный `tauri ios init/build`. Настоящее
+iOS-приложение — тот же React UI и тот же Rust, проект в
+`app/src-tauri/gen/apple/`. Харнесс остался как артефакт спайка.
+
+**Что понадобилось, чтобы собралось** (все грабли найдены прогоном
+реальной сборки/экспорта/загрузки):
+
+1. `tauri.ios.conf.json` с `externalBin: []` — Linux-sidecar не должен
+   попадать в бандл (как `tauri.macos.conf.json`).
+2. Трей и `tauri-plugin-single-instance` — desktop-only: `tray.rs`
+   разбит на реальную desktop-реализацию и no-op-обёртки той же
+   сигнатуры, плагин подключается под `cfg(desktop)`.
+3. Все NE-развилки в Rust — `any(target_os = "macos", target_os = "ios")`:
+   API `NETunnelProviderManager` одинаковый, модуль `engine::macos` один.
+4. `gen/apple/project.yml`: таргет `VroxTunnelExtension` (тот же
+   `PacketTunnelProvider.swift` + iOS-слайс `GoNetunnel.xcframework`),
+   линковка `NetworkExtension.framework`, entitlement
+   `com.apple.developer.networking.networkextension`. `tauri ios build`
+   НЕ перегенерирует `.xcodeproj` — после правок `project.yml` нужен
+   `xcodegen generate` внутри `gen/apple/`.
+5. Ключи xcodegen `info:`/`entitlements:` генерируют файл с нуля и
+   затирают `NSExtension`-блок и NE-entitlement — заменены на
+   `INFOPLIST_FILE`/`CODE_SIGN_ENTITLEMENTS` (просто путь).
+6. `Externals/` (там `libapp.a`) была в `sources:` без `buildPhase` —
+   xcodegen копировал `.a` в `.app`, App Store Connect отклонял (90171).
+   Фикс: `buildPhase: none`; `.ipa` 55МБ → 14МБ.
+7. Подпись: Release — Manual + Apple Distribution + профили
+   «vrox.vpn iOS App Store» / «vrox.vpn tunnel iOS App Store» (Automatic
+   переключается на Distribution только при archive-action в Xcode).
+   Debug — Automatic (добавлять тестовые устройства без ручных
+   профилей).
+8. `tauri ios build --export-method app-store-connect` генерирует
+   ExportOptions с Automatic-подписью и игнорирует Manual-конфиг —
+   падает на «requires a provisioning profile with the Network
+   Extensions feature». Обход: собрать архив через `tauri ios build`, а
+   экспортировать вручную: `xcodebuild -exportArchive` с
+   `gen/apple/ExportOptionsManual.plist`. `tauri ios dev` сломан тем же
+   образом — для итераций по кабелю есть `gen/apple/dev-install.sh`
+   (debug-архив → экспорт с `ExportOptionsDev.plist` → `devicectl
+   install/launch`).
+9. App-иконки из `tauri icon` содержат альфа-канал — App Store Connect
+   их отклоняет; альфа расплавлена на чёрный фон.
+10. `excludeAPNs`/`excludeCellularServices` требуют iOS 16.4 / macOS
+    13.3 — это свойства `NEVPNProtocol` (выставляются в
+    `engine/macos/connect/mod.rs`), не `NEPacketTunnelNetworkSettings`.
+    Deployment target поднят до 16.4 / 13.3.
+11. `CFBundleVersion` расширения — `$(CURRENT_PROJECT_VERSION)`; дважды
+    перезатирался хардкодом. Причина найдена позже: `tauri ios build
+    --build-number` вызывает `agvtool new-version -all`, который
+    переписывает версию во всех Info.plist и pbxproj.
+    `build-testflight-ios.sh` бэкапит эти файлы и восстанавливает после
+    сборки.
+12. `macos-ext/build-testflight-ios.sh` изначально собирал SwiftUI-харнесс
+    (тот же bundle id — App Store Connect принял бы заглушку вместо
+    приложения). Переписан на Tauri: `tauri ios build --archive-only
+    --build-number <git rev-list --count>` → `xcodebuild -exportArchive`
+    с `ExportOptionsManual.plist` → проверка, что `CFBundleVersion`
+    приложения и расширения совпадают.
+
+NE не работает в iOS Simulator — тоннель проверяется только на
+физическом устройстве.
+
+## iOS: бюджет памяти NE-расширения (~50МБ) — что сделано
+
+Главная проблема iOS — jetsam убивает расширение при превышении лимита
+памяти. Метрика, по которой решает ОС, — `task_vm_info.phys_footprint`,
+не `resident_size` (Go на Darwin отдаёт память через `MADV_FREE`, RSS
+её ещё показывает). Индикатор в UI переведён на `phys_footprint`, а на
+экран Stats выведена полная разбивка из `GetStats` (Go-куча, горутины,
+число TCP/UDP relay, свободная память по `os_proc_available_memory`) —
+без неё утечки ловились гаданием.
+
+Что реально помогло, в порядке важности:
+
+1. **`autoreleasepool` на каждую итерацию `pumpOutbound`.** Go-куча
+   была 1.8МБ, relay — 0/0, а footprint рос до 50МБ: бесконечный цикл
+   на dispatch-потоке без run loop копил autoreleased `Data`/`NSNumber`
+   от каждого пакета в недренируемом пуле.
+2. **Idle-таймаут на TCP relay** (раньше был только на UDP) — браузер
+   держит keep-alive соединения после загрузки страницы; relay на них
+   жили до конца сессии.
+3. **Раздельные лимиты relay** (TCP/UDP) и idle timeout, настраиваемые
+   из Settings. Дефолты Happ (300с/256/128) копили сотни соединений при
+   листании Reels — kill за ~7 минут. Текущие дефолты 30с/64/32;
+   `settings.rs::migrate()` обновляет у пользователей ровно-старые
+   значения.
+4. **Эвикшен самого старого соединения**, если
+   `os_proc_available_memory() < 5МиБ` (первый cgo-вызов в `netunnel`;
+   функция линкуется только на iOS — `memory_ios.go` + заглушка для
+   macOS).
+5. **Буферы:** `io.CopyBuffer` с пулом 4КБ вместо `io.Copy` 32КБ, пул
+   для UDP-буфера, без лишней копии каждого входящего пакета, gVisor TCP
+   buffer 256КБ → 64КБ, `GOMAXPROCS(1)`, `debug.SetMemoryLimit(30МиБ)`.
+6. **QUIC receive windows** — окна растут под throughput и не сжимаются
+   до конца соединения, а QUIC-соединение одно на весь тоннель. Прошли
+   несколько итераций на живом тесте с видео; компромисс скорость/память
+   зафиксирован в `netunnel.go`.
+7. **Периодический QUIC-реконнект** (раз в 3 мин и при запасе < 15МБ) —
+   сбрасывает накопленное состояние quic-go.
+
+Системный трафик (push других приложений, LAN, сотовые сервисы) выведен
+из тоннеля: `excludeAPNs`/`excludeLocalNetworks`/`excludeCellularServices`
++ `excludedRoutes` (раньше Rust их считал, а Swift не применял — висел
+TODO).
+
+## iOS: восстановление тоннеля после сна устройства
+
+При блокировке экрана iOS замораживает расширение, UDP NAT-маппинг
+истекает (~30–120с), QUIC-соединение умирает, и пользователь видел
+«интернет пропал после блокировки» до ручного переподключения. Два
+независимых механизма:
+
+- `wake()` в `PacketTunnelProvider` — форсирует реконнект при
+  пробуждении;
+- `noteDialResult` в `netunnel` — 3 подряд неудачных дозвона
+  `hyClient.TCP/UDP()` запускают реконнект сами (`wake()` не
+  гарантирован для always-on VPN).
+
+`maybeReconnect` дедуплицирует одновременные триггеры (forwarder-горутины,
+тикеры, `wake`).
+
+## Обновление ядра hysteria2: v2.9.2 → v2.12.3 (сентябрь 2026)
+
+`packaging/hysteria2-patch/build.sh` → `UPSTREAM_TAG="app/v2.12.3"`. LTS-веток
+у apernet/hysteria нет — берём последний стабильный `app/v*` тег.
+
+- **Наш патч directDomains** (`direct-domains.patch` на `app/cmd/client.go`
+  и `app/internal/tun/server.go`) лёг без конфликтов; `directmatch*`/
+  `dnssniff_*` и `netunnel` компилируются без правок. Проверено: `go vet`
+  `netunnel` + `internal/tun` (darwin и linux), `vroxcore` linux-amd64/
+  arm64, `gomobile bind` ios+macos, `xcodebuild` расширения под macOS и iOS.
+- **Убран пин `miekg/dns@v1.1.59`.** На v2.9.2 апстрим этот пакет не тянул;
+  с v2.11 он сам зависит от v1.1.72 (обновлённый ACME-стек), и наш старый
+  пин откатывал certmagic 0.25→0.21 и acmez.
+- **Что даёт обновление клиенту:** маскировка QUIC-рукопожатия под Chrome
+  (2.11, включена по умолчанию и в `vroxcore`, и в `netunnel` — поле
+  `DisableChromeParrot` не выставляем), фикс паники BBR на малом MTU (2.12.0),
+  quic-go 0.62. В 2.12.1 **сервер** шлёт QUIC stateless reset — клиент со
+  «протухшим» соединением после сна переподключается сразу; работает, только
+  когда сервер тоже ≥ 2.12.1, и дополняет наш `wake()`/`noteDialResult`.
+- **Попутно найдено:** `gomobile bind` без `-macosversion` собирает Go-часть
+  под версию macOS машины сборки (на macOS 27 — «built for newer macOS
+  version (27.0) than being linked (13.3)»). `build-go-framework.sh` теперь
+  явно передаёт `-macosversion 13.3 -iosversion 16.4` (= deployment targets).
+- `bump.sh` падал на macOS: BSD sed не принимает голый `sed -i` — заменено
+  на `sed -i.bak` + удаление бэкапа.
+
+### Перегенерация iOS-проекта после перехода на Xcode 27
+
+Закоммиченный `gen/apple/app.xcodeproj` разошёлся с `project.yml`: после
+подъёма deploymentTarget до 16.4 `xcodegen generate` не запускали, и у
+`app_iOS` осталось `IPHONEOS_DEPLOYMENT_TARGET = 14.0`. Старый Xcode это
+терпел, Xcode 27 — нет («supported range is 15.0 to 27.0»). Проект
+перегенерирован. Попутно: Automatic-подпись Debug (bb50f10) была сделана
+правкой прямо в pbxproj и откатывалась при каждой регенерации —
+перенесена в `project.yml`. Правило: **любые правки проекта — только в
+`project.yml`, затем `xcodegen generate` внутри `gen/apple/`**.
