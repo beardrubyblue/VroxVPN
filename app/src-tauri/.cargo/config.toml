@@ -1,0 +1,12 @@
+# macOS: не стрипать Rust-бинарники. `strip` из Xcode 27 портит Mach-O —
+# dyld отказывается загружать с «mis-aligned LINKEDIT string pool»:
+# сначала сломались proc-macro (.dylib, rustc: «can't find crate for
+# foreign_types_macros», E0463), затем и сам исполняемый файл приложения
+# (`xcrun dyld_info` на Contents/MacOS/app — тот же отказ; такой .app упал
+# бы при запуске). profile.release.strip = true не трогаем — Linux
+# (.deb) стрипается как раньше; iOS отдаёт staticlib, его strip не
+# касается (проверено dyld_info на .ipa). `-C strip=none` в rustflags
+# идёт после профильного `-C strip=symbols` и перекрывает его.
+# Убрать, когда Apple починит strip.
+[target.'cfg(target_os = "macos")']
+rustflags = ["-C", "strip=none"]

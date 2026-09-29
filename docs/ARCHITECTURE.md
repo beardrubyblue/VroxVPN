@@ -1152,3 +1152,15 @@ Swift-часть Tauri (`tauri/mobile/ios-api`) собирается через 
 `memory_other.go`) включает runtime-тюнинг и фоновые механизмы только на
 iOS; Rust на macOS передаёт `RelayLimits::MACOS` (300с / 2048 / 2048)
 вместо значений из настроек. На iOS поведение не изменилось.
+
+### macOS-сборка на Xcode 27: strip портит Mach-O
+
+`strip` из Xcode 27 ломает Rust-бинарники: dyld отказывается их грузить
+с «mis-aligned LINKEDIT string pool». Сначала падала компиляция
+(proc-macro `foreign-types-macros` → «can't find crate», E0463), а после
+обхода — оказался испорчен и сам `Contents/MacOS/app` (поймано
+`xcrun dyld_info` до загрузки в TestFlight; такой .app упал бы при
+запуске). Фикс: `app/src-tauri/.cargo/config.toml` — `-C strip=none`
+только для `target_os = "macos"`. Linux стрипается как раньше, iOS
+(staticlib) не затронут. Перед загрузкой macOS-сборки проверять
+`xcrun dyld_info -platform <.app>/Contents/MacOS/app`.
