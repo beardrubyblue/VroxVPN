@@ -1,222 +1,91 @@
-import { useMemo, useState } from "react";
-import { Ic } from "@/design/icons";
-import { FlagDot } from "@/design/brand";
-import { countryCodeFromName } from "@/design/country";
-import type { PingResult, Server } from "@/types";
+import { useState } from "react";
+import { AddSubscriptionSheet } from "@/components/AddSubscriptionSheet";
+import { NodesFilters, NodesHeader, NodesTabEnum, SubscriptionGroup, filterNodes } from "@/components/nodes";
+import { SubscriptionSheet } from "@/components/subscription-sheet";
+import { useAddSubscription, useSubscriptionActions } from "@/hooks";
+import type { useConnection, useSubscriptions } from "@/hooks";
+import type { Server } from "@/types";
+
+type TPushToast = (text: string, kind?: "error" | "info") => void;
 
 interface NodesScreenProps {
-  servers: Server[];
-  pings: Record<string, PingResult>;
-  activeName: string | undefined;
+  subs: ReturnType<typeof useSubscriptions>;
+  connection: ReturnType<typeof useConnection>;
+  pushToast: TPushToast;
   onPick: (server: Server) => void;
   onBack: () => void;
-  onAdd: () => void;
-  onPaste: () => void;
 }
 
-// ScreenLocations (порт из дизайна) — список нод с поиском и фильтрами.
-// Вшит в реальные подписки: servers — это плоский список всех серверов
-// со всех подписок, pings — объединённая карта результатов пинга.
-export function NodesScreen({ servers, pings, activeName, onPick, onBack, onAdd, onPaste }: NodesScreenProps) {
+// Список нод, сгруппированный по подпискам: у каждой группы — обновление
+// и меню (переименовать / скопировать ссылку / удалить). Раньше (после
+// редизайна bf782fe) все подписки склеивались в один плоский список.
+export function NodesScreen({ subs, connection, pushToast, onPick, onBack }: NodesScreenProps) {
   const [query, setQuery] = useState("");
-  const [tab, setTab] = useState<"all" | "fast">("all");
+  const [tab, setTab] = useState<NodesTabEnum>(NodesTabEnum.All);
+  const [collapsed, setCollapsed] = useState<ReadonlySet<string>>(new Set());
+  const add = useAddSubscription(subs, pushToast);
+  const actions = useSubscriptionActions({ subs, connection, pushToast });
 
-  const list = useMemo(() => {
-    let r = servers.filter((s) => (query ? s.name.toLowerCase().includes(query.toLowerCase()) : true));
-    if (tab === "fast") {
-      r = [...r].sort((a, b) => {
-        const pa = pings[a.name]?.latency_ms ?? Infinity;
-        const pb = pings[b.name]?.latency_ms ?? Infinity;
-        return pa - pb;
-      });
-    }
-    return r;
-  }, [servers, query, tab, pings]);
+  const isSearching = query.trim() !== "";
+  const groups = subs.subscriptions
+    .map((subscription) => ({ subscription, servers: filterNodes(subscription.servers, subscription.pings, query, tab) }))
+    .filter((group) => !isSearching || group.servers.length > 0);
+  const nodeCount = subs.subscriptions.reduce((sum, subscription) => sum + subscription.servers.length, 0);
+
+  function toggleGroup(url: string) {
+    setCollapsed((prev) => {
+      const next = new Set(prev);
+      if (next.has(url)) next.delete(url);
+      else next.add(url);
+      return next;
+    });
+  }
 
   return (
     <div className="vrox-screen">
-      <div style={{ padding: "60px 20px 16px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-        <button onClick={onBack} className="btn-ghost" style={{ padding: 0 }}>
-          ← Back
-        </button>
-        <div className="mono" style={{ fontSize: 11, color: "var(--fg-dim)", letterSpacing: "0.2em" }}>
-          {servers.length} NODES
-        </div>
-      </div>
-      <div style={{ padding: "0 20px" }}>
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-          <h2 className="display" style={{ fontSize: 32, fontWeight: 600, margin: 0, letterSpacing: "-0.02em" }}>
-            Nodes
-          </h2>
-          <div style={{ display: "flex", gap: 8 }}>
-            <button
-              onClick={onPaste}
-              className="mono"
-              style={{
-                height: 36,
-                padding: "0 14px",
-                borderRadius: 999,
-                border: "1px solid var(--line-strong)",
-                background: "transparent",
-                color: "var(--fg)",
-                cursor: "pointer",
-                fontSize: 10,
-                letterSpacing: "0.12em",
-              }}
-            >
-              PASTE
-            </button>
-            <button
-              onClick={onAdd}
-              aria-label="Add subscription"
-              style={{
-                width: 36,
-                height: 36,
-                borderRadius: 999,
-                border: "none",
-                background: "var(--fg)",
-                color: "var(--bg)",
-                cursor: "pointer",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-              }}
-            >
-              <Ic.plus s={18} />
-            </button>
-          </div>
-        </div>
-        <div
-          style={{
-            marginTop: 18,
-            display: "flex",
-            alignItems: "center",
-            gap: 10,
-            background: "var(--bg-elev-1)",
-            border: "1px solid var(--line)",
-            borderRadius: 14,
-            padding: "10px 14px",
-          }}
-        >
-          <div style={{ color: "var(--fg-dim)" }}>
-            <Ic.globe s={16} />
-          </div>
-          <input
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            placeholder="Search city or tag…"
-            style={{
-              flex: 1,
-              background: "transparent",
-              border: "none",
-              outline: "none",
-              color: "var(--fg)",
-              fontSize: 14,
-              fontFamily: "var(--font-ui)",
-            }}
-          />
-        </div>
-        <div style={{ display: "flex", gap: 6, marginTop: 12 }}>
-          {(
-            [
-              ["all", "All"],
-              ["fast", "Fastest"],
-            ] as const
-          ).map(([id, label]) => (
-            <button
-              key={id}
-              onClick={() => setTab(id)}
-              style={{
-                padding: "7px 14px",
-                borderRadius: 999,
-                background: tab === id ? "var(--fg)" : "var(--bg-elev-2)",
-                color: tab === id ? "var(--bg)" : "var(--fg-muted)",
-                border: "1px solid var(--line)",
-                cursor: "pointer",
-                fontSize: 12,
-                fontWeight: 500,
-              }}
-            >
-              {label}
-            </button>
-          ))}
-        </div>
-      </div>
+      <NodesHeader
+        subscriptionCount={subs.subscriptions.length}
+        nodeCount={nodeCount}
+        isRefreshing={subs.subscriptions.some((subscription) => subscription.refreshing)}
+        onBack={onBack}
+        onPaste={add.paste}
+        onRefreshAll={subs.refreshAll}
+        onAdd={add.open}
+      />
+      <NodesFilters query={query} onQueryChange={setQuery} tab={tab} onTabChange={setTab} />
 
-      <div className="scrollable" style={{ flex: 1, padding: "14px 20px 20px" }}>
-        {list.length === 0 && (
-          <div style={{ textAlign: "center", color: "var(--fg-dim)", fontSize: 13, padding: "40px 0" }}>
-            {servers.length === 0 ? "No nodes — add a subscription first" : "Nothing matches your search"}
+      <div className="scrollable nodes-list">
+        {groups.length === 0 && (
+          <div className="nodes-empty">
+            {subs.subscriptions.length === 0 ? "Add a subscription to see your nodes" : "Nothing matches your search"}
           </div>
         )}
-        {list.map((s) => {
-          const ping = pings[s.name];
-          const ms = ping?.latency_ms ?? null;
-          const active = s.name === activeName;
-          // полоски сигнала: меньше пинг → больше полос (нет load в данных)
-          const bars = ms === null ? 0 : ms < 40 ? 5 : ms < 70 ? 4 : ms < 110 ? 3 : ms < 170 ? 2 : 1;
-          return (
-            <button
-              key={s.name}
-              onClick={() => onPick(s)}
-              style={{
-                width: "100%",
-                marginBottom: 8,
-                padding: "14px 14px",
-                display: "flex",
-                alignItems: "center",
-                gap: 12,
-                background: active ? "var(--bg-elev-2)" : "var(--bg-elev-1)",
-                border: `1px solid ${active ? "var(--fg)" : "var(--line)"}`,
-                borderRadius: 16,
-                color: "var(--fg)",
-                cursor: "pointer",
-                textAlign: "left",
-              }}
-            >
-              <FlagDot code={countryCodeFromName(s.name)} size={32} />
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ fontSize: 14, fontWeight: 500, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                  {s.name}
-                </div>
-                <div
-                  className="mono"
-                  style={{
-                    fontSize: 10,
-                    color: "var(--fg-dim)",
-                    marginTop: 3,
-                    letterSpacing: "0.08em",
-                    overflow: "hidden",
-                    textOverflow: "ellipsis",
-                    whiteSpace: "nowrap",
-                  }}
-                >
-                  {s.host}
-                </div>
-              </div>
-              <div style={{ textAlign: "right" }}>
-                <div className="mono" style={{ fontSize: 13 }}>
-                  {ms === null ? "—" : ms}
-                  {ms !== null && <span style={{ fontSize: 10, color: "var(--fg-dim)" }}>ms</span>}
-                </div>
-                <div style={{ display: "flex", gap: 1, marginTop: 4, justifyContent: "flex-end" }}>
-                  {[0, 1, 2, 3, 4].map((i) => (
-                    <div
-                      key={i}
-                      style={{
-                        width: 3,
-                        height: 3 + i * 2,
-                        borderRadius: 1,
-                        background: i < bars ? "var(--fg)" : "var(--line-strong)",
-                      }}
-                    />
-                  ))}
-                </div>
-              </div>
-            </button>
-          );
-        })}
+        {groups.map(({ subscription, servers }) => (
+          <SubscriptionGroup
+            key={subscription.url}
+            subscription={subscription}
+            servers={servers}
+            // во время поиска группы раскрыты — иначе совпадения прятались бы
+            isOpen={isSearching || !collapsed.has(subscription.url)}
+            activeName={connection.selectedServer?.name}
+            onToggle={() => toggleGroup(subscription.url)}
+            onRefresh={() => subs.refresh(subscription.url)}
+            onMenu={() => actions.openMenu(subscription.url)}
+            onPick={onPick}
+          />
+        ))}
       </div>
+
+      <AddSubscriptionSheet
+        open={add.sheet.open}
+        visible={add.sheet.visible}
+        url={add.url}
+        onUrlChange={add.setUrl}
+        error={add.error}
+        onConfirm={add.confirm}
+        onClose={add.sheet.hide}
+      />
+      <SubscriptionSheet actions={actions} />
     </div>
   );
 }

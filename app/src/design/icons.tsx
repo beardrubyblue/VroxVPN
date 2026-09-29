@@ -84,6 +84,22 @@ export const Ic = {
       <path d="M12 3v12M6 11l6 6 6-6M4 20h16" />
     </svg>
   ),
+  more: ({ s, sw }: IconProps = {}) => (
+    <svg {...base(s)} {...stroke} strokeWidth={sw || 2.2}>
+      <path d="M6 12h.01M12 12h.01M18 12h.01" />
+    </svg>
+  ),
+  edit: ({ s, sw }: IconProps = {}) => (
+    <svg {...base(s)} {...stroke} strokeWidth={sw || 1.5}>
+      <path d="M4 20h4L19 9l-4-4L4 16v4zM13 7l4 4" />
+    </svg>
+  ),
+  copy: ({ s, sw }: IconProps = {}) => (
+    <svg {...base(s)} {...stroke} strokeWidth={sw || 1.5}>
+      <rect x="9" y="9" width="11" height="11" rx="2" />
+      <path d="M5 15V6a2 2 0 012-2h9" />
+    </svg>
+  ),
   refresh: ({ s, sw }: IconProps = {}) => (
     <svg {...base(s)} {...stroke} strokeWidth={sw || 1.5}>
       <path d="M3 12a9 9 0 0115-6.7L21 8M21 3v5h-5M21 12a9 9 0 01-15 6.7L3 16M3 21v-5h5" />

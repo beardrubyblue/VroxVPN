@@ -45,6 +45,16 @@ pub struct UserInfo {
     pub fields: HashMap<String, i64>,
 }
 
+/// Ответ `fetch_subscription` фронтенду: серверы + `Subscription-Userinfo`
+/// (upload/download/total/expire). Раньше userinfo парсился и
+/// выбрасывался — теперь он нужен для строки трафика/срока в заголовке
+/// группы подписки на экране Nodes.
+#[derive(Serialize, Clone, Debug)]
+pub struct SubscriptionData {
+    pub servers: Vec<Server>,
+    pub userinfo: UserInfo,
+}
+
 pub async fn fetch_subscription(url: &str, timeout_secs: u64) -> Result<(Vec<Server>, UserInfo), String> {
     let client = reqwest::Client::builder()
         .timeout(std::time::Duration::from_secs(timeout_secs))

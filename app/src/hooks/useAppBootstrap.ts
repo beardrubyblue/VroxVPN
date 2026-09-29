@@ -2,7 +2,7 @@ import { useEffect } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import type { Server, Settings } from "@/types";
 import type { useSettings } from "./useSettings";
-import type { useSubscriptions } from "./useSubscriptions";
+import type { useSubscriptions } from "./subscriptions";
 
 interface UseAppBootstrapArgs {
   settings: ReturnType<typeof useSettings>;
@@ -22,16 +22,9 @@ export function useAppBootstrap({ settings, subs, setSelectedServer }: UseAppBoo
       settings.setIdleTimeoutSeconds(saved.idle_timeout_seconds);
       settings.setMaxTcpConnections(saved.max_tcp_connections);
       settings.setMaxUdpConnections(saved.max_udp_connections);
-      const loaded = await subs.loadFromMetas(saved.subscriptions ?? []);
-      if (saved.last_selected_server) {
-        for (const sub of loaded) {
-          const found = sub.servers.find((s) => s.name === saved.last_selected_server);
-          if (found) {
-            setSelectedServer(found);
-            break;
-          }
-        }
-      }
+      const servers = await subs.loadFromMetas(saved.subscriptions ?? []);
+      const lastSelected = servers.find((server) => server.name === saved.last_selected_server);
+      if (lastSelected) setSelectedServer(lastSelected);
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);

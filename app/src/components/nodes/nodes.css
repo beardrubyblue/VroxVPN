@@ -1,0 +1,81 @@
+/* Экран Nodes: шапка, фильтры, группы подписок, строки серверов. */
+.nodes-top { padding: 60px 20px 16px; display: flex; justify-content: space-between; align-items: center; }
+.nodes-counter { font-size: 11px; color: var(--fg-dim); letter-spacing: 0.2em; }
+.nodes-head { padding: 0 20px; }
+.nodes-title-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.nodes-title { font-size: 32px; font-weight: 600; margin: 0; letter-spacing: -0.02em; }
+.nodes-actions { display: flex; gap: 8px; }
+
+.pill-btn {
+  height: 36px; padding: 0 14px; border-radius: 999px; border: 1px solid var(--line-strong);
+  background: transparent; color: var(--fg); cursor: pointer; font-size: 10px; letter-spacing: 0.12em;
+}
+.round-btn {
+  width: 36px; height: 36px; flex: none; border-radius: 999px; border: 1px solid var(--line-strong);
+  background: transparent; color: var(--fg); cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+}
+.round-btn.small { width: 32px; height: 32px; }
+.round-btn.solid { border: none; background: var(--fg); color: var(--bg); }
+.round-btn:disabled { cursor: default; }
+.pill-btn:focus-visible, .round-btn:focus-visible, .node-row:focus-visible, .group-toggle:focus-visible {
+  outline: 2px solid var(--fg); outline-offset: 2px;
+}
+.icon { display: flex; }
+.spin { animation: nodes-spin 0.9s linear infinite; }
+@keyframes nodes-spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .spin { animation: none; opacity: 0.5; } }
+
+.nodes-search {
+  margin-top: 18px; display: flex; align-items: center; gap: 10px; background: var(--bg-elev-1);
+  border: 1px solid var(--line); border-radius: 14px; padding: 10px 14px; color: var(--fg-dim);
+}
+.nodes-search input {
+  flex: 1; background: transparent; border: none; outline: none; color: var(--fg);
+  font-size: 15px; font-family: var(--font-ui);
+}
+.nodes-tabs { display: flex; gap: 6px; margin-top: 12px; }
+.nodes-tab {
+  padding: 8px 16px; border-radius: 999px; background: var(--bg-elev-2); color: var(--fg-muted);
+  border: 1px solid var(--line); cursor: pointer; font-size: 13px; font-weight: 500;
+}
+.nodes-tab.active { background: var(--fg); color: var(--bg); }
+
+.nodes-list { flex: 1; padding: 4px 20px 20px; }
+.nodes-empty { text-align: center; color: var(--fg-dim); font-size: 14px; padding: 40px 0; }
+
+.group { margin-top: 20px; }
+.group-head { display: flex; align-items: center; gap: 8px; }
+.group-toggle {
+  flex: 1; min-width: 0; display: flex; align-items: flex-start; gap: 8px; padding: 4px 0;
+  background: transparent; border: none; color: var(--fg); cursor: pointer; text-align: left;
+}
+.group-chevron { color: var(--fg-dim); margin-top: 1px; transition: transform 0.2s; display: flex; }
+.group-chevron.open { transform: rotate(90deg); }
+.group-info { display: block; flex: 1; min-width: 0; }
+.group-title { display: block; font-size: 13px; font-weight: 600; letter-spacing: 0.14em; text-transform: uppercase; }
+.group-meta {
+  display: block; font-size: 11px; color: var(--fg-dim); margin-top: 4px; letter-spacing: 0.08em;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.group-meta.error { color: var(--danger); }
+.group-quota { display: block; height: 4px; max-width: 160px; margin-top: 8px; border-radius: 2px; background: var(--line); overflow: hidden; }
+.group-quota > span { display: block; height: 100%; border-radius: 2px; background: var(--fg); }
+
+.node-row {
+  width: 100%; margin-top: 8px; padding: 14px; display: flex; align-items: center; gap: 12px;
+  background: var(--bg-elev-1); border: 1px solid var(--line); border-radius: 16px;
+  color: var(--fg); cursor: pointer; text-align: left;
+}
+.node-row.active { background: var(--bg-elev-2); border-color: var(--fg); }
+.node-body { flex: 1; min-width: 0; }
+.node-name { font-size: 15px; font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.node-host {
+  font-size: 11px; color: var(--fg-dim); margin-top: 4px; letter-spacing: 0.08em;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.node-ping { text-align: right; font-size: 13px; }
+.node-ping small { font-size: 11px; color: var(--fg-dim); }
+.node-bars { display: flex; gap: 1px; margin-top: 4px; justify-content: flex-end; align-items: flex-end; }
+.node-bars > div { width: 3px; border-radius: 1px; background: var(--line-strong); }
+.node-bars > div.on { background: var(--fg); }

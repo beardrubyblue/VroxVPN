@@ -54,9 +54,26 @@ export interface SubscriptionMeta {
   name: string;
 }
 
+// Subscription-Userinfo от сервера подписки (байты и unix-время в
+// секундах); 0 — поле не прислано.
+export interface SubscriptionUsage {
+  upload: number;
+  download: number;
+  total: number;
+  expire: number;
+}
+
+// Ответ Rust-команды fetch_subscription (subscription.rs::SubscriptionData).
+export interface SubscriptionData {
+  servers: Server[];
+  userinfo: { fields: Record<string, number> };
+}
+
 export interface Subscription extends SubscriptionMeta {
   servers: Server[];
   pings: Record<string, PingResult>;
+  usage: SubscriptionUsage | null;
+  updatedAt: number | null;
   pinging: boolean;
   refreshing: boolean;
   error: string;

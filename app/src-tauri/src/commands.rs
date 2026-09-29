@@ -33,9 +33,9 @@ pub fn get_status(state: State<EngineState>) -> ConnectionStatus {
 }
 
 #[tauri::command]
-pub async fn fetch_servers(url: String) -> Result<Vec<Server>, String> {
-    let (servers, _userinfo) = subscription::fetch_subscription(&url, 15).await?;
-    Ok(servers)
+pub async fn fetch_subscription(url: String) -> Result<subscription::SubscriptionData, String> {
+    let (servers, userinfo) = subscription::fetch_subscription(&url, 15).await?;
+    Ok(subscription::SubscriptionData { servers, userinfo })
 }
 
 #[tauri::command]

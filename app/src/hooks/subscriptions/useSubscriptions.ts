@@ -1,86 +1,115 @@
 import { useEffect, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { subscriptionNameFromUrl } from "@/utils/format";
-import type { PingResult, Server, Subscription, SubscriptionMeta } from "@/types";
+import { usageFromUserInfo } from "@/utils/subscription-format";
+import type { PingResult, Server, Subscription, SubscriptionData, SubscriptionMeta } from "@/types";
 
-async function fetchAndStoreServers(meta: SubscriptionMeta): Promise<Subscription> {
-  try {
-    const servers = await invoke<Server[]>("fetch_servers", { url: meta.url });
-    return { ...meta, servers, pings: {}, pinging: false, refreshing: false, error: "" };
-  } catch (err) {
-    return { ...meta, servers: [], pings: {}, pinging: false, refreshing: false, error: String(err) };
-  }
+type TPushToast = (text: string, kind?: "error" | "info") => void;
+
+function emptySubscription(meta: SubscriptionMeta): Subscription {
+  return { ...meta, servers: [], pings: {}, usage: null, updatedAt: null, pinging: false, refreshing: true, error: "" };
 }
 
-async function persistSubscriptionMetas(subs: Subscription[]) {
-  const metas: SubscriptionMeta[] = subs.map((s) => ({ url: s.url, name: s.name }));
+async function fetchSubscription(url: string) {
+  const data = await invoke<SubscriptionData>("fetch_subscription", { url });
+  return { servers: data.servers, usage: usageFromUserInfo(data.userinfo.fields), updatedAt: Date.now() };
+}
+
+async function persistMetas(metas: SubscriptionMeta[]) {
   await invoke("set_setting", { key: "subscriptions", value: metas });
 }
 
-export function useSubscriptions(pushToast: (text: string, kind?: "error" | "info") => void) {
+function toMetas(subscriptions: Subscription[]): SubscriptionMeta[] {
+  return subscriptions.map(({ url, name }) => ({ url, name }));
+}
+
+export function useSubscriptions(pushToast: TPushToast) {
   const [subscriptions, setSubscriptions] = useState<Subscription[]>([]);
-  // тред-актуальная копия для слушателей событий трея (см.
-  // App.tsx::tray-select-server) — subscriptions меняется часто (на
-  // каждый пинг/обновление), а переподписываться на каждое изменение
-  // не нужно
+  // актуальная копия для слушателей трея (App.tsx::tray-select-server) и
+  // для вычисления списка метаданных при сохранении — subscriptions
+  // меняется на каждый пинг/обновление, переподписываться не нужно
   const subscriptionsRef = useRef<Subscription[]>([]);
   useEffect(() => {
     subscriptionsRef.current = subscriptions;
   }, [subscriptions]);
 
-  async function loadFromMetas(metas: SubscriptionMeta[]): Promise<Subscription[]> {
-    const loaded = await Promise.all(metas.map(fetchAndStoreServers));
-    setSubscriptions(loaded);
-    return loaded;
+  function patch(url: string, changes: Partial<Subscription>) {
+    setSubscriptions((prev) => prev.map((sub) => (sub.url === url ? { ...sub, ...changes } : sub)));
+  }
+
+  // После редизайна (bf782fe) пинг никто не вызывал — у всех серверов
+  // стоял прочерк, сортировка Fastest ничего не делала. Теперь пингуем
+  // после каждой загрузки подписки.
+  async function ping(url: string, servers: Server[]) {
+    patch(url, { pinging: true });
+    try {
+      const results = await invoke<PingResult[]>("ping_servers", { servers });
+      patch(url, { pings: Object.fromEntries(results.map((result) => [result.name, result])), pinging: false });
+    } catch {
+      patch(url, { pinging: false });
+    }
+  }
+
+  // Загрузка/обновление одной подписки. При ошибке прежний список
+  // серверов остаётся — сервер подписки, недоступный минуту, не должен
+  // вычищать рабочие серверы (группа подсвечивается красным).
+  async function refresh(url: string): Promise<Server[]> {
+    patch(url, { refreshing: true });
+    try {
+      const fetched = await fetchSubscription(url);
+      patch(url, { ...fetched, refreshing: false, error: "" });
+      ping(url, fetched.servers);
+      return fetched.servers;
+    } catch (err) {
+      patch(url, { refreshing: false, error: String(err) });
+      return [];
+    }
+  }
+
+  async function refreshAll() {
+    await Promise.all(subscriptionsRef.current.map((sub) => refresh(sub.url)));
+  }
+
+  // Возвращает серверы всех подписок — useAppBootstrap ищет среди них
+  // последний выбранный.
+  async function loadFromMetas(metas: SubscriptionMeta[]): Promise<Server[]> {
+    setSubscriptions(metas.map(emptySubscription));
+    const loaded = await Promise.all(metas.map((meta) => refresh(meta.url)));
+    return loaded.flat();
   }
 
   async function addFromUrl(url: string): Promise<boolean> {
-    if (subscriptions.some((s) => s.url === url)) {
+    if (subscriptionsRef.current.some((sub) => sub.url === url)) {
       pushToast("This subscription is already added", "error");
       return false;
     }
-    const meta: SubscriptionMeta = { url, name: subscriptionNameFromUrl(url) };
-    const loaded = await fetchAndStoreServers(meta);
-    if (loaded.error) {
-      pushToast(loaded.error, "error");
+    try {
+      const fetched = await fetchSubscription(url);
+      const added: Subscription = {
+        ...emptySubscription({ url, name: subscriptionNameFromUrl(url) }),
+        ...fetched,
+        refreshing: false,
+      };
+      setSubscriptions((prev) => [...prev, added]);
+      await persistMetas([...toMetas(subscriptionsRef.current), { url, name: added.name }]);
+      pushToast(`Subscription ${added.name} added — ${added.servers.length} servers`);
+      ping(url, added.servers);
+      return true;
+    } catch (err) {
+      pushToast(String(err), "error");
       return false;
     }
-    const next = [...subscriptions, loaded];
-    setSubscriptions(next);
-    await persistSubscriptionMetas(next);
-    pushToast(`Subscription ${loaded.name} added — ${loaded.servers.length} servers`);
-    return true;
   }
 
-  async function refresh(url: string) {
-    setSubscriptions((prev) => prev.map((s) => (s.url === url ? { ...s, refreshing: true } : s)));
-    const current = subscriptions.find((s) => s.url === url);
-    if (!current) return;
-    const loaded = await fetchAndStoreServers({ url: current.url, name: current.name });
-    if (loaded.error) {
-      pushToast(loaded.error, "error");
-      setSubscriptions((prev) => prev.map((s) => (s.url === url ? { ...s, refreshing: false } : s)));
-      return;
-    }
-    setSubscriptions((prev) => prev.map((s) => (s.url === url ? loaded : s)));
+  async function rename(url: string, name: string) {
+    patch(url, { name });
+    await persistMetas(toMetas(subscriptionsRef.current).map((meta) => (meta.url === url ? { ...meta, name } : meta)));
   }
 
-  async function remove(url: string): Promise<Subscription[]> {
-    const next = subscriptions.filter((s) => s.url !== url);
-    setSubscriptions(next);
-    await persistSubscriptionMetas(next);
-    return next;
+  async function remove(url: string) {
+    setSubscriptions((prev) => prev.filter((sub) => sub.url !== url));
+    await persistMetas(toMetas(subscriptionsRef.current).filter((meta) => meta.url !== url));
   }
 
-  async function ping(url: string) {
-    setSubscriptions((prev) => prev.map((s) => (s.url === url ? { ...s, pinging: true } : s)));
-    const sub = subscriptions.find((s) => s.url === url);
-    if (!sub) return;
-    const results = await invoke<PingResult[]>("ping_servers", { servers: sub.servers });
-    const pings: Subscription["pings"] = {};
-    for (const r of results) pings[r.name] = r;
-    setSubscriptions((prev) => prev.map((s) => (s.url === url ? { ...s, pings, pinging: false } : s)));
-  }
-
-  return { subscriptions, subscriptionsRef, loadFromMetas, addFromUrl, refresh, remove, ping };
+  return { subscriptions, subscriptionsRef, loadFromMetas, addFromUrl, refresh, refreshAll, rename, remove };
 }

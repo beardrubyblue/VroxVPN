@@ -1,0 +1,18 @@
+/* Шторка подписки: меню действий, переименование, удаление. */
+.sub-sheet-head { text-align: center; }
+.sub-sheet-name { font-size: 13px; font-weight: 600; letter-spacing: 0.14em; text-transform: uppercase; }
+.sub-sheet-url {
+  font-size: 11px; color: var(--fg-dim); margin-top: 4px; letter-spacing: 0.04em;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.sub-menu { display: flex; flex-direction: column; }
+.sub-menu-item {
+  display: flex; align-items: center; gap: 14px; min-height: 52px; padding: 0 4px;
+  background: transparent; border: none; border-top: 1px solid var(--line);
+  color: var(--fg); font-size: 16px; font-family: var(--font-ui); cursor: pointer; text-align: left;
+}
+.sub-menu-item.danger { color: var(--danger); }
+.sub-menu-item:focus-visible { outline: 2px solid var(--fg); outline-offset: -2px; }
+.sub-sheet-warning { margin: 0; text-align: center; font-size: 14px; color: var(--danger); }
+.sub-sheet-buttons { display: flex; gap: 10px; }
+.sub-sheet-buttons > button { flex: 1; }
