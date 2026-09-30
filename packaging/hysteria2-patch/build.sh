@@ -69,6 +69,10 @@ cd app
 # коммит, который реально использует в проде tailscale.com (см. их
 # go.mod на pkg.go.dev) — не угадывание, а заведомо собирающийся пин.
 go get gvisor.dev/gvisor@v0.0.0-20260224225140-573d5e7127a8
+# amneziawg-go — WireGuard / AmneziaWG для netunnel (wireguard.go). Пин
+# на тег: API device/conn/tun стабилен, но маскировка AmneziaWG меняется
+# между версиями, а она должна совпадать с серверной реализацией.
+go get github.com/amnezia-vpn/amneziawg-go/v3@v3.1.20260828
 go mod tidy
 
 echo "→ проверяю netunnel (go vet, кросс-проверка типов под NE-путь)..."

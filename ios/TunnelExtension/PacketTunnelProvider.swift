@@ -61,7 +61,9 @@ private func parseIPv4ExcludedRoutes(_ cidrs: [String]) -> [NEIPv4Route] {
 /// nullable-результат как индикатор неудачи) в `func foo() throws -> T`
 /// (см. сгенерированный Netunnel.objc.h).
 class PacketTunnelProvider: NEPacketTunnelProvider {
-    private var tunnelHandle: NetunnelTunnelHandle?
+    /// hysteria2 или WireGuard/AmneziaWG — Go выбирает по полю "protocol"
+    /// конфига (netunnel/tunnel.go::Start), методы у обоих одинаковые.
+    private var tunnelHandle: (any NetunnelTunnelProtocol)?
     private let log = OSLog(subsystem: "com.vroxory.vpn.tunnel", category: "PacketTunnelProvider")
 
     /// Работаем ли под iOS jetsam (~50МБ) — только на настоящем
@@ -87,6 +89,12 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
             .containerURL(forSecurityApplicationGroupIdentifier: appGroupID)?
             .appendingPathComponent("traffic_history.json")
             .path
+    }
+
+    /// Маска подсети IPv4 из длины префикса: 24 → "255.255.255.0".
+    private static func subnetMask(prefix: Int) -> String {
+        let bits: UInt32 = prefix <= 0 ? 0 : UInt32.max << UInt32(32 - min(prefix, 32))
+        return [24, 16, 8, 0].map { String((bits >> UInt32($0)) & 0xFF) }.joined(separator: ".")
     }
 
     /// DNS тоннеля — DNS-over-HTTPS (Cloudflare) средствами самой iOS.
@@ -134,14 +142,14 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
             return
         }
 
-        // NetunnelStartTunnel — свободная C-функция (FOUNDATION_EXPORT), а
+        // NetunnelStart — свободная C-функция (FOUNDATION_EXPORT), а
         // не Objective-C метод: автомост NSError** → throws у Swift-
         // импортёра действует только для ObjC-методов класса (writePacket/
         // readPacket/stop ниже — методы, поэтому там `try` работает),
         // для свободных функций нужен явный NSErrorPointer.
         var startErr: NSError?
         let tunnelConfigJSON = Self.withEnvironment(configJSON)
-        guard let handle = NetunnelStartTunnel(tunnelConfigJSON, &startErr) else {
+        guard let handle = NetunnelStart(tunnelConfigJSON, &startErr) else {
             let error = startErr ?? NSError(
                 domain: "com.vroxory.vpn.tunnel",
                 code: 2,
@@ -174,7 +182,10 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
         let remoteAddress = (providerConfig["server"] as? String)
             .flatMap { $0.split(separator: ":").first.map(String.init) } ?? inet4
         let settings = NEPacketTunnelNetworkSettings(tunnelRemoteAddress: remoteAddress)
-        settings.ipv4Settings = NEIPv4Settings(addresses: [inet4], subnetMasks: ["255.255.255.252"])
+        // маска из префикса CIDR: у hysteria2 /30, у WireGuard — из Address
+        // конфига (wg-easy выдаёт /24)
+        let prefix = inet4CIDR.split(separator: "/").last.flatMap { Int($0) } ?? 30
+        settings.ipv4Settings = NEIPv4Settings(addresses: [inet4], subnetMasks: [Self.subnetMask(prefix: prefix)])
         settings.ipv4Settings?.includedRoutes = [NEIPv4Route.default()]
         // ipv4Exclude/ipv6Exclude — Rust считает их заранее
         // (config_gen::generate_excluded_routes: приватные диапазоны +
@@ -330,7 +341,7 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
 
     /// Единственная поддерживаемая команда — "getStats" (см. engine/macos/stats.rs::
     /// get_traffic_totals_blocking, который шлёт её через sendProviderMessage
-    /// по запросу фронтенда). Ответ — JSON от NetunnelTunnelHandle.getStats()
+    /// по запросу фронтенда). Ответ — JSON от tunnelHandle.getStats() (любой протокол, netunnel/tunnel.go)
     /// (txBytes/rxBytes, см. netunnel.go) + rssBytes — память ВСЕГО этого
     /// процесса (.appex), не только Go-кучи: NE-лимит Apple считает по
     /// процессу целиком (Swift runtime, NetworkExtension.framework,

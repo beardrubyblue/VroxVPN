@@ -605,7 +605,7 @@ func StartTunnel(configJSON string) (*TunnelHandle, error) {
 	}
 	if cfg.HistoryPath != "" {
 		handle.history = &historyRecorder{path: cfg.HistoryPath}
-		go handle.recordHistoryPeriodically()
+		go handle.history.recordPeriodically(&handle.txBytes, &handle.rxBytes, handle.stopHistory)
 	}
 
 	tcpForwarder := tcp.NewForwarder(netStack, 0, 1024, tcpForwarderHandler(handle))

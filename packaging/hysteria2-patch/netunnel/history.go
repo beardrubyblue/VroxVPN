@@ -47,20 +47,28 @@ type historyRecorder struct {
 // FlushHistory — точка входа для Swift (sleep()/stopTunnel): записать
 // накопленную дельту немедленно. gomobile экспортирует как flushHistory().
 func (h *TunnelHandle) FlushHistory() {
-	if h.history == nil {
-		return
-	}
-	h.history.flush(atomic.LoadUint64(&h.txBytes), atomic.LoadUint64(&h.rxBytes))
+	h.history.flushCounters(&h.txBytes, &h.rxBytes)
 }
 
-func (h *TunnelHandle) recordHistoryPeriodically() {
+// flushCounters — общая для обоих протоколов (hysteria2, WireGuard) запись
+// дельты счётчиков; nil-рекордер (Config.HistoryPath пуст) — no-op.
+func (r *historyRecorder) flushCounters(txBytes, rxBytes *uint64) {
+	if r == nil {
+		return
+	}
+	r.flush(atomic.LoadUint64(txBytes), atomic.LoadUint64(rxBytes))
+}
+
+// recordPeriodically сбрасывает дельту раз в historyFlushInterval, пока не
+// закроют stop.
+func (r *historyRecorder) recordPeriodically(txBytes, rxBytes *uint64, stop <-chan struct{}) {
 	ticker := time.NewTicker(historyFlushInterval)
 	defer ticker.Stop()
 	for {
 		select {
 		case <-ticker.C:
-			h.FlushHistory()
-		case <-h.stopHistory:
+			r.flushCounters(txBytes, rxBytes)
+		case <-stop:
 			return
 		}
 	}
