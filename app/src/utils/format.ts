@@ -24,3 +24,10 @@ export function subscriptionNameFromUrl(url: string): string {
     return url;
   }
 }
+
+// Возраст рукопожатия WireGuard для экрана Stats: -1 — ни одного.
+export function formatHandshakeAge(ageSec: number): string {
+  if (ageSec < 0) return "never";
+  if (ageSec < 60) return `${ageSec}s ago`;
+  return `${Math.floor(ageSec / 60)}m ago`;
+}

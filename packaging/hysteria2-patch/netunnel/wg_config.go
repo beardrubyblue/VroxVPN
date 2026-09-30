@@ -8,9 +8,15 @@ import (
 	"strings"
 )
 
-// defaultWireGuardMTU — стандартный MTU WireGuard (1500 минус заголовки
-// IPv6 + UDP + WireGuard), если конфиг его не задаёт.
-const defaultWireGuardMTU = 1420
+// defaultWireGuardMTU — если в конфиге нет MTU (wg-easy его не пишет).
+// 1280, как официальный WireGuard для iOS (WireGuardKit/
+// PacketTunnelSettingsGenerator: «too many broken networks out there»), а
+// не десктопные 1420: на iPhone тоннель «подключался», но сети не было —
+// крупные пакеты (TLS, страницы) молча терялись на путях с меньшим MTU
+// (мобильный интернет, PPPoE), а мелкие (DNS) проходили; официальное
+// приложение с тем же конфигом работало. Менять синхронно с
+// wireguard/provider.rs::DEFAULT_MTU (MTU интерфейса в iOS).
+const defaultWireGuardMTU = 1280
 
 // obfuscationKeys — параметры маскировки AmneziaWG. В конфиге они пишутся
 // с заглавной (Jc, S1, H1…), в UAPI — строчными; Rust уже приводит к

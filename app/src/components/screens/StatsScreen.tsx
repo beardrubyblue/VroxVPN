@@ -1,7 +1,7 @@
 import { TrafficHistoryCard } from "@/components/stats";
 import { useTrafficHistory } from "@/hooks/useTrafficHistory";
 import type { MemoryDebug, TrafficDisplay } from "@/types";
-import { formatBytes, formatSpeed, MEMORY_BUDGET_BYTES } from "@/utils/format";
+import { formatBytes, formatHandshakeAge, formatSpeed, MEMORY_BUDGET_BYTES } from "@/utils/format";
 
 interface StatsScreenProps {
   connected: boolean;
@@ -80,6 +80,11 @@ export function StatsScreen({ connected, traffic, memoryBytes, memoryDebug }: St
                   ["Non-Go (Swift/QUIC)", formatBytes(Math.max(0, memoryBytes - memoryDebug.heap_sys))],
                   ["Goroutines", String(memoryDebug.goroutines)],
                   ["Connections TCP / UDP", `${memoryDebug.tcp_relays} / ${memoryDebug.udp_relays}`],
+                  // только WireGuard: «подключено, но сервер не отвечает» видно сразу
+                  ...(memoryDebug.handshake_age_sec !== undefined
+                    ? [["WireGuard handshake", formatHandshakeAge(memoryDebug.handshake_age_sec)]]
+                    : []),
+                  ...(memoryDebug.wg_error ? [["WireGuard error", memoryDebug.wg_error]] : []),
                 ] as [string, string][]
               ).map(([k, v]) => (
                 <div key={k} style={{ display: "flex", justifyContent: "space-between", fontSize: 12 }}>

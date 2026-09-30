@@ -39,6 +39,14 @@ pub struct MemoryDebug {
     /// Сколько байт ОС ещё готова дать процессу (os_proc_available_memory,
     /// только iOS) — на macOS вернётся 0/огромное.
     pub avail_mem: u64,
+    /// Только WireGuard: секунд с последнего рукопожатия с сервером, -1 —
+    /// ни одного («подключено, но сети нет» видно сразу). У hysteria2 — None.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub handshake_age_sec: Option<i64>,
+    /// Только WireGuard: последняя ошибка устройства (логи расширения на
+    /// iPhone больше никуда не попадают).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub wg_error: Option<String>,
 }
 
 /// Платформенно-специфичный "хвост" активного соединения, который нужно

@@ -13,6 +13,10 @@ export interface MemoryDebug {
   udp_relays: number;
   registry_size: number;
   avail_mem: number;
+  // только WireGuard: секунд с последнего рукопожатия (-1 — не было) и
+  // последняя ошибка устройства
+  handshake_age_sec?: number;
+  wg_error?: string;
 }
 
 export interface TrafficTotals {

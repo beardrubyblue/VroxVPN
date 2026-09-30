@@ -4,8 +4,11 @@ import (
 	"encoding/json"
 	"fmt"
 	"runtime"
+	"strconv"
+	"strings"
 	"sync"
 	"sync/atomic"
+	"time"
 
 	"github.com/amnezia-vpn/amneziawg-go/v3/conn"
 	"github.com/amnezia-vpn/amneziawg-go/v3/device"
@@ -26,6 +29,34 @@ type WireGuardHandle struct {
 	history     *historyRecorder // nil, если HistoryPath пуст
 	stopHistory chan struct{}
 	stopOnce    sync.Once
+
+	// последняя ошибка WireGuard (логгер устройства) — для экрана Stats:
+	// логи расширения на iPhone больше никуда не попадают
+	errorMu   sync.Mutex
+	lastError string
+}
+
+func (h *WireGuardHandle) recordError(format string, args ...any) {
+	h.errorMu.Lock()
+	h.lastError = fmt.Sprintf(format, args...)
+	h.errorMu.Unlock()
+}
+
+// handshakeAgeSec — сколько секунд назад было последнее рукопожатие с
+// сервером; -1 — ни одного (сервер не отвечает, сеть режет WireGuard).
+func (h *WireGuardHandle) handshakeAgeSec() int64 {
+	state, err := h.device.IpcGet()
+	if err != nil {
+		return -1
+	}
+	for _, line := range strings.Split(state, "\n") {
+		if value, ok := strings.CutPrefix(line, "last_handshake_time_sec="); ok {
+			if sec, err := strconv.ParseInt(value, 10, 64); err == nil && sec > 0 {
+				return time.Now().Unix() - sec
+			}
+		}
+	}
+	return -1
 }
 
 // StartWireGuard поднимает WireGuard-устройство. Сокеты расширения идут
@@ -49,7 +80,10 @@ func StartWireGuard(configJSON string) (*WireGuardHandle, error) {
 	}
 
 	vtun := newWGTun(mtu)
-	dev := device.NewDevice(vtun, conn.NewDefaultBind(), device.NewLogger(device.LogLevelError, "netunnel/wg: "))
+	handle := &WireGuardHandle{tun: vtun, stopHistory: make(chan struct{})}
+	logger := &device.Logger{Verbosef: device.DiscardLogf, Errorf: handle.recordError}
+	dev := device.NewDevice(vtun, conn.NewDefaultBind(), logger)
+	handle.device = dev
 	if err := dev.IpcSet(uapi); err != nil {
 		dev.Close()
 		return nil, fmt.Errorf("netunnel: wireguard config: %w", err)
@@ -59,7 +93,6 @@ func StartWireGuard(configJSON string) (*WireGuardHandle, error) {
 		return nil, fmt.Errorf("netunnel: wireguard up: %w", err)
 	}
 
-	handle := &WireGuardHandle{device: dev, tun: vtun, stopHistory: make(chan struct{})}
 	if cfg.HistoryPath != "" {
 		handle.history = &historyRecorder{path: cfg.HistoryPath}
 		go handle.history.recordPeriodically(&handle.txBytes, &handle.rxBytes, handle.stopHistory)
@@ -80,16 +113,22 @@ func (h *WireGuardHandle) ReadPacket() ([]byte, error) {
 	return pkt, err
 }
 
-// GetStats — тот же JSON, что TunnelHandle.GetStats; relay-счётчики у
-// WireGuard нулевые (relay-соединений нет).
+// GetStats — те же поля, что TunnelHandle.GetStats (relay-счётчики у
+// WireGuard нулевые), плюс диагностика WireGuard: возраст рукопожатия и
+// последняя ошибка (engine/macos/stats.rs → экран Stats).
 func (h *WireGuardHandle) GetStats() string {
 	var m runtime.MemStats
 	runtime.ReadMemStats(&m)
-	return fmt.Sprintf(
-		`{"txBytes":%d,"rxBytes":%d,"heapInUse":%d,"heapSys":%d,"goroutines":%d,"tcpRelays":0,"udpRelays":0,"registrySize":0,"availMem":%d}`,
-		atomic.LoadUint64(&h.txBytes), atomic.LoadUint64(&h.rxBytes),
-		m.HeapInuse, m.Sys, runtime.NumGoroutine(), availableMemoryBytes(),
-	)
+	h.errorMu.Lock()
+	lastError := h.lastError
+	h.errorMu.Unlock()
+	stats, _ := json.Marshal(map[string]any{
+		"txBytes": atomic.LoadUint64(&h.txBytes), "rxBytes": atomic.LoadUint64(&h.rxBytes),
+		"heapInUse": m.HeapInuse, "heapSys": m.Sys, "goroutines": runtime.NumGoroutine(),
+		"tcpRelays": 0, "udpRelays": 0, "registrySize": 0, "availMem": availableMemoryBytes(),
+		"handshakeAgeSec": h.handshakeAgeSec(), "wgError": lastError,
+	})
+	return string(stats)
 }
 
 func (h *WireGuardHandle) FlushHistory() {

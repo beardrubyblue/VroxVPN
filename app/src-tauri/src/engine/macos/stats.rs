@@ -84,6 +84,8 @@ fn get_traffic_totals_blocking() -> Result<(u64, u64, u64, Option<MemoryDebug>),
         udp_relays: parsed["udpRelays"].as_u64().unwrap_or(0),
         registry_size: parsed["registrySize"].as_u64().unwrap_or(0),
         avail_mem: parsed["availMem"].as_u64().unwrap_or(0),
+        handshake_age_sec: parsed["handshakeAgeSec"].as_i64(),
+        wg_error: parsed["wgError"].as_str().filter(|error| !error.is_empty()).map(String::from),
     };
     Ok((tx_bytes, rx_bytes, rss_bytes, Some(debug)))
 }

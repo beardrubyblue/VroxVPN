@@ -6,8 +6,11 @@
 use super::WireGuardProfile;
 use crate::config_gen::resolve_server_addresses;
 
-/// Стандартный MTU WireGuard (как netunnel::defaultWireGuardMTU).
-const DEFAULT_MTU: u32 = 1420;
+/// MTU, если в конфиге его нет (wg-easy не пишет): 1280, как официальный
+/// WireGuard для iOS — с десктопными 1420 тоннель на iPhone «подключался»,
+/// но крупные пакеты терялись на путях с меньшим MTU и сети не было (см.
+/// netunnel/wg_config.go::defaultWireGuardMTU, менять синхронно).
+const DEFAULT_MTU: u32 = 1280;
 
 pub fn provider_config_json(profile: &WireGuardProfile) -> Result<serde_json::Value, String> {
     // Endpoint — только IP: имя резолвим здесь, внутри песочницы
@@ -56,7 +59,7 @@ mod tests {
         let json = super::provider_config_json(&parse_conf(conf).unwrap()).unwrap();
         assert_eq!(json["protocol"], "wireguard");
         assert_eq!(json["privateKey"], "cHJpdg==");
-        assert_eq!(json["mtu"], 1420);
+        assert_eq!(json["mtu"], 1280);
         assert_eq!(json["obfuscation"]["jc"], "4");
         assert_eq!(json["peer"]["publicKey"], "cHVi");
         assert_eq!(json["peer"]["presharedKey"], "cHNr");
