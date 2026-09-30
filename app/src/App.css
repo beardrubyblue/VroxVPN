@@ -289,6 +289,17 @@ textarea {
   }
 }
 
+/* ---- скан QR (hooks/wireguard/useQrScanner) ---- */
+/* камера рисуется ПОД страницей (scan windowed) — фон прозрачный, интерфейс
+   скрыт; видна только рамка ScannerOverlay (портал в <body>) */
+html.is-scanning,
+html.is-scanning body {
+  background: transparent;
+}
+html.is-scanning #root {
+  visibility: hidden;
+}
+
 /* ---- bottom sheet (добавление подписки / подтверждение) ---- */
 .sheet-backdrop {
   position: fixed;

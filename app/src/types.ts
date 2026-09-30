@@ -41,6 +41,9 @@ export interface Server {
   pin_sha256: string;
   quic: Record<string, unknown>;
   raw_uri: string;
+  // Есть — WireGuard/AmneziaWG-узел из импортированного .conf (Rust
+  // wireguard/), нет — hysteria2 из подписки. UI нужен только id.
+  wireguard?: { id: string };
 }
 
 export interface PingResult {

@@ -29,6 +29,11 @@ pub fn run() {
             let _ = window.set_focus();
         }
     }));
+    // импорт WireGuard-конфигов файлом и QR — только iOS (wireguard/)
+    #[cfg(target_os = "ios")]
+    let builder = builder
+        .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_barcode_scanner::init());
     builder
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_shell::init())
@@ -48,6 +53,7 @@ pub fn run() {
             wireguard::commands::import_wireguard,
             wireguard::commands::rename_wireguard,
             wireguard::commands::delete_wireguard,
+            wireguard::commands::pick_wireguard_file,
             commands::fetch_subscription,
             commands::update_geoip,
             commands::update_geosite,

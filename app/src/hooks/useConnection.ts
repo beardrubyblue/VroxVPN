@@ -1,17 +1,23 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
-import type { ConnectionStatus, Server, Subscription } from "@/types";
+import type { ConnectionStatus, Server } from "@/types";
 
 interface UseConnectionArgs {
-  subscriptions: Subscription[];
-  subscriptionsRef: { current: Subscription[] };
+  // все узлы: серверы подписок + WireGuard-конфиги
+  servers: Server[];
   ruBypass: boolean;
   killSwitch: boolean;
   pushToast: (text: string, kind?: "error" | "info") => void;
 }
 
-export function useConnection({ subscriptions, subscriptionsRef, ruBypass, killSwitch, pushToast }: UseConnectionArgs) {
+export function useConnection({ servers, ruBypass, killSwitch, pushToast }: UseConnectionArgs) {
+  // актуальный список для слушателя трея — переподписываться на каждое
+  // изменение списка (пинги, обновления) не нужно
+  const serversRef = useRef<Server[]>(servers);
+  useEffect(() => {
+    serversRef.current = servers;
+  }, [servers]);
   const [status, setStatus] = useState<ConnectionStatus>({ connected: false, server_name: null });
   const [selectedServer, setSelectedServer] = useState<Server | null>(null);
   const [busy, setBusy] = useState(false);
@@ -58,7 +64,7 @@ export function useConnection({ subscriptions, subscriptionsRef, ruBypass, killS
   }, []);
 
   // подписку на "выбрать сервер"/"переключить подключение" из трея
-  // держим через subscriptionsRef (она меняется часто — на каждый
+  // держим через serversRef (список меняется часто — на каждый
   // пинг/обновление), а на toggle и ruBypass переподписываемся, это
   // происходит редко
   useEffect(() => {
@@ -70,13 +76,8 @@ export function useConnection({ subscriptions, subscriptionsRef, ruBypass, killS
       });
       unlistenSelect = await listen<string>("tray-select-server", (event) => {
         const name = event.payload;
-        for (const sub of subscriptionsRef.current) {
-          const found = sub.servers.find((s) => s.name === name);
-          if (found) {
-            setSelectedServer(found);
-            break;
-          }
-        }
+        const found = serversRef.current.find((server) => server.name === name);
+        if (found) setSelectedServer(found);
       });
     })();
     return () => {
@@ -88,13 +89,12 @@ export function useConnection({ subscriptions, subscriptionsRef, ruBypass, killS
 
   // зеркалим текущее состояние в меню трея
   useEffect(() => {
-    const servers = subscriptions.flatMap((s) => s.servers.map((srv) => srv.name));
     invoke("sync_tray", {
       connected: status.connected,
       currentServer: status.connected ? status.server_name : selectedServer?.name ?? null,
-      servers,
+      servers: servers.map((server) => server.name),
     });
-  }, [status, selectedServer, subscriptions]);
+  }, [status, selectedServer, servers]);
 
   return { status, selectedServer, setSelectedServer, busy, toggleConnection };
 }

@@ -1,0 +1,33 @@
+/* Шторка «+»: вкладки подписка / WireGuard, формы, экран скана QR. */
+.add-tabs { display: flex; gap: 6px; padding: 4px; border-radius: 14px; background: var(--bg-elev-2); border: 1px solid var(--line); }
+.add-tab {
+  flex: 1; height: 40px; border: none; border-radius: 10px; background: transparent;
+  color: var(--fg-muted); font-family: var(--font-ui); font-size: 15px; font-weight: 500; cursor: pointer;
+}
+.add-tab.active { background: var(--fg); color: var(--bg); }
+.add-tab:focus-visible, .add-row button:focus-visible { outline: 2px solid var(--fg); outline-offset: 2px; }
+.add-form { display: flex; flex-direction: column; gap: 12px; }
+.add-row { display: flex; gap: 10px; }
+.add-row > button { flex: 1; }
+.conf-input {
+  width: 100%; min-height: 128px; resize: vertical; padding: 14px 16px; border-radius: 14px;
+  border: 1px solid var(--line); background: var(--bg-elev-2); color: var(--fg);
+  font-family: var(--font-mono); font-size: 13px; line-height: 1.5; outline: none;
+}
+.conf-input::placeholder { color: var(--fg-dim); }
+
+/* Камера рисуется ПОД прозрачной страницей (useQrScanner) — поверх неё
+   своя палитра, не зависящая от светлой/тёмной темы. */
+.scanner-overlay {
+  --scanner-fg: #ffffff;
+  --scanner-shade: rgba(0, 0, 0, 0.55);
+  position: fixed; inset: 0; z-index: 100; display: flex; flex-direction: column;
+  align-items: center; justify-content: center; gap: 32px; color: var(--scanner-fg);
+  padding: 24px 24px calc(40px + env(safe-area-inset-bottom, 0px));
+}
+.scanner-frame { width: 240px; height: 240px; border-radius: 24px; border: 2px solid var(--scanner-fg); box-shadow: 0 0 0 100vmax var(--scanner-shade); }
+.scanner-hint { position: relative; font-size: 16px; text-align: center; max-width: 280px; }
+.scanner-cancel {
+  position: relative; height: 52px; padding: 0 32px; border-radius: 999px; border: none;
+  background: var(--scanner-fg); color: #000000; font-family: var(--font-ui); font-size: 16px; font-weight: 500; cursor: pointer;
+}

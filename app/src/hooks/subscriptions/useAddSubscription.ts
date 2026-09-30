@@ -1,30 +1,28 @@
 import { useState } from "react";
 import { readText } from "@tauri-apps/plugin-clipboard-manager";
-import { useSheet } from "@/hooks/useSheet";
 import type { useSubscriptions } from "./useSubscriptions";
 
 type TPushToast = (text: string, kind?: "error" | "info") => void;
 
-// Добавление подписки: шторка с полем URL и кнопка PASTE (сразу из
-// буфера обмена). Раньше жило в App.tsx.
+// Добавление подписки: поле URL во вкладке «Subscription» шторки «+» и
+// кнопка PASTE (сразу из буфера обмена). Шторкой управляет экран Nodes —
+// она общая с импортом WireGuard.
 export function useAddSubscription(subs: ReturnType<typeof useSubscriptions>, pushToast: TPushToast) {
-  const sheet = useSheet();
   const [url, setUrl] = useState("");
   const [error, setError] = useState("");
 
-  function open() {
+  function reset() {
     setUrl("");
     setError("");
-    sheet.show();
   }
 
-  async function confirm() {
+  async function confirm(): Promise<boolean> {
     if (!url.trim()) {
       setError("Enter a subscription URL");
-      return;
+      return false;
     }
     setError("");
-    if (await subs.addFromUrl(url.trim())) sheet.hide();
+    return subs.addFromUrl(url.trim());
   }
 
   async function paste() {
@@ -42,5 +40,5 @@ export function useAddSubscription(subs: ReturnType<typeof useSubscriptions>, pu
     await subs.addFromUrl(text.trim());
   }
 
-  return { sheet, url, setUrl, error, open, confirm, paste };
+  return { url, setUrl, error, reset, confirm, paste };
 }

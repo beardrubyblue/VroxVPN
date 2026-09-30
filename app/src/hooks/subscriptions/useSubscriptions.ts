@@ -25,9 +25,8 @@ function toMetas(subscriptions: Subscription[]): SubscriptionMeta[] {
 
 export function useSubscriptions(pushToast: TPushToast) {
   const [subscriptions, setSubscriptions] = useState<Subscription[]>([]);
-  // актуальная копия для слушателей трея (App.tsx::tray-select-server) и
-  // для вычисления списка метаданных при сохранении — subscriptions
-  // меняется на каждый пинг/обновление, переподписываться не нужно
+  // актуальная копия для вычисления списка метаданных при сохранении и
+  // проверки дублей — subscriptions меняется на каждый пинг/обновление
   const subscriptionsRef = useRef<Subscription[]>([]);
   useEffect(() => {
     subscriptionsRef.current = subscriptions;
@@ -111,5 +110,5 @@ export function useSubscriptions(pushToast: TPushToast) {
     await persistMetas(toMetas(subscriptionsRef.current).filter((meta) => meta.url !== url));
   }
 
-  return { subscriptions, subscriptionsRef, loadFromMetas, addFromUrl, refresh, refreshAll, rename, remove };
+  return { subscriptions, loadFromMetas, addFromUrl, refresh, refreshAll, rename, remove };
 }

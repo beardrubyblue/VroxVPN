@@ -9,3 +9,7 @@ export const isIOS =
   (/iPhone|iPad|iPod/.test(navigator.userAgent) ||
     // iPadOS 13+ маскируется под Mac в UA — отличаем по наличию тач-ввода
     (/Macintosh/.test(navigator.userAgent) && "ontouchend" in document));
+
+// Linux-сборка (десктоп): WireGuard там пока не поддерживается, импорт
+// .conf скрыт. iOS-сборка на Mac — не Linux.
+export const isLinux = typeof navigator !== "undefined" && /Linux/.test(navigator.userAgent) && !/Android/.test(navigator.userAgent);

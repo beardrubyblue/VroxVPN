@@ -79,3 +79,7 @@
 .node-bars { display: flex; gap: 1px; margin-top: 4px; justify-content: flex-end; align-items: flex-end; }
 .node-bars > div { width: 3px; border-radius: 1px; background: var(--line-strong); }
 .node-bars > div.on { background: var(--fg); }
+
+/* строка WireGuard-узла: NodeRow + своё меню «…» (wireguard/WireGuardRow) */
+.wg-row { display: flex; align-items: center; gap: 8px; margin-top: 8px; }
+.wg-row > .node-row { flex: 1; min-width: 0; margin-top: 0; }

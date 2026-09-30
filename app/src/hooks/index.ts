@@ -7,3 +7,5 @@ export { useAppUpdate } from "./useAppUpdate";
 export { useGeoUpdates } from "./useGeoUpdates";
 export { useSettings } from "./useSettings";
 export { useAppBootstrap } from "./useAppBootstrap";
+export { useWireGuard, useWireGuardForm, useWireGuardActions } from "./wireguard";
+export { useAddNode } from "./useAddNode";

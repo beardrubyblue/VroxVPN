@@ -67,6 +67,7 @@
 		3595A55C473DB098987099F2 /* app_update.rs */ = {isa = PBXFileReference; path = app_update.rs; sourceTree = "<group>"; };
 		3842AE2A64FB9933D0400EA4 /* assets */ = {isa = PBXFileReference; lastKnownFileType = folder; path = assets; sourceTree = SOURCE_ROOT; };
 		39EEC6A55698228E08917A52 /* libapp.a */ = {isa = PBXFileReference; lastKnownFileType = archive.ar; path = libapp.a; sourceTree = "<group>"; };
+		4C63D09CB400BA33FECBD825 /* commands.rs */ = {isa = PBXFileReference; path = commands.rs; sourceTree = "<group>"; };
 		4D80F4A37F55D13853FE5890 /* stats.rs */ = {isa = PBXFileReference; path = stats.rs; sourceTree = "<group>"; };
 		50AB47C0FCFA16B72598937F /* mod.rs */ = {isa = PBXFileReference; path = mod.rs; sourceTree = "<group>"; };
 		54BC81F346680E0C6A8E5F07 /* mod.rs */ = {isa = PBXFileReference; path = mod.rs; sourceTree = "<group>"; };
@@ -78,6 +79,7 @@
 		6C1BAA8B1131D4098CFBEAAB /* engine.rs */ = {isa = PBXFileReference; path = engine.rs; sourceTree = "<group>"; };
 		81E326B61ED92E1D1EECF952 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		85EEA3982806E79B9B7FDB19 /* mod.rs */ = {isa = PBXFileReference; path = mod.rs; sourceTree = "<group>"; };
+		87E2D23D5E26D5354AC3FAF8 /* mod.rs */ = {isa = PBXFileReference; path = mod.rs; sourceTree = "<group>"; };
 		91AA6714F8A08377810182D4 /* disconnect_watcher.rs */ = {isa = PBXFileReference; path = disconnect_watcher.rs; sourceTree = "<group>"; };
 		92B03E5F47F5BC0AB27EA81A /* mod.rs */ = {isa = PBXFileReference; path = mod.rs; sourceTree = "<group>"; };
 		95282FD90006440FA82835AA /* update.rs */ = {isa = PBXFileReference; path = update.rs; sourceTree = "<group>"; };
@@ -88,6 +90,8 @@
 		AF1DE57E7D9CF13BB2E0E038 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		B156D50861B260AF2FC718A7 /* GoNetunnel.xcframework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.xcframework; name = GoNetunnel.xcframework; path = ../../../../ios/Frameworks/GoNetunnel.xcframework; sourceTree = "<group>"; };
 		B2FC15BBAA85337765CD9515 /* connect.rs */ = {isa = PBXFileReference; path = connect.rs; sourceTree = "<group>"; };
+		C6162C534F06F66A14E83D7F /* parse.rs */ = {isa = PBXFileReference; path = parse.rs; sourceTree = "<group>"; };
+		C8D413B89722F139AD9CA181 /* store.rs */ = {isa = PBXFileReference; path = store.rs; sourceTree = "<group>"; };
 		CCDDF75F2877AEB57AB11B85 /* wait_result.rs */ = {isa = PBXFileReference; path = wait_result.rs; sourceTree = "<group>"; };
 		CE1209BFDECB28E00189B168 /* Metal.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Metal.framework; path = System/Library/Frameworks/Metal.framework; sourceTree = SDKROOT; };
 		CF674524E34966183631754E /* libapp.a */ = {isa = PBXFileReference; lastKnownFileType = archive.ar; path = libapp.a; sourceTree = "<group>"; };
@@ -100,6 +104,7 @@
 		E2D0499FF55F132C1E563FD9 /* resources.rs */ = {isa = PBXFileReference; path = resources.rs; sourceTree = "<group>"; };
 		F3673D372C5ABDD1AD6E7067 /* QuartzCore.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = QuartzCore.framework; path = System/Library/Frameworks/QuartzCore.framework; sourceTree = SDKROOT; };
 		F43854A0A79C2EA2645DA35E /* PacketTunnelProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = PacketTunnelProvider.swift; path = ../../../../ios/TunnelExtension/PacketTunnelProvider.swift; sourceTree = "<group>"; };
+		F4E8C5ECA6056B53F3375840 /* provider.rs */ = {isa = PBXFileReference; path = provider.rs; sourceTree = "<group>"; };
 		FBC720DFA1D01F55B0A32344 /* app_iOS.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = app_iOS.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		FDE7C471486E90794996E443 /* manager.rs */ = {isa = PBXFileReference; path = manager.rs; sourceTree = "<group>"; };
 /* End PBXFileReference section */
@@ -254,6 +259,7 @@
 				DE944FFD75F4654FD2221833 /* tray.rs */,
 				A4F9CDE4BB67EF2B3FFCA1EC /* engine */,
 				9EAC652416AB4D6E9D38A57B /* traffic_history */,
+				CEAB1C13CAD3C752DA8CE8F8 /* wireguard */,
 			);
 			name = src;
 			path = ../../src;
@@ -301,6 +307,18 @@
 			path = Externals;
 			sourceTree = "<group>";
 		};
+		CEAB1C13CAD3C752DA8CE8F8 /* wireguard */ = {
+			isa = PBXGroup;
+			children = (
+				4C63D09CB400BA33FECBD825 /* commands.rs */,
+				87E2D23D5E26D5354AC3FAF8 /* mod.rs */,
+				C6162C534F06F66A14E83D7F /* parse.rs */,
+				F4E8C5ECA6056B53F3375840 /* provider.rs */,
+				C8D413B89722F139AD9CA181 /* store.rs */,
+			);
+			path = wireguard;
+			sourceTree = "<group>";
+		};
 		EE72B6AC647386A11F795E44 /* Products */ = {
 			isa = PBXGroup;
 			children = (
@@ -327,7 +345,7 @@
 			path = app;
 			sourceTree = "<group>";
 		};
-		"TEMP_F05AA8A6-9965-45C7-8277-E49F7B19E7C2" /* x86_64 */ = {
+		"TEMP_E4E90300-F2F9-46E4-B609-3B0EB5BCEC88" /* x86_64 */ = {
 			isa = PBXGroup;
 			children = (
 			);

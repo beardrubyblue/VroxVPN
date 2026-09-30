@@ -1280,3 +1280,36 @@ dns-query`, bootstrap-IP 1.1.1.1 / 1.0.0.1) — DoH делает сама iOS, �
 переиспользуемым TCP-соединением через тоннель; памяти расширения это не
 стоит. DNSCrypt рассматривался и отклонён: отдельный `dnscrypt-proxy` в
 расширении — лишние мегабайты под 50-МБ лимит iPhone при той же пользе.
+
+## WireGuard / AmneziaWG рядом с hysteria2 (iOS)
+
+Цель: подключаться к серверам wg-easy (обычный WireGuard) и, когда сервер
+переведут на AmneziaWG, — к нему же, без переделки приложения.
+
+- **Go** (`netunnel`): `amneziawg-go` (форк wireguard-go с маскировкой) —
+  без параметров `Jc/S1…/H1…/I1…` это обычный WireGuard. Пакеты ходят через
+  виртуальный TUN на каналах (`wg_tun.go`), как у hysteria2, но без gVisor
+  и relay-соединений: WireGuard шифрует IP-пакеты целиком, памяти нужно
+  меньше (Go-куча ~2 МБ в живом тесте). Общий интерфейс `Tunnel` +
+  `Start(configJSON)` выбирает протокол по полю `protocol`; Swift работает
+  с любым тоннелем через один Obj-C протокол (`NetunnelTunnelProtocol`).
+  Счётчики, история трафика, режим памяти — общие.
+- **Rust** (`wireguard/`): разбор wg-quick `.conf` (ровно один `[Peer]`,
+  нужен IPv4 `Address`), хранение исходного текста в `wireguard.json` в
+  папке данных приложения (решено не использовать Keychain на старте),
+  JSON для расширения с Endpoint, уже разрезолвленным в IP. WireGuard-узел
+  — обычный `Server` с полем `wireguard`, поэтому выбор, пинг, трей и
+  исключение IP сервера из тоннеля не менялись.
+- **Импорт**: шторка «+» → вкладка WireGuard — вставка текста, файл
+  (`tauri-plugin-dialog`, файл копируется в песочницу, читает Rust) или QR
+  (`tauri-plugin-barcode-scanner`, режим `windowed`: камера под прозрачной
+  страницей, рамка и «Отмена» — наши, `html.is-scanning`). Оба плагина и
+  capability `mobile.json` — только iOS; строка `NSCameraUsageDescription`
+  в `gen/apple/project.yml`.
+- **Linux** — не поддерживается (понятная ошибка при подключении, вкладки
+  нет); отдельный этап.
+
+Проверено вживую на wg-easy до сборки приложения: `.conf` → Rust JSON →
+`netunnel` → рукопожатие и DNS-ответ через тоннель (тесты по env —
+`wireguard_live_test.go`, `wireguard/provider.rs`; конфиг с ключами в
+репозиторий не кладётся).

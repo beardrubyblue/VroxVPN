@@ -3,12 +3,19 @@ interface SubscriptionDeleteConfirmProps {
   isConnected: boolean;
   onCancel: () => void;
   onConfirm: () => void;
+  title?: string;
 }
 
-export function SubscriptionDeleteConfirm({ nodeCount, isConnected, onCancel, onConfirm }: SubscriptionDeleteConfirmProps) {
+export function SubscriptionDeleteConfirm({
+  nodeCount,
+  isConnected,
+  onCancel,
+  onConfirm,
+  title = "Delete subscription?",
+}: SubscriptionDeleteConfirmProps) {
   return (
     <>
-      <h3>Delete subscription?</h3>
+      <h3>{title}</h3>
       <p className="sheet-text">
         {nodeCount} {nodeCount === 1 ? "node" : "nodes"} will be removed from the list.
       </p>

@@ -75,6 +75,9 @@ targets:
         # не нужны. Несколько окон не поддерживаем.
         UIApplicationSceneManifest:
           UIApplicationSupportsMultipleScenes: false
+        # tauri-plugin-barcode-scanner отказывает без этой строки; iOS
+        # показывает её в запросе доступа к камере (скан QR WireGuard).
+        NSCameraUsageDescription: vrox.vpn uses the camera to scan WireGuard configuration QR codes.
     scheme:
       environmentVariables:
         RUST_BACKTRACE: full

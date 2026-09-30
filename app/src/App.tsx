@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { ShieldScreen } from "@/components/screens/ShieldScreen";
 import { NodesScreen } from "@/components/screens/NodesScreen";
@@ -15,6 +15,7 @@ import {
   useToast,
   useTrafficStats,
   useAppBootstrap,
+  useWireGuard,
 } from "@/hooks";
 import "./App.css";
 
@@ -24,10 +25,16 @@ function App() {
 
   const { toast, pushToast } = useToast();
   const subs = useSubscriptions(pushToast);
+  const wireguard = useWireGuard(pushToast);
   const settings = useSettings();
+  // все узлы (подписки + WireGuard) — для трея и выбора из него; useMemo,
+  // чтобы sync_tray (эффект в useConnection) не дёргался на каждый рендер
+  const allServers = useMemo(
+    () => [...subs.subscriptions.flatMap((subscription) => subscription.servers), ...wireguard.servers],
+    [subs.subscriptions, wireguard.servers],
+  );
   const connection = useConnection({
-    subscriptions: subs.subscriptions,
-    subscriptionsRef: subs.subscriptionsRef,
+    servers: allServers,
     ruBypass: settings.ruBypass,
     killSwitch: settings.killSwitch,
     pushToast,
@@ -35,7 +42,7 @@ function App() {
   const { traffic, memoryBytes, memoryDebug } = useTrafficStats(connection.status.connected, pushToast);
   const update = useAppUpdate(pushToast);
   const geo = useGeoUpdates(pushToast);
-  useAppBootstrap({ settings, subs, setSelectedServer: connection.setSelectedServer });
+  useAppBootstrap({ settings, subs, wireguard, setSelectedServer: connection.setSelectedServer });
 
   const showTabs = page !== "nodes";
 
@@ -56,6 +63,7 @@ function App() {
       {page === "nodes" && (
         <NodesScreen
           subs={subs}
+          wireguard={wireguard}
           connection={connection}
           pushToast={pushToast}
           onPick={(server) => {
