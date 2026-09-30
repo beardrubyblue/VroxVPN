@@ -53,6 +53,11 @@ export const Ic = {
       <path d="M5 12l5 5 9-10" />
     </svg>
   ),
+  alert: ({ s, sw }: IconProps = {}) => (
+    <svg {...base(s)} {...stroke} strokeWidth={sw || 2}>
+      <path d="M12 7v6M12 17h.01" />
+    </svg>
+  ),
   x: ({ s, sw }: IconProps = {}) => (
     <svg {...base(s)} {...stroke} strokeWidth={sw || 1.8}>
       <path d="M6 6l12 12M18 6L6 18" />

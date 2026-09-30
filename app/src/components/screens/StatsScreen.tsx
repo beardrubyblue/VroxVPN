@@ -28,10 +28,7 @@ export function StatsScreen({ connected, traffic, memoryBytes, memoryDebug }: St
   return (
     <div className="vrox-screen">
       <div style={{ padding: "60px 20px 8px" }}>
-        <div className="mono" style={{ fontSize: 11, color: "var(--fg-dim)", letterSpacing: "0.15em" }}>
-          {connected ? "TUNNEL · LIVE" : "TUNNEL · IDLE"}
-        </div>
-        <h2 className="display" style={{ fontSize: 32, fontWeight: 600, margin: "4px 0 0", letterSpacing: "-0.02em" }}>
+        <h2 className="display" style={{ fontSize: 32, fontWeight: 600, margin: 0, letterSpacing: "-0.02em" }}>
           Traffic.
         </h2>
       </div>

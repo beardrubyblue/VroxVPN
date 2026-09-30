@@ -2,7 +2,7 @@ import { useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import type { PingResult, Server } from "@/types";
 
-type TPushToast = (text: string, kind?: "error" | "info") => void;
+type TPushToast = (text: string, kind?: "error" | "info", detail?: string) => void;
 
 // Импортированные WireGuard/AmneziaWG-конфиги (Rust wireguard/). Каждый
 // конфиг — отдельный узел; группа WireGuard на экране Nodes.
@@ -36,7 +36,7 @@ export function useWireGuard(pushToast: TPushToast) {
       const server = await invoke<Server>("import_wireguard", { name, conf });
       setServers((prev) => [...prev, server]);
       ping([server]);
-      pushToast(`WireGuard ${server.name} added`);
+      pushToast("WireGuard added", "info", `${server.name} · ${server.host}:${server.port}`);
       return true;
     } catch (err) {
       pushToast(String(err), "error");

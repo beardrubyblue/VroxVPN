@@ -4,7 +4,7 @@ import { ShieldScreen } from "@/components/screens/ShieldScreen";
 import { NodesScreen } from "@/components/screens/NodesScreen";
 import { StatsScreen } from "@/components/screens/StatsScreen";
 import { SettingsScreen, type Theme } from "@/components/screens/SettingsScreen";
-import { ToastBanner } from "@/components/ToastBanner";
+import { ToastStack } from "@/components/toast";
 import { ViewSwitcher, type Page } from "@/components/ViewSwitcher";
 import {
   useAppUpdate,
@@ -23,7 +23,7 @@ function App() {
   const [page, setPage] = useState<Page>("shield");
   const [theme, setTheme] = useState<Theme>("dark");
 
-  const { toast, pushToast } = useToast();
+  const { toasts, pushToast, dismissToast } = useToast();
   const subs = useSubscriptions(pushToast);
   const wireguard = useWireGuard(pushToast);
   const settings = useSettings();
@@ -48,7 +48,7 @@ function App() {
 
   return (
     <div className={`window vrox-${theme}`}>
-      <ToastBanner toast={toast} />
+      <ToastStack toasts={toasts} onDismiss={dismissToast} />
 
       {page === "shield" && (
         <ShieldScreen

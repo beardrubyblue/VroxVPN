@@ -351,30 +351,6 @@ html.is-scanning #root {
   margin: 0 auto;
 }
 
-/* ---- toast ---- */
-.toast-banner {
-  flex-shrink: 0;
-  max-height: 0;
-  overflow: hidden;
-  transition: max-height 0.22s ease;
-}
-.toast-banner.visible {
-  max-height: 64px;
-}
-.toast-banner.info {
-  background-color: var(--bg-elev-3);
-}
-.toast-banner.error {
-  background-color: var(--bg-elev-3);
-  border-left: 3px solid var(--danger);
-}
-.toast-banner-text {
-  padding: 12px 20px;
-  font-size: 13px;
-  font-weight: 500;
-  color: var(--fg);
-}
-
 .spinner {
   display: inline-block;
   width: 12px;

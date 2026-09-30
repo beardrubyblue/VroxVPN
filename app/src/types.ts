@@ -119,7 +119,12 @@ export interface UpdateInfo {
   autoInstallable: boolean;
 }
 
+// Всплывающее уведомление (components/toast): text — заголовок, detail —
+// необязательная строка пояснения; isLeaving — идёт анимация ухода.
 export interface Toast {
+  id: number;
   text: string;
   kind: "error" | "info";
+  detail?: string;
+  isLeaving: boolean;
 }

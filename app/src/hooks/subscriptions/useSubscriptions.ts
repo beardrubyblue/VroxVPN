@@ -4,7 +4,7 @@ import { subscriptionNameFromUrl } from "@/utils/format";
 import { usageFromUserInfo } from "@/utils/subscription-format";
 import type { PingResult, Server, Subscription, SubscriptionData, SubscriptionMeta } from "@/types";
 
-type TPushToast = (text: string, kind?: "error" | "info") => void;
+type TPushToast = (text: string, kind?: "error" | "info", detail?: string) => void;
 
 function emptySubscription(meta: SubscriptionMeta): Subscription {
   return { ...meta, servers: [], pings: {}, usage: null, updatedAt: null, pinging: false, refreshing: true, error: "" };
@@ -91,7 +91,7 @@ export function useSubscriptions(pushToast: TPushToast) {
       };
       setSubscriptions((prev) => [...prev, added]);
       await persistMetas([...toMetas(subscriptionsRef.current), { url, name: added.name }]);
-      pushToast(`Subscription ${added.name} added — ${added.servers.length} servers`);
+      pushToast("Subscription added", "info", `${added.name} · ${added.servers.length} servers`);
       ping(url, added.servers);
       return true;
     } catch (err) {
