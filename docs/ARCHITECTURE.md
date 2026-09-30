@@ -1266,3 +1266,17 @@ Info.plist. На `tao 0.35` (Tauri 2.11) одного манифеста мал�
   `UIApplicationSceneManifest` с `UIApplicationSupportsMultipleScenes:
   false` (делегат сцены `tao` отдаёт сам через
   `configurationForConnectingSceneSession`).
+
+## DNS тоннеля: DNS-over-HTTPS вместо UDP-DNS
+
+Было: `NEDNSSettings(servers: ["1.1.1.1", "8.8.8.8"])` — обычный DNS
+через тоннель. Каждый запрос — отдельный UDP-relay в `netunnel`, живущий
+до idle timeout, а на iPhone их не больше 32 — при активном сёрфинге DNS
+забивал лимит, новые запросы отбрасывались. Участок «VPN-сервер →
+резолвер» шёл открытым текстом.
+
+Стало: `NEDNSOverHTTPSSettings` (Cloudflare, `https://cloudflare-dns.com/
+dns-query`, bootstrap-IP 1.1.1.1 / 1.0.0.1) — DoH делает сама iOS, одним
+переиспользуемым TCP-соединением через тоннель; памяти расширения это не
+стоит. DNSCrypt рассматривался и отклонён: отдельный `dnscrypt-proxy` в
+расширении — лишние мегабайты под 50-МБ лимит iPhone при той же пользе.

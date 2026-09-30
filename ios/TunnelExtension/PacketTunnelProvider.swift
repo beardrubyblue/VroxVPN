@@ -89,6 +89,21 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
             .path
     }
 
+    /// DNS тоннеля — DNS-over-HTTPS (Cloudflare) средствами самой iOS.
+    /// Раньше был обычный UDP-DNS на 1.1.1.1/8.8.8.8: каждый запрос —
+    /// отдельный UDP-relay в netunnel (живёт до idle timeout), а на iPhone
+    /// их не больше 32 (handler.go) — при активном сёрфинге DNS забивал
+    /// лимит, и новые запросы отбрасывались. DoH идёт одним переиспользуемым
+    /// TCP-соединением и заодно шифрует участок «VPN-сервер → резолвер».
+    /// `servers` — IP для доступа к самому DoH-серверу (без них его имя
+    /// пришлось бы резолвить обычным DNS). Оба адреса маршрутизируются в
+    /// тоннель, как и раньше 1.1.1.1.
+    private static func makeDNSSettings() -> NEDNSSettings {
+        let dns = NEDNSOverHTTPSSettings(servers: ["1.1.1.1", "1.0.0.1"])
+        dns.serverURL = URL(string: "https://cloudflare-dns.com/dns-query")
+        return dns
+    }
+
     /// Добавляет в JSON-конфиг от Rust то, что знает только расширение:
     /// `memoryConstrained` и `historyPath`. Если JSON не разобрался —
     /// отдаём как есть: Go без полей считает режим ограниченным
@@ -190,7 +205,7 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
         // тоннеле). Публичные DNS реально резолвятся через тот же
         // udpForwarderHandler (netunnel/handler.go) — для стека порт 53
         // ничем не отличается от любого другого UDP-трафика.
-        settings.dnsSettings = NEDNSSettings(servers: ["1.1.1.1", "8.8.8.8"])
+        settings.dnsSettings = Self.makeDNSSettings()
 
         self.setTunnelNetworkSettings(settings) { [weak self] error in
             guard let self else { return }
