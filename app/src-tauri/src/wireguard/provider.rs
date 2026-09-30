@@ -3,8 +3,10 @@
 //! Плюс `inet4Addr`/`mtu`, которые engine/macos/connect читает для
 //! сетевых настроек тоннеля (Go эти поля игнорирует).
 
+use std::net::Ipv4Addr;
+
 use super::WireGuardProfile;
-use crate::config_gen::resolve_server_addresses;
+use crate::config_gen::{resolve_server_addresses, ExcludedRoutes};
 
 /// MTU, если в конфиге его нет (wg-easy не пишет): 1280, как официальный
 /// WireGuard для iOS — с десктопными 1420 тоннель на iPhone «подключался»,
@@ -46,6 +48,36 @@ pub fn provider_config_json(profile: &WireGuardProfile) -> Result<serde_json::Va
     }))
 }
 
+/// Разбор IPv4 CIDR «10.8.0.14/24» → (адрес, маска); без префикса — /32.
+fn parse_ipv4_cidr(cidr: &str) -> Option<(u32, u32)> {
+    let (address, prefix) = cidr.split_once('/').unwrap_or((cidr, "32"));
+    let address = u32::from(address.trim().parse::<Ipv4Addr>().ok()?);
+    let prefix = prefix.trim().parse::<u32>().ok().filter(|prefix| *prefix <= 32)?;
+    let mask = if prefix == 0 { 0 } else { u32::MAX << (32 - prefix) };
+    Some((address, mask))
+}
+
+/// Убрать из исключений тоннеля частные диапазоны, в которые попадает
+/// адрес WireGuard-интерфейса. config_gen исключает 10.0.0.0/8,
+/// 172.16.0.0/12 и 192.168.0.0/16 (локальная сеть — напрямую), а wg-easy
+/// выдаёт клиентам 10.8.0.x: весь 10.0.0.0/8 уходил мимо тоннеля, и на
+/// iPhone WireGuard «подключался», рукопожатие проходило, ответы сервера
+/// даже расшифровывались (↓ рос), но iOS их не принимала — ping и
+/// страницы висели, ↑ рос от повторов. У hysteria2 адрес тоннеля
+/// 100.100.100.101 вне этих диапазонов, поэтому проблемы не было.
+/// Официальный клиент подсеть своего адреса тоже явно направляет в тоннель.
+pub fn keep_tunnel_subnet(excluded: &mut ExcludedRoutes, profile: &WireGuardProfile) {
+    let tunnel_addresses: Vec<u32> = profile
+        .addresses
+        .iter()
+        .filter_map(|address| parse_ipv4_cidr(address).map(|(ip, _)| ip))
+        .collect();
+    excluded.ipv4.retain(|range| match parse_ipv4_cidr(range) {
+        Some((network, mask)) => !tunnel_addresses.iter().any(|ip| ip & mask == network & mask),
+        None => true,
+    });
+}
+
 #[cfg(test)]
 mod tests {
     use crate::wireguard::parse_conf;
@@ -67,6 +99,21 @@ mod tests {
         assert_eq!(json["peer"]["allowedIPs"][0], "0.0.0.0/0");
         assert_eq!(json["peer"]["persistentKeepalive"], 0);
         assert_eq!(json["inet4Addr"], "10.8.0.14/24");
+    }
+
+    #[test]
+    fn keeps_tunnel_subnet_out_of_excluded_routes() {
+        let profile = parse_conf(
+            "[Interface]\nPrivateKey = cHJpdg==\nAddress = 10.8.0.14/24\n\
+             [Peer]\nPublicKey = cHVi\nAllowedIPs = 0.0.0.0/0\nEndpoint = 192.0.2.55:51820\n",
+        )
+        .unwrap();
+        let mut excluded = crate::config_gen::ExcludedRoutes {
+            ipv4: ["192.168.0.0/16", "10.0.0.0/8", "172.16.0.0/12", "192.0.2.55/32"].map(String::from).to_vec(),
+            ipv6: vec![],
+        };
+        super::keep_tunnel_subnet(&mut excluded, &profile);
+        assert_eq!(excluded.ipv4, vec!["192.168.0.0/16", "172.16.0.0/12", "192.0.2.55/32"]);
     }
 
     /// Живая цепочка Rust → Go: разобрать настоящий .conf (VROX_WG_TEST_CONF)

@@ -101,7 +101,10 @@ pub async fn spawn_client(
 ) -> Result<(ConnectionHandle, String), String> {
     // config_gen-вызовам нужен &AppHandle (geoip/geosite) — считаем их
     // ДО перехода на blocking-поток, не внутри него.
-    let excluded = config_gen::generate_excluded_routes(app, server, ru_bypass)?;
+    let mut excluded = config_gen::generate_excluded_routes(app, server, ru_bypass)?;
+    if let Some(profile) = &server.wireguard {
+        crate::wireguard::provider::keep_tunnel_subnet(&mut excluded, profile);
+    }
     // протокол узла: WireGuard — импортированный .conf, иначе hysteria2
     let provider_config = match &server.wireguard {
         Some(profile) => crate::wireguard::provider::provider_config_json(profile)?,
