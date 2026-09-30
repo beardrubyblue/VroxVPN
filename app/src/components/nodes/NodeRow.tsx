@@ -1,6 +1,7 @@
 import { FlagDot } from "@/design/brand";
 import { countryCodeFromName } from "@/design/country";
 import type { PingResult, Server } from "@/types";
+import { protocolLabel } from "@/utils/protocol";
 
 const BAR_COUNT = 5;
 // Пороги пинга (мс) для полосок сигнала: меньше пинг → больше полос.
@@ -28,7 +29,7 @@ export function NodeRow({ server, ping, isActive, onPick }: NodeRowProps) {
       <FlagDot code={countryCodeFromName(server.name)} size={32} />
       <div className="node-body">
         <div className="node-name">{server.name}</div>
-        <div className="node-host mono">{server.host}</div>
+        <div className="node-host mono">{protocolLabel(server)}</div>
       </div>
       <div className="node-ping mono" aria-label={latencyMs === null ? "No ping" : `${latencyMs} ms`}>
         {latencyMs === null ? "—" : latencyMs}
