@@ -1,5 +1,5 @@
 /* Экран Nodes: шапка, фильтры, группы подписок, строки серверов. */
-.nodes-top { padding: 60px 20px 16px; display: flex; justify-content: space-between; align-items: center; }
+.nodes-top { padding: var(--screen-top) 20px 16px; display: flex; justify-content: space-between; align-items: center; }
 .nodes-counter { font-size: 11px; color: var(--fg-dim); letter-spacing: 0.2em; }
 .nodes-head { padding: 0 20px; }
 .nodes-title-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; }

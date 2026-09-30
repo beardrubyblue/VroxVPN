@@ -4,6 +4,8 @@ mod config_gen;
 mod engine;
 mod geoip;
 mod geosite;
+#[cfg(target_os = "ios")]
+mod mac_window;
 mod ping;
 mod resources;
 mod settings;
@@ -66,6 +68,9 @@ pub fn run() {
             tray::sync_tray,
         ])
         .setup(|app| {
+            // iOS-сборка на Mac: окно можно сузить до ширины iPhone
+            #[cfg(target_os = "ios")]
+            mac_window::allow_narrow_window();
             // polkit-правило ставится при apt install (postinst.sh) — на
             // свежей установке это no-op без pkexec. Нужно ДО startup-
             // уборки ниже, иначе на апгрейде без переустановки она сама

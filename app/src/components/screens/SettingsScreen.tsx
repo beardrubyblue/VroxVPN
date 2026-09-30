@@ -136,7 +136,7 @@ function UpdateButton({ label = "UPDATE", solid, loading, onClick }: { label?: s
 export function SettingsScreen(p: SettingsScreenProps) {
   return (
     <div className="vrox-screen">
-      <div style={{ padding: "60px 20px 8px" }}>
+      <div style={{ padding: "var(--screen-top) 20px 8px" }}>
         <h2 className="display" style={{ fontSize: 32, fontWeight: 600, margin: 0, letterSpacing: "-0.02em" }}>
           Settings
         </h2>

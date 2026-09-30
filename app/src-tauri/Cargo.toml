@@ -54,6 +54,9 @@ codegen-units = 1
 [target.'cfg(target_os = "ios")'.dependencies]
 tauri-plugin-dialog = "2.8"
 tauri-plugin-barcode-scanner = "2.5"
+# mac_window.rs — минимальный размер окна iOS-сборки на Mac; тот же
+# 0.3, что тянет tao, отдельно — только нужные классы
+objc2-ui-kit = { version = "0.3", default-features = false, features = ["std", "UIApplication", "UIResponder", "UIScene", "UIWindowScene", "UISceneSizeRestrictions"] }
 
 # Linux пишет историю трафика сам (traffic_history/recorder.rs) — нужна
 # локальная дата; на iOS даты ставит расширение (Go).

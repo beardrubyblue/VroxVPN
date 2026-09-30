@@ -60,6 +60,7 @@ dependencies = [
  "objc2",
  "objc2-foundation",
  "objc2-network-extension",
+ "objc2-ui-kit",
  "percent-encoding",
  "reqwest",
  "serde",

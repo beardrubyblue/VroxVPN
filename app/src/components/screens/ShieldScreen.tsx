@@ -119,7 +119,7 @@ export function ShieldScreen({ connected, busy, server, onToggle, onOpenLocation
         style={{
           position: "relative",
           zIndex: 3,
-          padding: "60px 24px 0",
+          padding: "var(--screen-top) 24px 0",
           display: "flex",
           justifyContent: "space-between",
           alignItems: "center",
