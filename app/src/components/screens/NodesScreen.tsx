@@ -1,44 +1,46 @@
 import { useState } from "react";
 import { AddNodeSheet } from "@/components/add-sheet";
-import { NodesFilters, NodesHeader, NodesTabEnum, SubscriptionGroup, WireGuardGroup, WireGuardSheet, filterNodes } from "@/components/nodes";
+import { ManualGroup, ManualSheet, NodesFilters, NodesHeader, NodesTabEnum, SubscriptionGroup, filterNodes } from "@/components/nodes";
 import { SubscriptionSheet } from "@/components/subscription-sheet";
-import { useAddNode, useSubscriptionActions, useWireGuardActions } from "@/hooks";
-import type { useConnection, useSubscriptions, useWireGuard } from "@/hooks";
+import { useAddNode, useManualActions, useSubscriptionActions } from "@/hooks";
+import type { useConnection, useManualServers, useSubscriptions } from "@/hooks";
 import type { Server } from "@/types";
 import { isLinux } from "@/utils/platform";
 
-type TPushToast = (text: string, kind?: "error" | "info") => void;
+type TPushToast = (text: string, kind?: "error" | "info", detail?: string) => void;
 
-// ключ группы WireGuard в наборе свёрнутых (у подписок — их url)
-const WIREGUARD_GROUP_KEY = "wireguard";
+// ключ группы «Added manually» в наборе свёрнутых (у подписок — их url)
+const MANUAL_GROUP_KEY = "manual";
 
 interface NodesScreenProps {
   subs: ReturnType<typeof useSubscriptions>;
-  wireguard: ReturnType<typeof useWireGuard>;
+  manual: ReturnType<typeof useManualServers>;
   connection: ReturnType<typeof useConnection>;
   pushToast: TPushToast;
   onPick: (server: Server) => void;
   onBack: () => void;
 }
 
-// Список нод: группы подписок (hysteria2) с обновлением и меню, плюс группа
-// импортированных WireGuard/AmneziaWG-конфигов с меню у каждого узла.
-export function NodesScreen({ subs, wireguard, connection, pushToast, onPick, onBack }: NodesScreenProps) {
+// Список нод, сгруппированный по ИСТОЧНИКУ: группы подписок (обновление и
+// меню на всю группу) и «Added manually» (меню у каждого узла). Протокол —
+// свойство узла: метка в строке и фильтр Hysteria2 / WireGuard.
+export function NodesScreen({ subs, manual, connection, pushToast, onPick, onBack }: NodesScreenProps) {
   const [query, setQuery] = useState("");
   const [tab, setTab] = useState<NodesTabEnum>(NodesTabEnum.All);
   const [collapsed, setCollapsed] = useState<ReadonlySet<string>>(new Set());
-  const add = useAddNode(subs, wireguard, pushToast);
+  const add = useAddNode(subs, manual, pushToast);
   const actions = useSubscriptionActions({ subs, connection, pushToast });
-  const wireguardActions = useWireGuardActions({ wireguard, connection });
+  const manualActions = useManualActions({ manual, connection });
 
-  const isSearching = query.trim() !== "";
+  // при поиске или фильтре по протоколу пустые группы скрыты, а непустые раскрыты
+  const isFiltering = query.trim() !== "" || tab === NodesTabEnum.Hysteria2 || tab === NodesTabEnum.WireGuard;
   const groups = subs.subscriptions
     .map((subscription) => ({ subscription, servers: filterNodes(subscription.servers, subscription.pings, query, tab) }))
-    .filter((group) => !isSearching || group.servers.length > 0);
-  const wireguardServers = filterNodes(wireguard.servers, wireguard.pings, query, tab);
-  const hasWireGuardGroup = wireguardServers.length > 0 || (!isSearching && wireguard.servers.length > 0);
+    .filter((group) => !isFiltering || group.servers.length > 0);
+  const manualServers = filterNodes(manual.servers, manual.pings, query, tab);
+  const hasManualGroup = isFiltering ? manualServers.length > 0 : manual.servers.length > 0;
   const subscriptionNodes = subs.subscriptions.reduce((sum, subscription) => sum + subscription.servers.length, 0);
-  const hasNothing = subs.subscriptions.length === 0 && wireguard.servers.length === 0;
+  const hasNothing = subs.subscriptions.length === 0 && manual.servers.length === 0;
 
   function toggleGroup(key: string) {
     setCollapsed((prev) => {
@@ -49,25 +51,24 @@ export function NodesScreen({ subs, wireguard, connection, pushToast, onPick, on
     });
   }
 
-  // во время поиска группы раскрыты — иначе совпадения прятались бы
-  const isGroupOpen = (key: string) => isSearching || !collapsed.has(key);
+  const isGroupOpen = (key: string) => isFiltering || !collapsed.has(key);
 
   return (
     <div className="vrox-screen">
       <NodesHeader
         subscriptionCount={subs.subscriptions.length}
-        nodeCount={subscriptionNodes + wireguard.servers.length}
+        nodeCount={subscriptionNodes + manual.servers.length}
         isRefreshing={subs.subscriptions.some((subscription) => subscription.refreshing)}
         onBack={onBack}
-        onPaste={add.subscriptionForm.paste}
+        onPaste={add.paste}
         onRefreshAll={subs.refreshAll}
         onAdd={add.open}
       />
       <NodesFilters query={query} onQueryChange={setQuery} tab={tab} onTabChange={setTab} />
 
       <div className="scrollable nodes-list">
-        {groups.length === 0 && !hasWireGuardGroup && (
-          <div className="nodes-empty">{hasNothing ? "Add a subscription or a WireGuard config" : "Nothing matches your search"}</div>
+        {groups.length === 0 && !hasManualGroup && (
+          <div className="nodes-empty">{hasNothing ? "Add a subscription or a server" : "Nothing matches your filter"}</div>
         )}
         {groups.map(({ subscription, servers }) => (
           <SubscriptionGroup
@@ -82,15 +83,15 @@ export function NodesScreen({ subs, wireguard, connection, pushToast, onPick, on
             onPick={onPick}
           />
         ))}
-        {hasWireGuardGroup && (
-          <WireGuardGroup
-            servers={wireguardServers}
-            pings={wireguard.pings}
-            isOpen={isGroupOpen(WIREGUARD_GROUP_KEY)}
+        {hasManualGroup && (
+          <ManualGroup
+            servers={manualServers}
+            pings={manual.pings}
+            isOpen={isGroupOpen(MANUAL_GROUP_KEY)}
             activeName={connection.selectedServer?.name}
-            onToggle={() => toggleGroup(WIREGUARD_GROUP_KEY)}
+            onToggle={() => toggleGroup(MANUAL_GROUP_KEY)}
             onPick={onPick}
-            onMenu={wireguardActions.openMenu}
+            onMenu={manualActions.openMenu}
           />
         )}
       </div>
@@ -100,13 +101,13 @@ export function NodesScreen({ subs, wireguard, connection, pushToast, onPick, on
         isVisible={add.sheet.visible}
         tab={add.tab}
         onTabChange={add.setTab}
-        canAddWireGuard={!isLinux}
+        canPickFileOrQr={!isLinux}
         subscriptionForm={add.subscriptionForm}
-        wireguardForm={add.wireguardForm}
+        serverForm={add.serverForm}
         onClose={add.sheet.hide}
       />
       <SubscriptionSheet actions={actions} />
-      <WireGuardSheet actions={wireguardActions} />
+      <ManualSheet actions={manualActions} />
     </div>
   );
 }

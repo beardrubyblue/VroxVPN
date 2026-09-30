@@ -1,8 +1,8 @@
 import { Ic } from "@/design/icons";
 import type { PingResult, Server } from "@/types";
-import { WireGuardRow } from "./WireGuardRow";
+import { ManualRow } from "./ManualRow";
 
-interface WireGuardGroupProps {
+interface ManualGroupProps {
   servers: Server[];
   pings: Record<string, PingResult>;
   isOpen: boolean;
@@ -12,25 +12,26 @@ interface WireGuardGroupProps {
   onMenu: (id: string) => void;
 }
 
-// Группа импортированных WireGuard/AmneziaWG-конфигов на экране Nodes.
+// Группа «Added manually» — узлы, добавленные вручную (ссылка hysteria2://
+// или .conf WireGuard). Группа — источник, протокол виден в строке узла.
 // servers — уже отфильтрованы поиском (filter-nodes.ts).
-export function WireGuardGroup({ servers, pings, isOpen, activeName, onToggle, onPick, onMenu }: WireGuardGroupProps) {
+export function ManualGroup({ servers, pings, isOpen, activeName, onToggle, onPick, onMenu }: ManualGroupProps) {
   return (
-    <section className="group" aria-label="WireGuard">
+    <section className="group" aria-label="Added manually">
       <div className="group-head">
         <button className="group-toggle" onClick={onToggle} aria-expanded={isOpen}>
           <span className={isOpen ? "group-chevron open" : "group-chevron"} aria-hidden="true">
             <Ic.chevron s={14} sw={2} />
           </span>
           <span className="group-info">
-            <span className="group-title mono">WireGuard</span>
-            <span className="group-meta mono">{servers.length} CONFIGS</span>
+            <span className="group-title mono">Added manually</span>
+            <span className="group-meta mono">{servers.length} NODES</span>
           </span>
         </button>
       </div>
       {isOpen &&
         servers.map((server) => (
-          <WireGuardRow
+          <ManualRow
             key={server.raw_uri}
             server={server}
             ping={pings[server.name]}

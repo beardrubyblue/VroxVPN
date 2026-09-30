@@ -15,7 +15,7 @@ import {
   useToast,
   useTrafficStats,
   useAppBootstrap,
-  useWireGuard,
+  useManualServers,
 } from "@/hooks";
 import "./App.css";
 
@@ -25,13 +25,13 @@ function App() {
 
   const { toasts, pushToast, dismissToast } = useToast();
   const subs = useSubscriptions(pushToast);
-  const wireguard = useWireGuard(pushToast);
+  const manual = useManualServers(pushToast);
   const settings = useSettings();
-  // все узлы (подписки + WireGuard) — для трея и выбора из него; useMemo,
+  // все узлы (подписки + добавленные вручную) — для трея и выбора из него; useMemo,
   // чтобы sync_tray (эффект в useConnection) не дёргался на каждый рендер
   const allServers = useMemo(
-    () => [...subs.subscriptions.flatMap((subscription) => subscription.servers), ...wireguard.servers],
-    [subs.subscriptions, wireguard.servers],
+    () => [...subs.subscriptions.flatMap((subscription) => subscription.servers), ...manual.servers],
+    [subs.subscriptions, manual.servers],
   );
   const connection = useConnection({
     servers: allServers,
@@ -42,7 +42,7 @@ function App() {
   const { traffic, memoryBytes, memoryDebug } = useTrafficStats(connection.status.connected, pushToast);
   const update = useAppUpdate(pushToast);
   const geo = useGeoUpdates(pushToast);
-  useAppBootstrap({ settings, subs, wireguard, setSelectedServer: connection.setSelectedServer });
+  useAppBootstrap({ settings, subs, manual, setSelectedServer: connection.setSelectedServer });
 
   const showTabs = page !== "nodes";
 
@@ -63,7 +63,7 @@ function App() {
       {page === "nodes" && (
         <NodesScreen
           subs={subs}
-          wireguard={wireguard}
+          manual={manual}
           connection={connection}
           pushToast={pushToast}
           onPick={(server) => {

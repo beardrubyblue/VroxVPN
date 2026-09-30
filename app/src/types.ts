@@ -45,10 +45,12 @@ export interface Server {
   pin_sha256: string;
   quic: Record<string, unknown>;
   raw_uri: string;
-  // Есть — WireGuard/AmneziaWG-узел из импортированного .conf (Rust
-  // wireguard/), нет — hysteria2 из подписки. UI нужны id и параметры
-  // маскировки (есть — это AmneziaWG).
-  wireguard?: { id: string; obfuscation?: Record<string, string> };
+  // Есть — WireGuard/AmneziaWG-узел (.conf), нет — hysteria2. UI нужны
+  // только параметры маскировки (есть — это AmneziaWG).
+  wireguard?: { obfuscation?: Record<string, string> };
+  // Есть — узел добавлен вручную (Rust manual/, группа «Added manually»),
+  // это id для переименования/удаления; нет — узел из подписки.
+  manual_id?: string;
 }
 
 export interface PingResult {

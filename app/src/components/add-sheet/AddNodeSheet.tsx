@@ -1,7 +1,7 @@
-import type { useAddSubscription, useWireGuardForm } from "@/hooks";
+import type { useAddSubscription, useServerForm } from "@/hooks";
 import { ScannerOverlay } from "./ScannerOverlay";
 import { SubscriptionForm } from "./SubscriptionForm";
-import { WireGuardForm } from "./WireGuardForm";
+import { ServerForm } from "./ServerForm";
 import { AddTabEnum } from "./add-tab";
 
 interface AddNodeSheetProps {
@@ -9,48 +9,46 @@ interface AddNodeSheetProps {
   isVisible: boolean;
   tab: AddTabEnum;
   onTabChange: (tab: AddTabEnum) => void;
-  // на Linux WireGuard пока не поддерживается — вкладки нет
-  canAddWireGuard: boolean;
+  // файл и QR — только iOS (на Linux только вставка ссылки/конфига)
+  canPickFileOrQr: boolean;
   subscriptionForm: ReturnType<typeof useAddSubscription>;
-  wireguardForm: ReturnType<typeof useWireGuardForm>;
+  serverForm: ReturnType<typeof useServerForm>;
   onClose: () => void;
 }
 
-// Шторка «+»: подписка hysteria2 или конфиг WireGuard/AmneziaWG.
+// Шторка «+»: выбираешь источник — подписка или один сервер (ссылка
+// hysteria2:// или .conf WireGuard/AmneziaWG, протокол определяется сам).
 export function AddNodeSheet(props: AddNodeSheetProps) {
-  const { isOpen, isVisible, tab, onTabChange, canAddWireGuard, subscriptionForm, wireguardForm, onClose } = props;
+  const { isOpen, isVisible, tab, onTabChange, canPickFileOrQr, subscriptionForm, serverForm, onClose } = props;
   if (!isOpen) return null;
-  const activeTab = canAddWireGuard ? tab : AddTabEnum.Subscription;
 
   return (
     <div className={isVisible ? "sheet-backdrop visible" : "sheet-backdrop"} onClick={onClose}>
       <div className={isVisible ? "sheet visible" : "sheet"} role="dialog" aria-label="Add" onClick={(event) => event.stopPropagation()}>
         <div className="sheet-handle" />
         <h3>Add</h3>
-        {canAddWireGuard && (
-          <div className="add-tabs" role="tablist">
+        <div className="add-tabs" role="tablist">
             <button
               role="tab"
-              aria-selected={activeTab === AddTabEnum.Subscription}
-              className={activeTab === AddTabEnum.Subscription ? "add-tab active" : "add-tab"}
+              aria-selected={tab === AddTabEnum.Subscription}
+              className={tab === AddTabEnum.Subscription ? "add-tab active" : "add-tab"}
               onClick={() => onTabChange(AddTabEnum.Subscription)}
             >
               Subscription
             </button>
             <button
               role="tab"
-              aria-selected={activeTab === AddTabEnum.WireGuard}
-              className={activeTab === AddTabEnum.WireGuard ? "add-tab active" : "add-tab"}
-              onClick={() => onTabChange(AddTabEnum.WireGuard)}
+              aria-selected={tab === AddTabEnum.Server}
+              className={tab === AddTabEnum.Server ? "add-tab active" : "add-tab"}
+              onClick={() => onTabChange(AddTabEnum.Server)}
             >
-              WireGuard
+              Server
             </button>
           </div>
-        )}
-        {activeTab === AddTabEnum.Subscription && <SubscriptionForm form={subscriptionForm} onDone={onClose} />}
-        {activeTab === AddTabEnum.WireGuard && <WireGuardForm form={wireguardForm} onDone={onClose} />}
+        {tab === AddTabEnum.Subscription && <SubscriptionForm form={subscriptionForm} onDone={onClose} />}
+        {tab === AddTabEnum.Server && <ServerForm form={serverForm} canPickFileOrQr={canPickFileOrQr} onDone={onClose} />}
       </div>
-      {wireguardForm.scanner.isScanning && <ScannerOverlay onCancel={wireguardForm.scanner.cancelScan} />}
+      {serverForm.scanner.isScanning && <ScannerOverlay onCancel={serverForm.scanner.cancelScan} />}
     </div>
   );
 }

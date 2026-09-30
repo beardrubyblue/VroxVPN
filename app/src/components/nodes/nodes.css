@@ -80,6 +80,6 @@
 .node-bars > div { width: 3px; border-radius: 1px; background: var(--line-strong); }
 .node-bars > div.on { background: var(--fg); }
 
-/* строка WireGuard-узла: NodeRow + своё меню «…» (wireguard/WireGuardRow) */
-.wg-row { display: flex; align-items: center; gap: 8px; margin-top: 8px; }
-.wg-row > .node-row { flex: 1; min-width: 0; margin-top: 0; }
+/* строка узла, добавленного вручную: NodeRow + своё меню «…» (manual/ManualRow) */
+.manual-row { display: flex; align-items: center; gap: 8px; margin-top: 8px; }
+.manual-row > .node-row { flex: 1; min-width: 0; margin-top: 0; }

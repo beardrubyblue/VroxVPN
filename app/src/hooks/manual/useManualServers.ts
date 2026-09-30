@@ -4,9 +4,10 @@ import type { PingResult, Server } from "@/types";
 
 type TPushToast = (text: string, kind?: "error" | "info", detail?: string) => void;
 
-// Импортированные WireGuard/AmneziaWG-конфиги (Rust wireguard/). Каждый
-// конфиг — отдельный узел; группа WireGuard на экране Nodes.
-export function useWireGuard(pushToast: TPushToast) {
+// Узлы, добавленные вручную (Rust manual/): ссылка hysteria2:// или .conf
+// WireGuard/AmneziaWG. Группа «Added manually» на экране Nodes — источник,
+// протокол показан у каждого узла.
+export function useManualServers(pushToast: TPushToast) {
   const [servers, setServers] = useState<Server[]>([]);
   const [pings, setPings] = useState<Record<string, PingResult>>({});
 
@@ -22,7 +23,7 @@ export function useWireGuard(pushToast: TPushToast) {
 
   async function load(): Promise<Server[]> {
     try {
-      const list = await invoke<Server[]>("list_wireguard");
+      const list = await invoke<Server[]>("list_manual_servers");
       setServers(list);
       ping(list);
       return list;
@@ -31,12 +32,13 @@ export function useWireGuard(pushToast: TPushToast) {
     }
   }
 
-  async function importConf(name: string, conf: string): Promise<boolean> {
+  // text — ссылка hysteria2:// или .conf; протокол определяет Rust
+  async function importText(name: string, text: string): Promise<boolean> {
     try {
-      const server = await invoke<Server>("import_wireguard", { name, conf });
+      const server = await invoke<Server>("import_manual_server", { name, text });
       setServers((prev) => [...prev, server]);
       ping([server]);
-      pushToast("WireGuard added", "info", `${server.name} · ${server.host}:${server.port}`);
+      pushToast("Server added", "info", `${server.name} · ${server.host}:${server.port}`);
       return true;
     } catch (err) {
       pushToast(String(err), "error");
@@ -46,8 +48,8 @@ export function useWireGuard(pushToast: TPushToast) {
 
   async function rename(id: string, name: string) {
     try {
-      await invoke("rename_wireguard", { id, name });
-      setServers((prev) => prev.map((server) => (server.wireguard?.id === id ? { ...server, name } : server)));
+      await invoke("rename_manual_server", { id, name });
+      setServers((prev) => prev.map((server) => (server.manual_id === id ? { ...server, name } : server)));
     } catch (err) {
       pushToast(String(err), "error");
     }
@@ -55,12 +57,12 @@ export function useWireGuard(pushToast: TPushToast) {
 
   async function remove(id: string) {
     try {
-      await invoke("delete_wireguard", { id });
-      setServers((prev) => prev.filter((server) => server.wireguard?.id !== id));
+      await invoke("delete_manual_server", { id });
+      setServers((prev) => prev.filter((server) => server.manual_id !== id));
     } catch (err) {
       pushToast(String(err), "error");
     }
   }
 
-  return { servers, pings, load, importConf, rename, remove };
+  return { servers, pings, load, importText, rename, remove };
 }

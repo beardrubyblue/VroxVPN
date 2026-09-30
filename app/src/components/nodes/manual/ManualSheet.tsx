@@ -1,13 +1,14 @@
 import { SubscriptionDeleteConfirm, SubscriptionMenu, SubscriptionRenameForm } from "@/components/subscription-sheet";
-import type { useWireGuardActions } from "@/hooks";
+import type { useManualActions } from "@/hooks";
+import { protocolLabel } from "@/utils/protocol";
 
-interface WireGuardSheetProps {
-  actions: ReturnType<typeof useWireGuardActions>;
+interface ManualSheetProps {
+  actions: ReturnType<typeof useManualActions>;
 }
 
-// Шторка меню WireGuard-узла: переименовать / удалить (одна шторка с
-// режимами, те же формы, что у подписок).
-export function WireGuardSheet({ actions }: WireGuardSheetProps) {
+// Шторка меню узла, добавленного вручную: переименовать / удалить (одна
+// шторка с режимами, те же формы, что у подписок).
+export function ManualSheet({ actions }: ManualSheetProps) {
   const { sheet, mode, target } = actions;
   if (!sheet.open || !target) return null;
 
@@ -23,11 +24,11 @@ export function WireGuardSheet({ actions }: WireGuardSheetProps) {
         <div className="sub-sheet-head">
           <div className="sub-sheet-name mono">{target.name}</div>
           <div className="sub-sheet-url mono">
-            WireGuard · {target.host}:{target.port}
+            {protocolLabel(target)} · {target.host}:{target.port}
           </div>
         </div>
         {mode === "menu" && (
-          <SubscriptionMenu onRename={actions.startRename} onDelete={() => actions.setMode("delete")} deleteLabel="Delete config" />
+          <SubscriptionMenu onRename={actions.startRename} onDelete={() => actions.setMode("delete")} deleteLabel="Delete server" />
         )}
         {mode === "rename" && (
           <SubscriptionRenameForm
@@ -39,7 +40,7 @@ export function WireGuardSheet({ actions }: WireGuardSheetProps) {
         )}
         {mode === "delete" && (
           <SubscriptionDeleteConfirm
-            title="Delete WireGuard config?"
+            title="Delete server?"
             nodeCount={1}
             isConnected={actions.isTargetConnected}
             onCancel={() => actions.setMode("menu")}

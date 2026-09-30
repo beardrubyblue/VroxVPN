@@ -17,7 +17,7 @@ fn split_list(value: &str) -> Vec<String> {
     value.split(',').map(str::trim).filter(|item| !item.is_empty()).map(String::from).collect()
 }
 
-/// `id` результата пуст — его выдаёт хранилище. DNS из конфига не
+/// DNS из конфига не
 /// используется: DNS тоннеля одинаковый для всех протоколов (DoH в
 /// PacketTunnelProvider.swift).
 pub fn parse_conf(text: &str) -> Result<WireGuardProfile, String> {

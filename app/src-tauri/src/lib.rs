@@ -4,6 +4,7 @@ mod config_gen;
 mod engine;
 mod geoip;
 mod geosite;
+mod manual;
 #[cfg(target_os = "ios")]
 mod mac_window;
 mod ping;
@@ -51,11 +52,11 @@ pub fn run() {
             commands::disconnect,
             commands::get_traffic_totals,
             commands::get_traffic_history,
-            wireguard::commands::list_wireguard,
-            wireguard::commands::import_wireguard,
-            wireguard::commands::rename_wireguard,
-            wireguard::commands::delete_wireguard,
-            wireguard::commands::pick_wireguard_file,
+            manual::commands::list_manual_servers,
+            manual::commands::import_manual_server,
+            manual::commands::rename_manual_server,
+            manual::commands::delete_manual_server,
+            manual::commands::pick_config_file,
             commands::fetch_subscription,
             commands::update_geoip,
             commands::update_geosite,

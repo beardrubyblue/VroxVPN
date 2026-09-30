@@ -4,6 +4,8 @@ import { NodesTabEnum } from "./filter-nodes";
 const TABS = [
   [NodesTabEnum.All, "All"],
   [NodesTabEnum.Fastest, "Fastest"],
+  [NodesTabEnum.Hysteria2, "Hysteria2"],
+  [NodesTabEnum.WireGuard, "WireGuard"],
 ] as const;
 
 interface NodesFiltersProps {

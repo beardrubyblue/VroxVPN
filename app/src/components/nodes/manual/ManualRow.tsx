@@ -2,7 +2,7 @@ import { NodeRow } from "@/components/nodes/NodeRow";
 import { Ic } from "@/design/icons";
 import type { PingResult, Server } from "@/types";
 
-interface WireGuardRowProps {
+interface ManualRowProps {
   server: Server;
   ping: PingResult | undefined;
   isActive: boolean;
@@ -10,12 +10,12 @@ interface WireGuardRowProps {
   onMenu: (id: string) => void;
 }
 
-// Строка WireGuard-узла: у каждого конфига своё меню (переименовать /
+// Строка узла, добавленного вручную: у каждого своё меню (переименовать /
 // удалить) — у подписок меню на всю группу.
-export function WireGuardRow({ server, ping, isActive, onPick, onMenu }: WireGuardRowProps) {
-  const id = server.wireguard?.id ?? "";
+export function ManualRow({ server, ping, isActive, onPick, onMenu }: ManualRowProps) {
+  const id = server.manual_id ?? "";
   return (
-    <div className="wg-row">
+    <div className="manual-row">
       <NodeRow server={server} ping={ping} isActive={isActive} onPick={onPick} />
       <button className="round-btn small" onClick={() => onMenu(id)} aria-label={`${server.name} options`}>
         <Ic.more s={16} />

@@ -43,6 +43,11 @@ pub struct Server {
     /// WireGuard-узла пустые, кроме name/host/port/raw_uri.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub wireguard: Option<crate::wireguard::WireGuardProfile>,
+    /// Есть — узел добавлен вручную (manual/: ссылка hysteria2:// или
+    /// .conf WireGuard), это id записи для переименования/удаления; нет —
+    /// узел из подписки.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub manual_id: Option<String>,
 }
 
 #[derive(Serialize, Clone, Debug, Default)]
@@ -190,5 +195,6 @@ pub fn parse_hysteria2_uri(uri: &str) -> Result<Server, String> {
         quic: parse_quic_params(&first("fm")),
         raw_uri: uri.to_string(),
         wireguard: None,
+        manual_id: None,
     })
 }

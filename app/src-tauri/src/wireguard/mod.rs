@@ -1,16 +1,15 @@
-//! WireGuard / AmneziaWG: импорт конфигов wg-quick (.conf — текстом,
-//! файлом или QR), хранение и конфиг для NE-расширения. Сам тоннель —
-//! Go (packaging/hysteria2-patch/netunnel/wireguard.go). Только iOS: на
-//! Linux WireGuard пока не поддерживается (engine/linux отказывает).
+//! Протокол WireGuard / AmneziaWG: разбор конфигов wg-quick (.conf) и
+//! конфиг для NE-расширения. Сам тоннель — Go (packaging/hysteria2-patch/
+//! netunnel/wireguard.go). Хранение добавленных вручную узлов (любого
+//! протокола) — в manual/. Только iOS: на Linux WireGuard пока не
+//! поддерживается (engine/linux отказывает, manual/ не даёт добавить).
 //!
 //! WireGuard-узел — обычный `Server` с заполненным `wireguard`: выбор,
 //! пинг, трей и исключение IP сервера из тоннеля работают как у hysteria2.
 
-pub mod commands;
 mod parse;
 #[cfg(any(target_os = "macos", target_os = "ios"))]
 pub mod provider;
-mod store;
 
 use std::collections::BTreeMap;
 
@@ -30,8 +29,6 @@ pub struct WireGuardPeer {
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Default)]
 pub struct WireGuardProfile {
-    /// Идентификатор записи в хранилище (store.rs).
-    pub id: String,
     pub private_key: String,
     /// `Address` из .conf, CIDR (IPv4 и/или IPv6).
     pub addresses: Vec<String>,

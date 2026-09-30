@@ -369,6 +369,7 @@ mod tests {
             quic: HashMap::new(),
             raw_uri: String::new(),
             wireguard: None,
+            manual_id: None,
         }
     }
 

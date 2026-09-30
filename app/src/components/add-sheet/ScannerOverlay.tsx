@@ -11,7 +11,7 @@ export function ScannerOverlay({ onCancel }: ScannerOverlayProps) {
   return createPortal(
     <div className="scanner-overlay" role="dialog" aria-label="Scan QR code">
       <div className="scanner-frame" aria-hidden="true" />
-      <p className="scanner-hint">Point the camera at the QR code from wg-easy</p>
+      <p className="scanner-hint">Point the camera at the server QR code</p>
       <button className="scanner-cancel" onClick={onCancel}>
         Cancel
       </button>

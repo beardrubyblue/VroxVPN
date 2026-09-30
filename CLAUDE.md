@@ -379,12 +379,18 @@ abstraction — drop the React-Native-specific tooling rules.
   (traffic history file written by `netunnel/history.go`, read by
   `traffic_history/`) — keep the ID in sync across both entitlements,
   `PacketTunnelProvider.swift` and `traffic_history/mod.rs`.
-- `app/src-tauri/src/wireguard/` — WireGuard/AmneziaWG (iOS only): `.conf`
-  parsing, storage (`wireguard.json`), provider JSON for
-  `netunnel.WireGuardConfig`. A WireGuard node is a regular `Server` with
-  `wireguard: Some(..)`. Import via the "+" sheet: paste, file
-  (`tauri-plugin-dialog`) or QR (`tauri-plugin-barcode-scanner`) — both
-  plugins iOS-only (`capabilities/mobile.json`).
+- **Nodes are grouped by SOURCE, protocol is a node attribute.** Sources:
+  subscriptions (`subscription.rs`, one group per subscription) and
+  "Added manually" (`app/src-tauri/src/manual/` — a single `hysteria2://`
+  link or a WireGuard `.conf`, protocol auto-detected, stored as raw text
+  in `manual_servers.json`, `Server.manual_id`). Protocols: Hysteria2,
+  WireGuard, AmneziaWG — label in the row + filter chips. The "+" sheet
+  has two tabs: Subscription / Server (paste, file via
+  `tauri-plugin-dialog`, QR via `tauri-plugin-barcode-scanner` — both
+  plugins iOS-only, `capabilities/mobile.json`).
+- `app/src-tauri/src/wireguard/` — the WireGuard/AmneziaWG protocol (iOS
+  only): `.conf` parsing and provider JSON for `netunnel.WireGuardConfig`.
+  A WireGuard node is a regular `Server` with `wireguard: Some(..)`.
 - `packaging/hysteria2-patch/` — Go: forked `apernet/hysteria`
   (directDomains patch + DNS sniffer for Linux) and the `netunnel`
   package (gVisor stack + hysteria2 relay, gomobile-bound into

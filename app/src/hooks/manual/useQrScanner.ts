@@ -9,8 +9,8 @@ type TPushToast = (text: string, kind?: "error" | "info") => void;
 // отмены (ScannerOverlay, через портал). См. App.css.
 const SCANNING_CLASS = "is-scanning";
 
-// Скан QR-кода с WireGuard-конфигом (wg-easy показывает его для каждого
-// клиента). windowed: true, а не полноэкранная камера плагина — у той нет
+// Скан QR-кода с сервером (wg-easy показывает QR с .conf для каждого
+// клиента; подойдёт и QR со ссылкой hysteria2://). windowed: true, а не полноэкранная камера плагина — у той нет
 // кнопки отмены.
 export function useQrScanner(pushToast: TPushToast) {
   const [isScanning, setIsScanning] = useState(false);
