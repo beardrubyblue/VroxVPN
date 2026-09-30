@@ -75,7 +75,7 @@ fn ensure_private_config_dir() -> Result<(), String> {
 
 /// Резолвит host в IPv4/IPv6 адреса — нужны для exclude-маршрутов, иначе
 /// пакеты к самому VPN-серверу уйдут в TUN и получится routing loop.
-fn resolve_server_addresses(host: &str) -> (Vec<String>, Vec<String>) {
+pub(crate) fn resolve_server_addresses(host: &str) -> (Vec<String>, Vec<String>) {
     let mut ipv4 = Vec::new();
     let mut ipv6 = Vec::new();
     if let Ok(addrs) = format!("{host}:0").to_socket_addrs() {
@@ -368,6 +368,7 @@ mod tests {
             pin_sha256: "AA:BB".into(),
             quic: HashMap::new(),
             raw_uri: String::new(),
+            wireguard: None,
         }
     }
 

@@ -54,6 +54,12 @@ pub async fn spawn_client(
     server: &Server,
     ru_bypass: bool,
 ) -> Result<(ConnectionHandle, String), String> {
+    // WireGuard на Linux — отдельный этап (нужен свой путь запуска через
+    // privileged helper); пока — понятный отказ, а не падение vroxcore на
+    // пустом hysteria2-конфиге.
+    if server.wireguard.is_some() {
+        return Err("WireGuard на Linux пока не поддерживается".into());
+    }
     let config_path = config_gen::generate_config(app, server, ru_bypass)?;
     let config_path = config_path.to_string_lossy().to_string();
 

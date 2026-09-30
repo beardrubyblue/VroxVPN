@@ -10,6 +10,7 @@ mod settings;
 mod subscription;
 mod traffic_history;
 mod tray;
+mod wireguard;
 
 use tauri::Manager;
 
@@ -43,6 +44,10 @@ pub fn run() {
             commands::disconnect,
             commands::get_traffic_totals,
             commands::get_traffic_history,
+            wireguard::commands::list_wireguard,
+            wireguard::commands::import_wireguard,
+            wireguard::commands::rename_wireguard,
+            wireguard::commands::delete_wireguard,
             commands::fetch_subscription,
             commands::update_geoip,
             commands::update_geosite,

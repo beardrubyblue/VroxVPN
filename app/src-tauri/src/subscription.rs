@@ -25,7 +25,7 @@ const QUIC_FIELD_MAP: &[(&str, &str)] = &[
 // строку вида "30s" — голое число hysteria2 распарсит как наносекунды.
 const QUIC_DURATION_FIELDS: &[&str] = &["maxIdleTimeout", "keepAlivePeriod"];
 
-#[derive(Serialize, Deserialize, Clone, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug, Default)]
 pub struct Server {
     pub name: String,
     pub host: String,
@@ -38,6 +38,11 @@ pub struct Server {
     pub pin_sha256: String,
     pub quic: HashMap<String, JsonValue>,
     pub raw_uri: String,
+    /// Есть — WireGuard/AmneziaWG-узел (импортированный .conf, см.
+    /// wireguard/), нет — hysteria2 из подписки. Остальные поля у
+    /// WireGuard-узла пустые, кроме name/host/port/raw_uri.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub wireguard: Option<crate::wireguard::WireGuardProfile>,
 }
 
 #[derive(Serialize, Clone, Debug, Default)]
@@ -184,5 +189,6 @@ pub fn parse_hysteria2_uri(uri: &str) -> Result<Server, String> {
         pin_sha256: first("pinSHA256"),
         quic: parse_quic_params(&first("fm")),
         raw_uri: uri.to_string(),
+        wireguard: None,
     })
 }
