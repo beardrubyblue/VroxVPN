@@ -61,8 +61,8 @@ targets:
           - UIInterfaceOrientationPortraitUpsideDown
           - UIInterfaceOrientationLandscapeLeft
           - UIInterfaceOrientationLandscapeRight
-        CFBundleShortVersionString: 4.0.0
-        CFBundleVersion: "4.0.0"
+        CFBundleShortVersionString: 4.1.0
+        CFBundleVersion: "4.1.0"
         # Жизненный цикл UIScene обязателен для приложений, собранных с
         # SDK iOS 27: без манифеста iOS 27 убивает процесс при запуске
         # (_UIApplicationEvaluateRuntimeIssueForNoSceneLifecycleAdoption,
@@ -175,9 +175,9 @@ targets:
         CODE_SIGN_ENTITLEMENTS: ../../../../ios/TunnelExtension/VroxTunnelExtension.entitlements
         # Info.plist расширения ссылается на $(CURRENT_PROJECT_VERSION) —
         # без явного значения подставилась бы пустота (никто его здесь
-        # не задаёт иначе). app_iOS использует литерал "4.0.0" для
+        # не задаёт иначе). app_iOS использует литерал "4.1.0" для
         # CFBundleVersion — держим то же самое здесь же, синхронно.
-        CURRENT_PROJECT_VERSION: "4.0.0"
+        CURRENT_PROJECT_VERSION: "4.1.0"
         ARCHS: [arm64]
         VALID_ARCHS: arm64
         EXCLUDED_ARCHS[sdk=iphoneos*]: x86_64

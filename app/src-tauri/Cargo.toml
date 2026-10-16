@@ -1,6 +1,6 @@
 [package]
 name = "app"
-version = "4.0.0"
+version = "4.1.0"
 description = "vrox.vpn — Hysteria2 VPN клиент"
 authors = ["Vroxory"]
 edition = "2021"
