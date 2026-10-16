@@ -1,8 +1,8 @@
 {
-  "version": "4.0.0",
-  "download_url": "https://github.com/beardrubyblue/VroxVPN/releases/download/v4.0.0/vrox.vpn_4.0.0_amd64.deb",
-  "sha256": "e746695d7d8738b39e04149214c0549f54f8e0fd044b0343ad46261d1fdf9533",
-  "changelog": "Переход на Tauri (Rust + React): системный трей, kill switch, аудит безопасности, уменьшенный размер сборки",
+  "version": "4.1.0",
+  "download_url": "https://github.com/beardrubyblue/VroxVPN/releases/download/v4.1.0/vrox.vpn_4.1.0_amd64.deb",
+  "sha256": "363808a939d5fc313fa0c6ae91284f3b9306104f13e8489eb9edc6f374e35869",
+  "changelog": "Новый интерфейс с нижним Dock, узлы сгруппированы по источнику, ручное добавление hysteria2-ссылки, история трафика за месяц, ядро hysteria2 v2.12.3",
   "min_version": "1.0.0",
-  "released_at": "2026-06-21T15:50:00Z"
+  "released_at": "2026-10-16T12:00:00Z"
 }
