@@ -214,7 +214,7 @@ export function SettingsScreen(p: SettingsScreenProps) {
 
         <SetGroup title="APP VERSION">
           <SetRow
-            title="vrox.vpn 4.0.0"
+            title={`vrox.vpn ${__APP_VERSION__}`}
             sub={p.updateInfo ? `Update available · ${p.updateInfo.version}` : undefined}
             right={
               p.updateInfo && p.updateInfo.autoInstallable ? (

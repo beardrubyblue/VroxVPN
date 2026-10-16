@@ -11,7 +11,9 @@ const VERSION_URL: &str = "https://net.vroxory.com/vpn/version.json";
 #[cfg(not(any(target_os = "macos", target_os = "ios")))]
 const VERSION_URL_FALLBACK: &str =
     "https://raw.githubusercontent.com/beardrubyblue/VroxVPN/main/version.json";
-const CURRENT_VERSION: &str = "4.0.0";
+// Версия берётся из Cargo.toml при компиляции: раньше здесь был литерал,
+// который отставал от tauri.conf.json/package.json при бампе версии.
+const CURRENT_VERSION: &str = env!("CARGO_PKG_VERSION");
 
 #[cfg(not(any(target_os = "macos", target_os = "ios")))]
 #[derive(Deserialize)]

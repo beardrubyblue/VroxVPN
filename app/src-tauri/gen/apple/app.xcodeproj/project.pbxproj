@@ -536,7 +536,7 @@
 				CODE_SIGN_ENTITLEMENTS = ../../../../ios/TunnelExtension/VroxTunnelExtension.entitlements;
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 4.0.0;
+				CURRENT_PROJECT_VERSION = 4.1.0;
 				DEVELOPMENT_TEAM = QRZT5R3Q28;
 				"EXCLUDED_ARCHS[sdk=iphoneos*]" = x86_64;
 				FRAMEWORK_SEARCH_PATHS = (
@@ -568,7 +568,7 @@
 				CODE_SIGN_ENTITLEMENTS = ../../../../ios/TunnelExtension/VroxTunnelExtension.entitlements;
 				CODE_SIGN_IDENTITY = "Apple Distribution";
 				CODE_SIGN_STYLE = Manual;
-				CURRENT_PROJECT_VERSION = 4.0.0;
+				CURRENT_PROJECT_VERSION = 4.1.0;
 				DEVELOPMENT_TEAM = QRZT5R3Q28;
 				"EXCLUDED_ARCHS[sdk=iphoneos*]" = x86_64;
 				FRAMEWORK_SEARCH_PATHS = (
