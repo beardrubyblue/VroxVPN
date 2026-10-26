@@ -1,0 +1,13 @@
+[Unit]
+Description=vrox.vpn gateway (hysteria2 для локальной сети)
+Documentation=https://github.com/beardrubyblue/VroxVPN/blob/main/docs/GATEWAY.md
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+ExecStart=/usr/bin/vroxgw run
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

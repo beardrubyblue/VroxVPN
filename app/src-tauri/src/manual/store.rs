@@ -10,7 +10,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Manager};
 
-use crate::subscription::{parse_hysteria2_uri, Server};
+use vrox_core::subscription::{parse_hysteria2_uri, Server};
 use crate::wireguard::parse_conf;
 
 const FILE_NAME: &str = "manual_servers.json";

@@ -1,16 +1,13 @@
 mod app_update;
+mod bypass;
 mod commands;
 mod config_gen;
 mod engine;
-mod geoip;
-mod geosite;
 mod manual;
 #[cfg(target_os = "ios")]
 mod mac_window;
-mod ping;
 mod resources;
 mod settings;
-mod subscription;
 mod traffic_history;
 mod tray;
 mod wireguard;

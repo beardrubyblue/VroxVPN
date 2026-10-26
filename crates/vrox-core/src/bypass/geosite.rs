@@ -4,64 +4,19 @@
 
 use std::collections::HashSet;
 use std::fs;
-#[cfg(target_os = "linux")]
 use std::path::Path;
-use std::path::PathBuf;
 
-use serde::Serialize;
-use tauri::{AppHandle, Manager};
+use super::{parse_list_file, pick_path, BypassDirs, UpdateResult};
 
-#[cfg(target_os = "linux")]
-use crate::resources;
-
+const DIR: &str = "geosite";
 const SOURCE_BASE: &str = "https://raw.githubusercontent.com/v2fly/domain-list-community/master/data/";
 const ROOT_CATEGORY: &str = "category-ru";
 
-/// `dirs::home_dir()` + `.config/...` ломается на iOS (EPERM в sandbox,
-/// см. тот же фикс в geoip.rs::user_dir) — `app.path().app_data_dir()`
-/// портативен.
-fn user_dir(app: &AppHandle) -> PathBuf {
-    app.path()
-        .app_data_dir()
-        .unwrap_or_else(|_| PathBuf::from("."))
-        .join("geosite")
-}
-
-// Используется только Linux-путём (config_gen::generate_config —
-// directDomains в YAML-конфиге hysteria2-клиента). На macOS-NE домены
-// сейчас не передаются вообще (см. config_gen::generate_excluded_routes
-// doc-комментарий, Фаза 3 плана NE-перехода ещё не реализована для
-// доменов, не IP) — geosite::update_ru_domains (обновление кеша файла)
-// при этом остаётся кросс-платформенным, тут гейтится только чтение.
-#[cfg(target_os = "linux")]
-fn parse_domain_file(path: &Path) -> Vec<String> {
-    fs::read_to_string(path)
-        .map(|content| {
-            content
-                .lines()
-                .map(str::trim)
-                .filter(|l| !l.is_empty() && !l.starts_with('#'))
-                .map(str::to_string)
-                .collect()
-        })
-        .unwrap_or_default()
-}
-
-#[cfg(target_os = "linux")]
-pub fn get_ru_domains(app: &AppHandle) -> Result<Vec<String>, String> {
-    let user_file = user_dir(app).join("ru_domains.txt");
-    let path = if user_file.exists() {
-        user_file
-    } else {
-        resources::resolve(app, "resources/geosite/ru_domains.txt")?
-    };
-    Ok(parse_domain_file(&path))
-}
-
-#[derive(Serialize)]
-pub struct UpdateResult {
-    pub count: usize,
-    pub bytes: usize,
+/// Домены для `directDomains` hysteria2-клиента (Linux-путь и шлюз; на
+/// NE домены пока не передаются — см. `generate_excluded_routes` в
+/// приложении).
+pub fn load_ru_domains(dirs: &BypassDirs) -> Vec<String> {
+    parse_list_file(&pick_path(&dirs.user_root, &dirs.bundled_root, DIR, "ru_domains.txt"))
 }
 
 async fn fetch_file(client: &reqwest::Client, name: &str, retries: u32) -> Option<String> {
@@ -85,7 +40,9 @@ async fn fetch_file(client: &reqwest::Client, name: &str, retries: u32) -> Optio
     None
 }
 
-pub async fn update_ru_domains(app: &AppHandle) -> Result<UpdateResult, String> {
+/// Собирает category-ru с рекурсивными include: и пишет результат в
+/// `<user_root>/geosite/ru_domains.txt`.
+pub async fn update_ru_domains(user_root: &Path) -> Result<UpdateResult, String> {
     let client = reqwest::Client::new();
     let mut seen_files: HashSet<String> = HashSet::new();
     let mut domains: HashSet<String> = HashSet::new();
@@ -150,7 +107,7 @@ pub async fn update_ru_domains(app: &AppHandle) -> Result<UpdateResult, String> 
         return Err("Не удалось скачать ни одного домена из category-ru".into());
     }
 
-    let dir = user_dir(app);
+    let dir = user_root.join(DIR);
     fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
     let mut sorted: Vec<String> = domains.into_iter().collect();
     sorted.sort();

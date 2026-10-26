@@ -391,6 +391,11 @@ abstraction — drop the React-Native-specific tooling rules.
 - `app/src-tauri/src/wireguard/` — the WireGuard/AmneziaWG protocol (iOS
   only): `.conf` parsing and provider JSON for `netunnel.WireGuardConfig`.
   A WireGuard node is a regular `Server` with `wireguard: Some(..)`.
+- `crates/vrox-core/` — общая логика без Tauri (подписки, YAML hysteria2,
+  RU-обход geoip/geosite, пинг, типы WireGuard); её используют и
+  приложение (по пути, без workspace), и шлюз.
+- `crates/vroxgw/` — headless-шлюз для LAN (systemd-демон на Linux-VM,
+  `.deb` через `packaging/vroxgw/build-deb.sh`), см. `docs/GATEWAY.md`.
 - `packaging/hysteria2-patch/` — Go: forked `apernet/hysteria`
   (directDomains patch + DNS sniffer for Linux) and the `netunnel`
   package (gVisor stack + hysteria2 relay, gomobile-bound into
@@ -444,6 +449,10 @@ newest sections at the end; overview at the top).
   (iOS on Xcode 27 also needs `rustup component add llvm-tools` — see the
   temporary `swift-rs` patch in `Cargo.toml`)
   (iOS: add `--target aarch64-apple-ios`)
+- Core / gateway: `cd crates/vrox-core && cargo test`,
+  `cd crates/vroxgw && cargo clippy && cargo test`
+- Gateway .deb: `./packaging/vroxgw/build-deb.sh` (needs Docker and
+  vroxcore from `packaging/hysteria2-patch/build.sh`)
 - Go: `go vet` inside the prepared tree after `packaging/hysteria2-patch/build.sh`
 
 **Distribution/updates:** Linux ships `.deb`, self-updates via

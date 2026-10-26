@@ -3,7 +3,7 @@
 use tauri::AppHandle;
 
 use super::store;
-use crate::subscription::Server;
+use vrox_core::subscription::Server;
 
 #[tauri::command]
 pub fn list_manual_servers(app: AppHandle) -> Vec<Server> {

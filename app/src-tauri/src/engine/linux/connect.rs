@@ -8,7 +8,7 @@ use tauri_plugin_shell::ShellExt;
 
 use crate::config_gen;
 use crate::engine::{ConnectionHandle, EngineState, Slot};
-use crate::subscription::Server;
+use vrox_core::subscription::Server;
 
 const SIDECAR_NAME: &str = "vroxcore-x86_64-unknown-linux-gnu";
 

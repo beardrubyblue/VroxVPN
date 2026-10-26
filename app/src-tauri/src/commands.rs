@@ -5,11 +5,11 @@ use tauri::{AppHandle, State};
 
 use crate::app_update;
 use crate::engine::{self, ActiveConnection, EngineState, Slot};
-use crate::geoip;
-use crate::geosite;
-use crate::ping;
+use crate::bypass;
 use crate::settings;
-use crate::subscription::{self, Server};
+use vrox_core::bypass::{update_ru_cidrs, update_ru_domains, UpdateResult};
+use vrox_core::ping;
+use vrox_core::subscription::{self, Server};
 
 #[derive(Serialize, Clone)]
 pub struct ConnectionStatus {
@@ -214,13 +214,13 @@ pub async fn ping_servers(servers: Vec<Server>) -> Vec<ping::PingResult> {
 }
 
 #[tauri::command]
-pub async fn update_geoip(app: AppHandle) -> Result<geoip::UpdateResult, String> {
-    geoip::update_ru_cidrs(&app).await
+pub async fn update_geoip(app: AppHandle) -> Result<UpdateResult, String> {
+    update_ru_cidrs(&bypass::user_root(&app)).await
 }
 
 #[tauri::command]
-pub async fn update_geosite(app: AppHandle) -> Result<geosite::UpdateResult, String> {
-    geosite::update_ru_domains(&app).await
+pub async fn update_geosite(app: AppHandle) -> Result<UpdateResult, String> {
+    update_ru_domains(&bypass::user_root(&app)).await
 }
 
 #[tauri::command]

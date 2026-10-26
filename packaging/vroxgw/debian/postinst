@@ -1,0 +1,17 @@
+#!/bin/sh
+set -e
+# Кеш подписки (servers.json) и YAML содержат пароли узлов — только root.
+mkdir -p /var/lib/vroxgw
+chmod 700 /var/lib/vroxgw
+chmod 600 /etc/vroxgw/config.toml
+
+# Без systemd (chroot, контейнер) — только файлы, сервис не трогаем.
+[ -d /run/systemd/system ] || exit 0
+systemctl daemon-reload
+systemctl enable vroxgw >/dev/null 2>&1 || true
+if systemctl is-active --quiet vroxgw; then
+    systemctl restart vroxgw
+else
+    echo "vroxgw: впишите subscription_url в /etc/vroxgw/config.toml и выполните"
+    echo "        sudo systemctl start vroxgw"
+fi

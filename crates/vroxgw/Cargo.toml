@@ -1,0 +1,20 @@
+[package]
+name = "vroxgw"
+version = "4.0.0"
+description = "vrox.vpn gateway — шлюз hysteria2 для домашней сети, без UI"
+authors = ["Vroxory"]
+edition = "2021"
+license = "Proprietary"
+
+[dependencies]
+vrox-core = { path = "../vrox-core" }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+toml = "0.9"
+reqwest = "0.13.4"
+tokio = { version = "1.52.3", features = ["rt", "macros", "process", "time", "signal"] }
+
+[profile.release]
+strip = true
+lto = true
+codegen-units = 1

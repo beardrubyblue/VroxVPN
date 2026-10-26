@@ -5,7 +5,7 @@ use tauri::AppHandle;
 use super::plugin::{self, StartArgs};
 use crate::config_gen;
 use crate::engine::ConnectionHandle;
-use crate::subscription::Server;
+use vrox_core::subscription::Server;
 
 pub async fn spawn_client(
     app: &AppHandle,

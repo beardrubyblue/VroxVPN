@@ -19,7 +19,7 @@ use super::manager::{
 };
 use crate::config_gen::{self, ExcludedRoutes};
 use crate::engine::ConnectionHandle;
-use crate::subscription::Server;
+use vrox_core::subscription::Server;
 
 /// Вся синхронная objc2-логика старта тоннеля — выполняется целиком на
 /// одном blocking-потоке (см. doc-комментарий модуля `engine::macos`).
