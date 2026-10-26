@@ -1,8 +1,8 @@
 {
   "$schema": "../gen/schemas/mobile-schema.json",
   "identifier": "mobile",
-  "description": "iOS: сканирование QR с WireGuard-конфигом (wireguard/). Только скан и разрешение камеры, без вибрации и прочего.",
-  "platforms": ["iOS"],
+  "description": "iOS и Android: сканирование QR с WireGuard-конфигом (wireguard/). Только скан и разрешение камеры, без вибрации и прочего.",
+  "platforms": ["iOS", "android"],
   "windows": ["main"],
   "permissions": [
     "barcode-scanner:allow-scan",

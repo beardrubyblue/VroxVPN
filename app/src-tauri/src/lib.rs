@@ -32,11 +32,15 @@ pub fn run() {
             let _ = window.set_focus();
         }
     }));
-    // импорт WireGuard-конфигов файлом и QR — только iOS (wireguard/)
-    #[cfg(target_os = "ios")]
+    // импорт конфигов файлом и QR — iOS и Android (manual/)
+    #[cfg(mobile)]
     let builder = builder
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_barcode_scanner::init());
+    // VpnService — Kotlin-плагин (engine/android/plugin.rs); fs — чтение
+    // выбранного файла по content:// URI (manual/commands.rs)
+    #[cfg(target_os = "android")]
+    let builder = builder.plugin(engine::vpn_plugin()).plugin(tauri_plugin_fs::init());
     builder
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_shell::init())

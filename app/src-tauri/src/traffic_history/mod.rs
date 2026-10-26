@@ -1,9 +1,10 @@
 //! История трафика по дням (последний месяц) для экрана Stats.
 //!
-//! На iOS (iPhone/iPad/Mac) файл пишет само NE-расширение
-//! (packaging/hysteria2-patch/netunnel/history.go) в App Group — оно
-//! видит каждый байт, даже когда приложение закрыто, поэтому цифры
-//! точные. Приложение здесь только читает. На Linux тоннель — sidecar, а
+//! На iOS (iPhone/iPad/Mac) и Android файл пишет сам Go-тоннель
+//! (packaging/hysteria2-patch/netunnel/history.go): на iOS — NE-расширение
+//! в App Group, на Android — VpnService в данных приложения. Тоннель видит
+//! каждый байт, даже когда интерфейс закрыт, поэтому цифры точные.
+//! Приложение здесь только читает. На Linux тоннель — sidecar, а
 //! приложение живёт в трее всё время подключения, поэтому пишет сам Rust
 //! (`recorder`). Формат файла общий — менять синхронно с history.go.
 
@@ -60,15 +61,17 @@ pub fn add_day(days: &mut Vec<DayTraffic>, date: &str, upload: u64, download: u6
 const APP_GROUP_ID: &str = "group.com.vroxory.vpn";
 
 #[cfg(any(target_os = "macos", target_os = "ios"))]
-fn history_path(_app: &AppHandle) -> Option<PathBuf> {
+pub fn history_path(_app: &AppHandle) -> Option<PathBuf> {
     use objc2_foundation::{NSFileManager, NSString};
     let group = NSString::from_str(APP_GROUP_ID);
     let url = NSFileManager::defaultManager().containerURLForSecurityApplicationGroupIdentifier(&group)?;
     Some(PathBuf::from(url.path()?.to_string()).join(FILE_NAME))
 }
 
-#[cfg(target_os = "linux")]
-fn history_path(app: &AppHandle) -> Option<PathBuf> {
+/// Android: пишет Go (engine/android/connect.rs передаёт этот путь в
+/// конфиг тоннеля), тоннель живёт в процессе приложения.
+#[cfg(any(target_os = "linux", target_os = "android"))]
+pub fn history_path(app: &AppHandle) -> Option<PathBuf> {
     use tauri::Manager;
     app.path().app_data_dir().ok().map(|dir| dir.join(FILE_NAME))
 }

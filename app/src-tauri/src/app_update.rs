@@ -2,18 +2,18 @@
 //! из core/updater.py (ветка main), тот же version.json и тот же контракт
 //! (основной URL + GitHub-фоллбек, если net.vroxory.com недоступен).
 
-#[cfg(not(any(target_os = "macos", target_os = "ios")))]
+#[cfg(target_os = "linux")]
 use serde::Deserialize;
 use serde::Serialize;
 
-#[cfg(not(any(target_os = "macos", target_os = "ios")))]
+#[cfg(target_os = "linux")]
 const VERSION_URL: &str = "https://net.vroxory.com/vpn/version.json";
-#[cfg(not(any(target_os = "macos", target_os = "ios")))]
+#[cfg(target_os = "linux")]
 const VERSION_URL_FALLBACK: &str =
     "https://raw.githubusercontent.com/beardrubyblue/VroxVPN/main/version.json";
 const CURRENT_VERSION: &str = "4.0.0";
 
-#[cfg(not(any(target_os = "macos", target_os = "ios")))]
+#[cfg(target_os = "linux")]
 #[derive(Deserialize)]
 struct VersionJson {
     version: String,
@@ -41,7 +41,7 @@ pub struct UpdateCheck {
     pub auto_installable: bool,
 }
 
-#[cfg(not(any(target_os = "macos", target_os = "ios")))]
+#[cfg(target_os = "linux")]
 fn version_tuple(v: &str) -> Vec<u32> {
     v.trim()
         .trim_start_matches('v')
@@ -61,20 +61,27 @@ fn version_tuple(v: &str) -> Vec<u32> {
 /// константы) без какой-либо связи с `version.json`, и сравнение с ним
 /// показало бы либо ложное "доступно обновление", либо ложное "у вас
 /// последняя версия" — ни то, ни другое не отражает реальность.
+/// Android: version.json описывает только .deb; новые APK публикуются в
+/// GitHub Releases и ставятся вручную.
+#[cfg(target_os = "android")]
+const UPDATES_HINT: &str = "Обновления Android — новые APK в GitHub Releases";
 #[cfg(any(target_os = "macos", target_os = "ios"))]
+const UPDATES_HINT: &str = "Обновления на macOS приходят через TestFlight — отдельной проверки версии здесь нет";
+
+#[cfg(not(target_os = "linux"))]
 pub async fn check_update(_timeout_secs: u64) -> Result<UpdateCheck, String> {
     Ok(UpdateCheck {
         current: CURRENT_VERSION.to_string(),
         latest: CURRENT_VERSION.to_string(),
         update_available: false,
         download_url: String::new(),
-        changelog: "Обновления на macOS приходят через TestFlight — отдельной проверки версии здесь нет".to_string(),
+        changelog: UPDATES_HINT.to_string(),
         sha256: String::new(),
         auto_installable: false,
     })
 }
 
-#[cfg(not(any(target_os = "macos", target_os = "ios")))]
+#[cfg(target_os = "linux")]
 pub async fn check_update(timeout_secs: u64) -> Result<UpdateCheck, String> {
     let client = reqwest::Client::builder()
         .timeout(std::time::Duration::from_secs(timeout_secs))

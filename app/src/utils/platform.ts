@@ -13,3 +13,9 @@ export const isIOS =
 // Linux-сборка (десктоп): WireGuard там пока не поддерживается, импорт
 // .conf скрыт. iOS-сборка на Mac — не Linux.
 export const isLinux = typeof navigator !== "undefined" && /Linux/.test(navigator.userAgent) && !/Android/.test(navigator.userAgent);
+
+// Android-сборка: как iOS — мобильная, без выхода из приложения
+// (тоннель держит VpnService, а не открытое окно).
+export const isAndroid = typeof navigator !== "undefined" && /Android/.test(navigator.userAgent);
+
+export const isMobile = isIOS || isAndroid;

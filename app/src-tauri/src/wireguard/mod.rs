@@ -1,14 +1,14 @@
 //! Протокол WireGuard / AmneziaWG: разбор конфигов wg-quick (.conf) и
 //! конфиг для NE-расширения. Сам тоннель — Go (packaging/hysteria2-patch/
 //! netunnel/wireguard.go). Хранение добавленных вручную узлов (любого
-//! протокола) — в manual/. Только iOS: на Linux WireGuard пока не
+//! протокола) — в manual/. iOS и Android: на Linux WireGuard пока не
 //! поддерживается (engine/linux отказывает, manual/ не даёт добавить).
 //!
 //! WireGuard-узел — обычный `Server` с заполненным `wireguard`: выбор,
 //! пинг, трей и исключение IP сервера из тоннеля работают как у hysteria2.
 
 mod parse;
-#[cfg(any(target_os = "macos", target_os = "ios"))]
+#[cfg(any(target_os = "macos", target_os = "ios", target_os = "android"))]
 pub mod provider;
 
 use std::collections::BTreeMap;

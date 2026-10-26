@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
 import { Ic } from "@/design/icons";
 import type { UpdateInfo } from "@/types";
-import { isIOS } from "@/utils/platform";
+import { isMobile } from "@/utils/platform";
 
 export type Theme = "light" | "dark";
 
@@ -228,8 +228,9 @@ export function SettingsScreen(p: SettingsScreenProps) {
         </SetGroup>
 
         {/* Quit — только на десктопе (на iOS приложения не закрывают себя
-            программно: против Apple HIG, риск отклонения в App Store) */}
-        {!isIOS && (
+            программно: против Apple HIG; на Android тоннель живёт в
+            VpnService, отключение — кнопкой или из уведомления) */}
+        {!isMobile && (
           <>
             <button
               onClick={p.onQuit}

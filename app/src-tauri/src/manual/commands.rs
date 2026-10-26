@@ -29,24 +29,37 @@ pub fn delete_manual_server(app: AppHandle, id: String) -> Result<(), String> {
 
 /// Выбрать файл конфига в «Файлах» и вернуть его текст; `None` — выбор
 /// отменён. На iOS выбранный файл копируется во временную папку приложения
-/// (tauri-plugin-dialog, asCopy), поэтому читается обычным fs::read.
+/// (tauri-plugin-dialog, asCopy), поэтому читается обычным fs::read. На
+/// Android приходит content:// URI — его читает fs-плагин через ContentResolver.
 #[tauri::command]
 pub async fn pick_config_file(app: AppHandle) -> Result<Option<String>, String> {
-    #[cfg(target_os = "ios")]
+    #[cfg(mobile)]
     {
         use tauri_plugin_dialog::DialogExt;
-        let picked = tauri::async_runtime::spawn_blocking(move || app.dialog().file().blocking_pick_file())
+        let picker = app.clone();
+        let picked = tauri::async_runtime::spawn_blocking(move || picker.dialog().file().blocking_pick_file())
             .await
             .map_err(|e| e.to_string())?;
         let Some(file) = picked else {
             return Ok(None);
         };
-        let path = file.into_path().map_err(|e| e.to_string())?;
-        std::fs::read_to_string(path).map(Some).map_err(|_| "Could not read the file".to_string())
+        read_picked_file(&app, file).map(Some).map_err(|_| "Could not read the file".to_string())
     }
-    #[cfg(not(target_os = "ios"))]
+    #[cfg(not(mobile))]
     {
         let _ = app;
-        Err("Choosing a file is only available on iOS".into())
+        Err("Choosing a file is only available on iOS and Android".into())
     }
+}
+
+#[cfg(target_os = "ios")]
+fn read_picked_file(_app: &AppHandle, file: tauri_plugin_dialog::FilePath) -> Result<String, String> {
+    let path = file.into_path().map_err(|e| e.to_string())?;
+    std::fs::read_to_string(path).map_err(|e| e.to_string())
+}
+
+#[cfg(target_os = "android")]
+fn read_picked_file(app: &AppHandle, file: tauri_plugin_dialog::FilePath) -> Result<String, String> {
+    use tauri_plugin_fs::FsExt;
+    app.fs().read_to_string(file).map_err(|e| e.to_string())
 }

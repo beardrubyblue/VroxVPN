@@ -248,17 +248,17 @@ pub fn generate_config(
 /// — только статическая часть (сервер + приватные диапазоны + RU-geoip),
 /// которая не имеет этой проблемы.
 ///
-/// Используется только `engine::macos::spawn_client` — на Linux этот код
-/// не компилируется (`#[cfg(any(target_os = "macos", target_os = "ios"))]`, не `#[allow
+/// Используется только `engine::macos` / `engine::android::spawn_client` — на Linux этот код
+/// не компилируется (`#[cfg(any(target_os = "macos", target_os = "ios", target_os = "android"))]`, не `#[allow
 /// (dead_code)]`: это не временно неподключённый код, а архитектурно
 /// платформо-специфичная концепция, у Linux-пути своего эквивалента нет).
-#[cfg(any(target_os = "macos", target_os = "ios"))]
+#[cfg(any(target_os = "macos", target_os = "ios", target_os = "android"))]
 pub struct ExcludedRoutes {
     pub ipv4: Vec<String>,
     pub ipv6: Vec<String>,
 }
 
-#[cfg(any(target_os = "macos", target_os = "ios"))]
+#[cfg(any(target_os = "macos", target_os = "ios", target_os = "android"))]
 pub fn generate_excluded_routes(
     app: &AppHandle,
     server: &Server,
@@ -298,9 +298,9 @@ pub fn generate_excluded_routes(
 /// Не пишет на диск — под NE конфиг уходит в `NETunnelProviderProtocol.
 /// providerConfiguration` в памяти, не файлом.
 ///
-/// `#[cfg(any(target_os = "macos", target_os = "ios"))]` — см. комментарий у
+/// `#[cfg(any(target_os = "macos", target_os = "ios", target_os = "android"))]` — см. комментарий у
 /// `generate_excluded_routes` выше, та же причина.
-#[cfg(any(target_os = "macos", target_os = "ios"))]
+#[cfg(any(target_os = "macos", target_os = "ios", target_os = "android"))]
 pub fn generate_provider_config_json(server: &Server) -> serde_json::Value {
     let sni = if server.sni.is_empty() {
         server.host.clone()
@@ -377,7 +377,7 @@ mod tests {
     /// `netunnel.Config` (packaging/hysteria2-patch/netunnel/netunnel.go)
     /// — несовпадение здесь не поймает ни одна из сторон по отдельности
     /// (Go и Rust компилируются и тестируются независимо).
-    #[cfg(any(target_os = "macos", target_os = "ios"))]
+    #[cfg(any(target_os = "macos", target_os = "ios", target_os = "android"))]
     #[test]
     fn provider_config_json_matches_netunnel_config_shape() {
         let server = test_server();

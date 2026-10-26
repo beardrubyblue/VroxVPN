@@ -2,7 +2,8 @@
 //! привилегированных операций (pkexec/polkit/nftables на Linux,
 //! NetworkExtension на macOS/iOS — API NETunnelProviderManager у них
 //! общий, поэтому это один и тот же модуль `engine::macos`, не два)
-//! живёт в engine::linux / engine::macos — см. их доккомменты.
+//! живёт в engine::linux / engine::macos / engine::android — см. их
+//! доккомменты.
 //! Публичный API (`ensure_polkit_rule`, `loosen_rp_filter`,
 //! `cleanup_interface`, `cleanup_orphans`, `spawn_client`,
 //! `kill_client`, `enable_killswitch`, `disable_killswitch`)
@@ -52,12 +53,13 @@ pub struct MemoryDebug {
 /// Платформенно-специфичный "хвост" активного соединения, который нужно
 /// освободить при disconnect, но который commands.rs не интерпретирует
 /// сам (просто `drop`-ает) — на Linux это обёртка pkexec-процесса
-/// (`CommandChild`), на macOS/iOS под NetworkExtension отдельного
+/// (`CommandChild`), на macOS/iOS под NetworkExtension (и на Android под
+/// VpnService — тоннель внутри нашего же процесса) отдельного
 /// процесса, который мы сами породили, не существует вообще (тоннель
 /// живёт в `.appex`-расширении, управляемом ОС), поэтому там это `()`.
 #[cfg(target_os = "linux")]
 pub type ConnectionHandle = tauri_plugin_shell::process::CommandChild;
-#[cfg(any(target_os = "macos", target_os = "ios"))]
+#[cfg(any(target_os = "macos", target_os = "ios", target_os = "android"))]
 pub type ConnectionHandle = ();
 
 pub struct ActiveConnection {
@@ -93,5 +95,11 @@ mod macos;
 #[cfg(any(target_os = "macos", target_os = "ios"))]
 pub use macos::*;
 
-#[cfg(not(any(target_os = "linux", target_os = "macos", target_os = "ios")))]
-compile_error!("engine.rs: поддерживаются только Linux, macOS и iOS — см. docs/MACOS_PORT.md");
+// Android — VpnService (Kotlin) + тот же Go netunnel, что у iOS.
+#[cfg(target_os = "android")]
+mod android;
+#[cfg(target_os = "android")]
+pub use android::*;
+
+#[cfg(not(any(target_os = "linux", target_os = "macos", target_os = "ios", target_os = "android")))]
+compile_error!("engine.rs: поддерживаются только Linux, iOS (и macOS для cargo check) и Android");
