@@ -34,6 +34,14 @@ func startDNSSniffer(matcher *directMatcher, logger *zap.Logger, ifaceName strin
 		logger.Warn("dns-sniffer: socket", zap.Error(err))
 		return
 	}
+	// Фильтр ДО bind: без него ядро копирует в этот сокет КАЖДЫЙ IPv4-пакет
+	// интерфейса. Без фильтра сниффер не запускаем вовсе — доменный обход
+	// пропадёт, geoip-обход останется (он на маршрутах).
+	if err := attachDNSResponseFilter(fd); err != nil {
+		logger.Warn("dns-sniffer: BPF-фильтр", zap.Error(err))
+		_ = syscall.Close(fd)
+		return
+	}
 	addr := syscall.SockaddrLinklayer{
 		Protocol: htons(syscall.ETH_P_IP),
 		Ifindex:  iface.Index,

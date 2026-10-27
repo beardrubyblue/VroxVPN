@@ -25,4 +25,14 @@ polkit.addRule(function(action, subject) {
 });
 POLKIT
 
+# UDP-буферы сокетов для QUIC (hysteria2): дефолт Ubuntu 208 КБ, quic-go
+# просит ~7 МБ. Без этого на 250+ Мбит/с ядро роняет пакеты и BBR сервера
+# сбрасывает скорость — поймано на шлюзе vroxgw (разгон до 300 и обвал до
+# 10-70). Значение — рекомендация quic-go (wiki «UDP Buffer Sizes»).
+cat > /etc/sysctl.d/60-vrox-vpn.conf << 'SYSCTL'
+net.core.rmem_max = 7500000
+net.core.wmem_max = 7500000
+SYSCTL
+sysctl -q -p /etc/sysctl.d/60-vrox-vpn.conf || true
+
 exit 0

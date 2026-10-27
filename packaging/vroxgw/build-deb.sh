@@ -30,11 +30,12 @@ BIN="$REPO/crates/vroxgw/target/docker/release/vroxgw"
 
 rm -rf "$PKG"
 mkdir -p "$PKG/DEBIAN" "$PKG/usr/bin" "$PKG/usr/lib/vroxgw" "$PKG/usr/share/vroxgw" \
-    "$PKG/etc/vroxgw" "$PKG/lib/systemd/system"
+    "$PKG/etc/vroxgw" "$PKG/etc/sysctl.d" "$PKG/lib/systemd/system"
 install -m 755 "$BIN" "$PKG/usr/bin/vroxgw"
 install -m 755 "$VROXCORE" "$PKG/usr/lib/vroxgw/vroxcore"
 cp -R "$REPO/app/src-tauri/resources/geoip" "$REPO/app/src-tauri/resources/geosite" "$PKG/usr/share/vroxgw/"
 install -m 600 "$SCRIPT_DIR/debian/config.toml" "$PKG/etc/vroxgw/config.toml"
+install -m 644 "$SCRIPT_DIR/debian/60-vroxgw.conf" "$PKG/etc/sysctl.d/60-vroxgw.conf"
 install -m 644 "$SCRIPT_DIR/debian/vroxgw.service" "$PKG/lib/systemd/system/vroxgw.service"
 install -m 755 "$SCRIPT_DIR/debian/postinst" "$SCRIPT_DIR/debian/prerm" "$PKG/DEBIAN/"
 echo "/etc/vroxgw/config.toml" > "$PKG/DEBIAN/conffiles"

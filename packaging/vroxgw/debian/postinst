@@ -4,6 +4,9 @@ set -e
 mkdir -p /var/lib/vroxgw
 chmod 700 /var/lib/vroxgw
 chmod 600 /etc/vroxgw/config.toml
+# UDP-буферы для QUIC (см. /etc/sysctl.d/60-vroxgw.conf) — применяем
+# сразу, без перезагрузки; в контейнере sysctl может быть запрещён.
+sysctl -q -p /etc/sysctl.d/60-vroxgw.conf || true
 
 # Без systemd (chroot, контейнер) — только файлы, сервис не трогаем.
 [ -d /run/systemd/system ] || exit 0

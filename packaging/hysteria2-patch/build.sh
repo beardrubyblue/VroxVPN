@@ -28,7 +28,8 @@ git apply --include="app/cmd/client.go" "$SCRIPT_DIR/direct-domains.patch"
 git apply --include="app/internal/tun/server.go" "$SCRIPT_DIR/direct-domains.patch"
 cp "$SCRIPT_DIR/directmatch.go" "$SCRIPT_DIR/directmatch_linux.go" \
    "$SCRIPT_DIR/directmatch_darwin.go" "$SCRIPT_DIR/dnssniff_linux.go" \
-   "$SCRIPT_DIR/dnssniff_darwin.go" app/internal/tun/
+   "$SCRIPT_DIR/dnssniff_darwin.go" "$SCRIPT_DIR/dnssniff_bpf_linux.go" \
+   app/internal/tun/
 
 # netunnel — байт-слайс адаптация app/internal/tun для NetworkExtension
 # (macOS/iOS): gVisor-стек без настоящего TUN-fd, биндится через
