@@ -59,9 +59,13 @@ pub fn generate_yaml(server: &Server, ru_bypass: Option<RuBypass>) -> Result<Str
         tls.insert(s("pinSHA256"), s(server.pin_sha256.clone()));
     }
 
-    let mut bandwidth = Mapping::new();
-    bandwidth.insert(s("up"), s("100 mbps"));
-    bandwidth.insert(s("down"), s("100 mbps"));
+    // bandwidth НЕ задаём намеренно. Раньше тут стояло up/down 100 mbps —
+    // и это резало скорость до ~60-70 Мбит/с, тогда как Happ на той же
+    // подписке давал 250-300. Причина в сервере hysteria2
+    // (core/server/server.go, обработка handshake): если клиент заявил
+    // свой Rx, сервер вместо BBR включает Brutal и шлёт РОВНО с этой
+    // скоростью — заявленная цифра становится потолком загрузки. Без
+    // bandwidth сервер берёт свой congestion control (BBR), как у Happ.
 
     let mut config = Mapping::new();
     config.insert(s("server"), s(format!("{}:{}", server.host, server.port)));
@@ -69,7 +73,6 @@ pub fn generate_yaml(server: &Server, ru_bypass: Option<RuBypass>) -> Result<Str
     config.insert(s("tls"), Value::Mapping(tls));
     config.insert(s("tun"), Value::Mapping(tun));
     config.insert(s("fastOpen"), Value::Bool(true));
-    config.insert(s("bandwidth"), Value::Mapping(bandwidth));
 
     if !server.obfs.is_empty() {
         let mut salamander = Mapping::new();
@@ -130,5 +133,14 @@ mod tests {
         let yaml = generate_yaml(&test_server(), None).unwrap();
         let config: Value = serde_yaml::from_str(&yaml).unwrap();
         assert!(config["tun"].get("directDomains").is_none());
+    }
+
+    #[test]
+    fn yaml_has_no_bandwidth() {
+        // Заявленный bandwidth переводит сервер на Brutal с потолком
+        // скорости — см. комментарий в generate_yaml.
+        let yaml = generate_yaml(&test_server(), None).unwrap();
+        let config: Value = serde_yaml::from_str(&yaml).unwrap();
+        assert!(config.get("bandwidth").is_none());
     }
 }

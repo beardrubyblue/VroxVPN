@@ -95,18 +95,14 @@ pub fn generate_provider_config_json(server: &Server) -> serde_json::Value {
         .next()
         .unwrap_or_else(|| server.host.clone());
 
-    // iOS NE-расширение жёстко лимитировано по памяти ОС (~50МБ,
-    // поймано вживую — реальный спидтест разгонял RSS до ~59МБ и iOS
-    // убивала расширение). hysteria2/QUIC сайзит буфера congestion
-    // control под заявленную bandwidth — чем больше цифра, тем больше
-    // окна на приём/отправку. На macOS этого жёсткого потолка нет
-    // (NE там much менее зажат), поэтому занижаем только для iOS, не
-    // трогая macOS-throughput.
-    #[cfg(target_os = "ios")]
-    let bandwidth_mbps = "25 mbps";
-    #[cfg(not(target_os = "ios"))]
-    let bandwidth_mbps = "100 mbps";
-
+    // bandwidth НЕ задаём (как и в YAML, см. vrox-core config_gen/yaml.rs):
+    // заявленный Rx переводит сервер hysteria2 на Brutal с потолком ровно
+    // в эту цифру — тут стояло 25 mbps на iOS и 100 на macOS, и скорость
+    // упиралась в ~60-70 Мбит/с против 250-300 у Happ на той же подписке.
+    // Исходно 25 mbps ставили против jetsam-килла расширения (~50МБ, см.
+    // коммит 194efda), но память на приём ограничивают не bandwidth, а
+    // QUIC receive windows (netunnel/quic_flow_control.go) — сервер не может
+    // держать в полёте больше окна при любом congestion control.
     serde_json::json!({
         "server": format!("{}:{}", server_addr, server.port),
         "auth": server.password,
@@ -117,7 +113,6 @@ pub fn generate_provider_config_json(server: &Server) -> serde_json::Value {
             "type": server.obfs,
             "salamander": { "password": server.obfs_password },
         },
-        "bandwidth": { "up": bandwidth_mbps, "down": bandwidth_mbps },
         "inet4Addr": "100.100.100.101/30",
         "inet6Addr": "2001::ffff:ffff:ffff:fff1/126",
         "mtu": 1500,
@@ -151,7 +146,7 @@ mod tests {
     /// `netunnel.Config` (packaging/hysteria2-patch/netunnel/netunnel.go)
     /// — несовпадение здесь не поймает ни одна из сторон по отдельности
     /// (Go и Rust компилируются и тестируются независимо).
-        #[test]
+    #[test]
     fn provider_config_json_matches_netunnel_config_shape() {
         let server = test_server();
         let json = generate_provider_config_json(&server);
@@ -163,8 +158,7 @@ mod tests {
         assert_eq!(json["pinSHA256"], "AA:BB");
         assert_eq!(json["obfs"]["type"], "salamander");
         assert_eq!(json["obfs"]["salamander"]["password"], "obfspw");
-        assert_eq!(json["bandwidth"]["up"], "100 mbps");
-        assert_eq!(json["bandwidth"]["down"], "100 mbps");
+        assert!(json.get("bandwidth").is_none());
         assert!(json["inet4Addr"].is_string());
         assert!(json["mtu"].is_number());
     }
