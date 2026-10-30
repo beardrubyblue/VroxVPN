@@ -1,6 +1,6 @@
 [package]
 name = "vrox-core"
-version = "4.0.0"
+version = "4.1.0"
 description = "vrox.vpn — общая логика клиента и шлюза: подписки, конфиг hysteria2, RU-обход, пинг"
 edition = "2021"
 

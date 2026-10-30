@@ -1,6 +1,6 @@
 [package]
 name = "vroxgw"
-version = "4.0.0"
+version = "4.1.0"
 description = "vrox.vpn gateway — шлюз hysteria2 для домашней сети, без UI"
 authors = ["Vroxory"]
 edition = "2021"
