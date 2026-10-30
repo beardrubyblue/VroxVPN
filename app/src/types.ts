@@ -79,6 +79,12 @@ export interface SubscriptionData {
   userinfo: { fields: Record<string, number> };
 }
 
+// Запись кеша узлов подписки (subscription_cache.rs): последний удачный
+// ответ, updated_at — unix-время в мс.
+export interface CachedSubscription extends SubscriptionData {
+  updated_at: number;
+}
+
 export interface Subscription extends SubscriptionMeta {
   servers: Server[];
   pings: Record<string, PingResult>;

@@ -9,7 +9,7 @@ use crate::bypass;
 use crate::settings;
 use vrox_core::bypass::{update_ru_cidrs, update_ru_domains, UpdateResult};
 use vrox_core::ping;
-use vrox_core::subscription::{self, Server};
+use vrox_core::subscription::Server;
 
 #[derive(Serialize, Clone)]
 pub struct ConnectionStatus {
@@ -30,12 +30,6 @@ pub fn get_status(state: State<EngineState>) -> ConnectionStatus {
             server_name: None,
         },
     }
-}
-
-#[tauri::command]
-pub async fn fetch_subscription(url: String) -> Result<subscription::SubscriptionData, String> {
-    let (servers, userinfo) = subscription::fetch_subscription(&url, 15).await?;
-    Ok(subscription::SubscriptionData { servers, userinfo })
 }
 
 #[tauri::command]

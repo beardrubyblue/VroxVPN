@@ -36,7 +36,7 @@ pub struct Server {
     pub manual_id: Option<String>,
 }
 
-#[derive(Serialize, Clone, Debug, Default)]
+#[derive(Serialize, Deserialize, Clone, Debug, Default)]
 pub struct UserInfo {
     pub fields: HashMap<String, i64>,
 }

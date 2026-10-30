@@ -1,27 +1,17 @@
 import { useEffect, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { subscriptionNameFromUrl } from "@/utils/format";
-import { usageFromUserInfo } from "@/utils/subscription-format";
-import type { PingResult, Server, Subscription, SubscriptionData, SubscriptionMeta } from "@/types";
+import type { CachedSubscription, PingResult, Server, Subscription, SubscriptionMeta } from "@/types";
+import {
+  cachedSubscription,
+  emptySubscription,
+  fetchSubscription,
+  loadCache,
+  persistMetas,
+  toMetas,
+} from "./subscription-store";
 
 type TPushToast = (text: string, kind?: "error" | "info", detail?: string) => void;
-
-function emptySubscription(meta: SubscriptionMeta): Subscription {
-  return { ...meta, servers: [], pings: {}, usage: null, updatedAt: null, pinging: false, refreshing: true, error: "" };
-}
-
-async function fetchSubscription(url: string) {
-  const data = await invoke<SubscriptionData>("fetch_subscription", { url });
-  return { servers: data.servers, usage: usageFromUserInfo(data.userinfo.fields), updatedAt: Date.now() };
-}
-
-async function persistMetas(metas: SubscriptionMeta[]) {
-  await invoke("set_setting", { key: "subscriptions", value: metas });
-}
-
-function toMetas(subscriptions: Subscription[]): SubscriptionMeta[] {
-  return subscriptions.map(({ url, name }) => ({ url, name }));
-}
 
 export function useSubscriptions(pushToast: TPushToast) {
   const [subscriptions, setSubscriptions] = useState<Subscription[]>([]);
@@ -51,8 +41,9 @@ export function useSubscriptions(pushToast: TPushToast) {
 
   // Загрузка/обновление одной подписки. При ошибке прежний список
   // серверов остаётся — сервер подписки, недоступный минуту, не должен
-  // вычищать рабочие серверы (группа подсвечивается красным).
-  async function refresh(url: string): Promise<Server[]> {
+  // вычищать рабочие серверы (группа подсвечивается красным). null —
+  // загрузка не удалась.
+  async function refresh(url: string): Promise<Server[] | null> {
     patch(url, { refreshing: true });
     try {
       const fetched = await fetchSubscription(url);
@@ -61,7 +52,7 @@ export function useSubscriptions(pushToast: TPushToast) {
       return fetched.servers;
     } catch (err) {
       patch(url, { refreshing: false, error: String(err) });
-      return [];
+      return null;
     }
   }
 
@@ -71,10 +62,26 @@ export function useSubscriptions(pushToast: TPushToast) {
 
   // Возвращает серверы всех подписок — useAppBootstrap ищет среди них
   // последний выбранный.
+  // Раньше узлы подписок не сохранялись вовсе (в settings.json только
+  // url и имя) — после запуска экран Nodes был пуст до конца загрузки, а
+  // без сети пуст совсем. Теперь сначала показываем кеш и не ждём
+  // загрузку подписок, у которых он есть; ждём только подписки без кеша.
   async function loadFromMetas(metas: SubscriptionMeta[]): Promise<Server[]> {
-    setSubscriptions(metas.map(emptySubscription));
-    const loaded = await Promise.all(metas.map((meta) => refresh(meta.url)));
+    const cache = await loadCache();
+    setSubscriptions(
+      metas.map((meta) => (cache[meta.url] ? cachedSubscription(meta, cache[meta.url]) : emptySubscription(meta))),
+    );
+    const loaded = await Promise.all(metas.map((meta) => loadOne(meta.url, cache[meta.url])));
     return loaded.flat();
+  }
+
+  async function loadOne(url: string, cached: CachedSubscription | undefined): Promise<Server[]> {
+    if (!cached) return (await refresh(url)) ?? [];
+    // загрузка не удалась — пингуем хотя бы кешированные узлы
+    refresh(url).then((fetched) => {
+      if (!fetched) ping(url, cached.servers);
+    });
+    return cached.servers;
   }
 
   async function addFromUrl(url: string): Promise<boolean> {
@@ -107,6 +114,7 @@ export function useSubscriptions(pushToast: TPushToast) {
 
   async function remove(url: string) {
     setSubscriptions((prev) => prev.filter((sub) => sub.url !== url));
+    invoke("forget_subscription", { url }).catch(() => {});
     await persistMetas(toMetas(subscriptionsRef.current).filter((meta) => meta.url !== url));
   }
 

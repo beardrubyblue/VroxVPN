@@ -8,6 +8,7 @@ mod manual;
 mod mac_window;
 mod resources;
 mod settings;
+mod subscription_cache;
 mod traffic_history;
 mod tray;
 mod wireguard;
@@ -58,7 +59,9 @@ pub fn run() {
             manual::commands::rename_manual_server,
             manual::commands::delete_manual_server,
             manual::commands::pick_config_file,
-            commands::fetch_subscription,
+            subscription_cache::fetch_subscription,
+            subscription_cache::get_cached_subscriptions,
+            subscription_cache::forget_subscription,
             commands::update_geoip,
             commands::update_geosite,
             commands::get_settings,

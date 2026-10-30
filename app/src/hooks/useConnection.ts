@@ -37,7 +37,10 @@ export function useConnection({ servers, ruBypass, killSwitch, pushToast }: UseC
           setBusy(false);
           return;
         }
-        await invoke("connect", { server: selectedServer, ruBypass, killSwitch });
+        // выбранный узел мог прийти из кеша подписок, а фоновое
+        // обновление — сменить его пароль/хост: берём свежую версию по имени
+        const server = serversRef.current.find((item) => item.name === selectedServer.name) ?? selectedServer;
+        await invoke("connect", { server, ruBypass, killSwitch });
         await invoke("set_setting", { key: "last_selected_server", value: selectedServer.name });
       }
     } catch (err) {
